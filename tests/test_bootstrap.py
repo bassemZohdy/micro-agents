@@ -8,6 +8,8 @@ from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
 from micro_agent.session import InMemorySessionProvider, SqliteSessionProvider
+from runtimes.adk import AdkRuntime
+from runtimes.google_adk import GoogleAdkRuntime
 
 
 def _definition(
@@ -46,6 +48,60 @@ def test_explicit_fake_provider_uses_fake_provider():
         import asyncio
 
         asyncio.run(bootstrap.runtime.close())
+
+
+def test_default_runtime_is_custom_reference_loop():
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        assert isinstance(bootstrap.runtime, AdkRuntime)
+        assert bootstrap.resolved.runtime is None
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_google_adk_runtime_is_selected_from_deployment_environment(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert bootstrap.resolved.runtime == "google-adk"
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_google_adk_runtime_accepts_native_google_model_selection(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google_adk")
+    bootstrap = build_runtime(_definition(provider="google", model_id="gemini-2.5-flash"))
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert bootstrap.runtime._model_provider is None
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_unsupported_runtime_fails_before_runtime_creation(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "unknown")
+    with pytest.raises(BootstrapError, match="Unsupported runtime"):
+        build_runtime(_definition(provider="fake"))
+
+
+def test_google_adk_runtime_rejects_unmapped_state_bindings(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    with pytest.raises(BootstrapError, match="memory/session providers"):
+        build_runtime(_definition(provider="fake", session={"persistence": "memory"}))
+
+
+def test_google_adk_runtime_rejects_ignored_state_endpoint(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "sqlite:///:memory:")
+    with pytest.raises(BootstrapError, match="memory/session providers"):
+        build_runtime(_definition(provider="fake"))
 
 
 def test_bare_string_model_reference_requires_explicit_provider():

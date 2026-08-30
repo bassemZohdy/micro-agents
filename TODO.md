@@ -25,8 +25,9 @@ the relevant P1 acceptance tests are green.
       sessions, invocation deadlines, and terminal responses to ADK-native
       constructs without leaking ADK types through the SPI.
 - [x] Add ADK lifecycle, invocation, tool-call, session, and failure tests.
-- [ ] Select the Google ADK adapter from executable deployment configuration
-      and map MCP, memory, policy, and OpenTelemetry services.
+- [x] Select the Google ADK adapter from executable deployment configuration.
+- [ ] Map MCP, memory, policy, and OpenTelemetry services into the selected
+      adapter; unsupported declarations must continue to fail fast.
 - [x] Publish a runtime capability matrix and reject unsupported required
       capabilities at startup.
 

@@ -6,6 +6,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added deployment-selectable runtime bootstrap via `MICRO_AGENT_RUNTIME`,
+  including explicit Google ADK selection and fail-fast validation for ADK
+  service declarations that are not mapped yet.
 - Added executable model bootstrap from definition and `MICRO_AGENT_*`
   bindings, including model ID, provider, endpoint, timeout, generation, and
   environment-backed credentials.
@@ -133,7 +136,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 362 collected (358 default plus four optional Google ADK adapter tests;
+- Tests: 369 collected (365 default plus four optional Google ADK adapter tests;
   updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network

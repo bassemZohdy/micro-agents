@@ -116,8 +116,8 @@ runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
 ```
 
 The adapter owns ADK agent, runner, and session objects internally; only the
-runtime-neutral `AgentRuntime` contracts are exposed to callers. Full
-production bootstrap selection and external dependency mappings remain open.
+runtime-neutral `AgentRuntime` contracts are exposed to callers. External
+dependency mappings remain open and unsupported declarations fail fast.
 
 ## Container
 

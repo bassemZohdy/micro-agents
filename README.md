@@ -118,6 +118,13 @@ sets `provider: fake`; a definition with a live endpoint (or
 `OpenAICompatProvider`. A provider or endpoint is required—there is no silent
 fallback for a bare model reference.
 
+Runtime selection is deployment configuration. The custom loop is the default;
+set `MICRO_AGENT_RUNTIME=google-adk` (with the optional `adk` extra installed)
+to select the Google ADK adapter. Its current service mappings are deliberately
+strict: definitions declaring Micro-Agent memory, sessions, MCP servers, or
+policy references fail before startup until equivalent ADK-native services are
+implemented.
+
 For an OpenAI-compatible endpoint, keep credentials out of the definition:
 
 ```bash
@@ -146,7 +153,7 @@ state, or A2A task interoperability.
 | Area | Current state | Production gap |
 |---|---|---|
 | Definition | Typed loader, generated schema, semantic uniqueness/format checks, and runtime contract enforcement | compatibility policy and reference overlays need hardening |
-| Runtime | Custom bounded model/tool loop plus optional Google ADK adapter with ADK lifecycle/session/tool tests | production bootstrap selection and full ADK dependency mappings remain |
+| Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests | MCP, memory, policy, and OpenTelemetry mappings remain |
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client; ADK bridge accepts injected providers | richer credential providers and live-model acceptance remain |
 | Tools | `echo` built in; MCP adapters can be injected | plugin registry, tool-schema validation, and safe side-effect classification |
 | MCP | interfaces, security checks, fake client, manager | official SDK wire client and protocol lifecycle |
@@ -183,7 +190,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 362 collected tests: 358 in the default development
+The current suite contains 369 collected tests: 365 in the default development
 environment plus four tests for the optional Google ADK adapter. CI runs lint,
 typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release

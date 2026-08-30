@@ -17,8 +17,9 @@ Google ADK remains the first external framework adapter. The project-owned
 loop stays in `runtimes/adk`, while `runtimes/google_adk` provides the genuine
 adapter behind the same SPI. The `google-adk` package is an optional pinned
 extra so fake-provider CI remains deterministic. The executable bootstrap
-still selects the custom loop by default; adapter selection and additional
-provider mappings remain open work.
+selects the custom loop by default or the adapter through
+`MICRO_AGENT_RUNTIME`; additional provider and service mappings remain open
+work.
 
 ## Consequences
 

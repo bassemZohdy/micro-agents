@@ -1,11 +1,11 @@
 """Executable runtime bootstrap.
 
 The bootstrap translates a portable definition and environment bindings into
-the provider objects consumed by the current runtime.  It deliberately keeps
-provider selection small and explicit: an endpoint (or an OpenAI-compatible
-provider name) selects :class:`OpenAICompatProvider`; ``fake`` selects the
-deterministic test provider; an unsupported or incomplete live configuration
-fails before the service is started.
+provider objects consumed by the selected runtime. Provider and runtime
+selection are explicit: an endpoint (or an OpenAI-compatible provider name)
+selects :class:`OpenAICompatProvider`; ``fake`` selects the deterministic test
+provider; ``MICRO_AGENT_RUNTIME=google-adk`` selects the optional Google ADK
+adapter; unsupported or incomplete configurations fail before service start.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from micro_agent.models import (
     OpenAICompatProvider,
 )
 from micro_agent.observability import Telemetry
+from micro_agent.runtime import AgentRuntime
 from micro_agent.session import InMemorySessionProvider, SessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
@@ -47,7 +48,7 @@ class RuntimeBootstrap:
     Callers must not serialize it or include it in logs, responses, or errors.
     """
 
-    runtime: AdkRuntime
+    runtime: AgentRuntime
     resolved: ResolvedConfig
 
 
@@ -76,19 +77,100 @@ def build_runtime(
     """
 
     resolved = _resolve_definition_config(definition)
-    provider = _build_model_provider(resolved, fake_model_config=fake_model_config)
-    session_provider = _build_session_provider(definition, resolved)
-    memory_provider = _build_memory_provider(definition, resolved)
-    runtime = AdkRuntime(
-        AdkRuntimeConfig(
-            model_provider=provider,
-            session_provider=session_provider,
-            memory_provider=memory_provider,
-            memory_policy=MemoryPolicy() if memory_provider is not None else None,
-            telemetry=telemetry,
-        )
+    runtime_name = _runtime_name(resolved.runtime)
+    provider = _build_model_provider(
+        resolved,
+        fake_model_config=fake_model_config,
+        allow_native_google=runtime_name == "google-adk",
     )
+    if runtime_name == "google-adk":
+        _validate_google_adk_bindings(definition, resolved)
+        from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
+
+        runtime: AgentRuntime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+    else:
+        session_provider = _build_session_provider(definition, resolved)
+        memory_provider = _build_memory_provider(definition, resolved)
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=provider,
+                session_provider=session_provider,
+                memory_provider=memory_provider,
+                memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                telemetry=telemetry,
+            )
+        )
     return RuntimeBootstrap(runtime=runtime, resolved=resolved)
+
+
+_RUNTIME_ALIASES = {
+    "adk": "custom",
+    "custom": "custom",
+    "reference": "custom",
+    "google-adk": "google-adk",
+    "google_adk": "google-adk",
+    "googleadk": "google-adk",
+}
+
+
+def _runtime_name(value: str | None) -> str:
+    """Normalize the deployment-selected runtime name."""
+    normalized = (value or "custom").strip().lower()
+    try:
+        return _RUNTIME_ALIASES[normalized]
+    except KeyError as exc:
+        supported = ", ".join(sorted(set(_RUNTIME_ALIASES.values())))
+        raise BootstrapError(
+            f"Unsupported runtime '{value}'. Supported runtimes: {supported}"
+        ) from exc
+
+
+def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: ResolvedConfig) -> None:
+    """Reject declarations the optional adapter cannot silently ignore."""
+    dependencies = definition.spec.dependencies
+    if (
+        dependencies.session.persistence != "none"
+        or dependencies.memory is not None
+        or config.session_endpoint is not None
+        or config.memory_endpoint is not None
+    ):
+        raise BootstrapError(
+            "Google ADK runtime does not yet map Micro-Agent memory/session providers; "
+            "use the custom runtime or remove the state declarations"
+        )
+    if dependencies.mcp_servers or config.mcp_endpoints:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map declared MCP servers; "
+            "use the custom runtime or remove the MCP declarations"
+        )
+    if definition.spec.security.policy_refs:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map policy references; "
+            "use the custom runtime or remove the policy declarations"
+        )
+    if dependencies.knowledge:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map knowledge providers; "
+            "use the custom runtime or remove the knowledge declarations"
+        )
+    model = dependencies.model
+    if model is not None and model.credential_ref:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map model credential references; "
+            "use the custom runtime or remove the credential reference"
+        )
+    if definition.spec.security.credential_refs:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map security credential references; "
+            "use the custom runtime or remove the credential declarations"
+        )
+    unresolved_tools = [tool.name for tool in dependencies.tools if tool.name != "echo"]
+    if unresolved_tools:
+        names = ", ".join(unresolved_tools)
+        raise BootstrapError(
+            "Google ADK runtime cannot resolve declared tools yet: "
+            f"{names}; use the custom runtime or remove them"
+        )
 
 
 def _resolve_definition_config(definition: MicroAgentDefinition) -> ResolvedConfig:
@@ -218,9 +300,21 @@ def _build_model_provider(
     config: ResolvedConfig,
     *,
     fake_model_config: FakeModelConfig | None = None,
-) -> ModelProvider:
+    allow_native_google: bool = False,
+) -> ModelProvider | None:
     provider_name = (config.model_provider or "").strip().lower()
     endpoint = config.model_endpoint
+
+    if provider_name in {"google", "gemini", "google-genai"}:
+        if allow_native_google and not endpoint:
+            if not config.model_id and not config.model_ref:
+                raise BootstrapError(
+                    "Google ADK runtime requires model_id or model_ref for a native model"
+                )
+            return None
+        raise BootstrapError(
+            "Google model providers require runtime: google-adk without an endpoint"
+        )
 
     if provider_name in _FAKE_PROVIDER_NAMES:
         return FakeModelProvider(fake_model_config)
