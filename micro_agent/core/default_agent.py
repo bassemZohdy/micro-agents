@@ -16,7 +16,7 @@ from micro_agent.core.agent import (
 )
 from micro_agent.definition import MicroAgentDefinition, validate_input, validate_output
 from micro_agent.definition.models import ConcurrencyPolicy
-from micro_agent.runtime import AgentRuntime, RuntimeAgent
+from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 
 
 class DefaultMicroAgent(MicroAgent):
@@ -63,6 +63,11 @@ class DefaultMicroAgent(MicroAgent):
         )
 
     @property
+    def runtime_capabilities(self) -> RuntimeCapabilities:
+        """Return the complete capability matrix advertised by the runtime."""
+        return self._runtime.capabilities()
+
+    @property
     def definition(self) -> MicroAgentDefinition:
         return self._definition
 
@@ -80,6 +85,15 @@ class DefaultMicroAgent(MicroAgent):
             assert self._runtime_agent is not None
             self._state = AgentState.STARTING
             try:
+                required = self._definition.spec.runtime.capabilities
+                available = self._runtime.capabilities()
+                missing = sorted(
+                    capability for capability in required if not available.supports(capability)
+                )
+                if missing:
+                    raise RuntimeError(
+                        "Runtime does not support required capabilities: " + ", ".join(missing)
+                    )
                 await self._runtime.start(self._runtime_agent)
             except Exception:
                 self._state = AgentState.ERROR

@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `c6a2470` on 2026-08-30. Completed work is removed rather
+Baseline audited: `fd6eee8` on 2026-08-30. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -23,8 +23,8 @@ the relevant P1 acceptance tests are green.
 - [ ] Map definition behavior, model, tools, sessions, and runtime semantics to
       ADK-native constructs without leaking ADK types through the SPI.
 - [ ] Add ADK lifecycle, invocation, tool-call, session, and failure tests.
-- [ ] Publish a runtime capability matrix and reject unsupported required
-      capabilities.
+- [x] Publish a runtime capability matrix and reject unsupported required
+      capabilities at startup.
 
 Acceptance: tests prove ADK objects are constructed and invoked while the same
 definition remains runtime-neutral.

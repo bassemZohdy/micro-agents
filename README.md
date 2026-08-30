@@ -144,7 +144,7 @@ state, or A2A task interoperability.
 | Area | Current state | Production gap |
 |---|---|---|
 | Definition | Typed loader, generated schema, semantic uniqueness/format checks, and runtime contract enforcement | compatibility policy and reference overlays need hardening |
-| Runtime | Custom bounded model/tool loop | actual Google ADK adapter is absent |
+| Runtime | Custom bounded model/tool loop with startup capability checks | actual Google ADK adapter is absent |
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client | Google ADK adapter, richer credential providers, and live-model acceptance remain |
 | Tools | `echo` built in; MCP adapters can be injected | plugin registry, tool-schema validation, and safe side-effect classification |
 | MCP | interfaces, security checks, fake client, manager | official SDK wire client and protocol lifecycle |
@@ -181,7 +181,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 339 tests. CI runs lint, typing, schema, unit,
+The current suite contains 342 tests. CI runs lint, typing, schema, unit,
 integration, E2E, package, container, separate runtime/development dependency
 audits, and strict documentation gates. Release tags repeat the quality gates,
 validate the tag against the package version, and publish only after all

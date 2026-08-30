@@ -94,6 +94,12 @@ parameters, the runtime validates required fields, JSON-compatible types, and
 unknown fields at the invocation boundary. An empty contract remains
 unconstrained for compatibility with minimal development definitions.
 
+Definitions may require runtime capabilities with
+`spec.runtime.capabilities`, for example `memory` or `mcp`. Startup compares
+these names with the runtime capability matrix and fails before readiness when
+any required capability is unavailable. The matrix is also exposed by
+`GET /v1/capabilities`.
+
 ## Development fake mode
 
 Fake mode is explicit: set `provider: fake` in the definition or

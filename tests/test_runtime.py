@@ -24,6 +24,20 @@ class TestRuntimeCapabilities:
         assert caps.streaming is True
         assert caps.mcp is True
 
+    def test_supports_and_serializes_matrix(self):
+        caps = RuntimeCapabilities(memory=True)
+        assert caps.supports("memory") is True
+        assert caps.supports("streaming") is False
+        assert caps.supports("unknown") is False
+        assert caps.as_dict() == {
+            "streaming": False,
+            "memory": True,
+            "mcp": False,
+            "a2a": False,
+            "structured_output": False,
+            "checkpointing": False,
+        }
+
 
 class TestRuntimeAgent:
     """Test runtime agent handle."""
