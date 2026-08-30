@@ -21,7 +21,7 @@ the service becomes ready.
 | Variable | Resolved field | Bootstrap status |
 |---|---|---|
 | `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
-| `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the definition ref used as provider model ID |
+| `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | not wired |
@@ -40,6 +40,7 @@ spec:
   dependencies:
     model:
       ref: reasoning-model
+      model_id: provider-model-v2
       credential_ref: MODEL_API_KEY
   security:
     credential_refs:

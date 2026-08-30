@@ -45,6 +45,7 @@ async def test_definition_selects_openai_compatible_provider():
     bootstrap = build_runtime(
         _definition(
             ref="reasoning-model",
+            model_id="gpt-4o-mini",
             provider="openai-compatible",
             endpoint="https://llm.example.test/v1",
             timeout_seconds=12,
@@ -54,7 +55,7 @@ async def test_definition_selects_openai_compatible_provider():
         provider = bootstrap.runtime._model_provider
         assert isinstance(provider, OpenAICompatProvider)
         assert provider._config.endpoint == "https://llm.example.test/v1"
-        assert provider._config.model_id == "reasoning-model"
+        assert provider._config.model_id == "gpt-4o-mini"
         assert provider._config.timeout_seconds == 12.0
     finally:
         await bootstrap.runtime.close()
@@ -81,6 +82,17 @@ async def test_environment_overrides_select_live_provider(monkeypatch):
 def test_live_provider_requires_endpoint():
     with pytest.raises(BootstrapError, match="requires model_endpoint"):
         build_runtime(_definition(ref="reasoning-model", provider="openai"))
+
+
+def test_live_provider_requires_provider_model_id():
+    with pytest.raises(BootstrapError, match="model_id"):
+        build_runtime(
+            _definition(
+                ref="logical-alias",
+                provider="openai",
+                endpoint="https://llm.example.test/v1",
+            )
+        )
 
 
 def test_unknown_provider_fails_before_startup():

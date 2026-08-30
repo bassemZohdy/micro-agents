@@ -140,6 +140,12 @@ class ModelRef(BaseModel, extra="forbid"):
         pattern=_TOKEN_PATTERN,
         description="Model reference identifier.",
     )
+    model_id: str | None = Field(
+        None,
+        min_length=1,
+        max_length=256,
+        description="Provider-specific model identifier.",
+    )
     provider: str | None = Field(
         None,
         min_length=1,
