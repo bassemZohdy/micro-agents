@@ -2,6 +2,54 @@
 
 All notable changes to the Micro-Agents project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- ADK runtime agent loop: model call → tool execution up to `max_iterations`,
+  overall `timeout_seconds`, tool/model timeout enforcement, and
+  `error_policy` (fail / retry / fallback) honored from RuntimeSemantics.
+- Generic tool resolution from definitions via a built-in registry;
+  unresolved tools are reported instead of silently dropped.
+- `OpenAICompatProvider` — real model provider for any /chat/completions
+  endpoint, selected by configuration (fake model remains the CI default).
+- Session integration (history replay/persistence, TTL from definition) and
+  memory auto-store behind `MemoryPolicy.auto_store`.
+- MCP integration: `FakeMcpClient` test double, `McpConnectionManager`
+  (connect-by-configuration, `server:tool` adapters, resources/prompts
+  metadata, health probe, graceful shutdown) and `McpSecurityPolicy` (TLS,
+  endpoint allowlist, transport validation, response size limits).
+- A2A: `agent_card_from_definition()`, `skills_mapping()`, and the
+  `GET /.well-known/agent.json` endpoint; validated by an independent raw-JSON
+  HTTP client test.
+- Observability wiring: `Telemetry` facade (StructuredLogger with secret
+  redaction + MetricsCollector + span tree) instruments the invocation path —
+  invocation count/latency/errors, model latency, tokens, tool calls, policy
+  denials; agent/model/tool/MCP spans share trace IDs.
+- Active health: dependency probes with `probe_readiness()`, status updates
+  after registration, real liveness probe; runtime exposes model/session/
+  memory/MCP probes.
+- Policy enforcement in the runtime: `PolicyEvaluator` denies tools/side
+  effects before execution and fails startup on denied MCP servers;
+  `OperationRegistry` deduplicates idempotent side effects;
+  `build_security_context()` loads definition security refs.
+- `SqliteSessionProvider` — persistent reference implementation proving the
+  multi-replica shared-session acceptance.
+- Modules moved out of observability: `micro_agent/security/` (identity,
+  policy, side effects, context) and `micro_agent/health/` (backward-compat
+  re-exports kept).
+- Duplicate types consolidated: canonical pydantic `SkillDefinition` and
+  `A2AConfig`; skills/interoperability re-export them; conversion helpers
+  added (`skills_mapping`, `capability_contract_from_definition`).
+- Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
+  missing `micro-agent-definition` ConfigMap).
+- Tests: 299 total (246 unit + 53 integration/e2e) including behavioral
+  runtime tests, MCP-by-configuration, real-socket network service, and
+  multi-replica session acceptance.
+- CI: integration and e2e jobs, container build + smoke test, SBOM, docs
+  publishing (mkdocs), `release.yml` (tag → PyPI/GHCR + generated notes);
+  `runtimes/` now strict-type-checked.
+- ADRs 0001–0006 (docs/adr/) and mkdocs site config.
+
 ## [0.1.0] — 2026-08-30
 
 ### Milestone 0 — Project Foundation
@@ -157,3 +205,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 - micro_agent/__main__.py (python -m micro_agent --definition ...)
 - FastAPI HTTP server with uvicorn
 - Graceful lifecycle (initialize → start → serve → stop → shutdown)
+
+### Known Limitations (resolved in Unreleased)
+
+The 0.1.0 slice was intentionally minimal; the interface-only stubs listed
+below have since been implemented — see the Unreleased section and ADRs
+0002/0003 for the remaining boundaries:
+
+- MCP ships a client integration seam (manager + security + fake client); a
+  production wire-protocol client (official SDK) plugs in via the manager's
+  client factory
+- OpenTelemetry export is not integrated yet; the in-tree `Telemetry` facade
+  is the single swap point
+- A2A covers discovery (agent card) but not the full A2A task protocol

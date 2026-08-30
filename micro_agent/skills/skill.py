@@ -2,29 +2,22 @@
 
 Skills represent externally advertised semantic capabilities.
 A skill is not necessarily equivalent to one tool.
+
+The canonical SkillDefinition is the pydantic model in
+:mod:`micro_agent.definition.models`; it is re-exported here so the skills
+package stays the semantic-capability entry point without duplicating the
+type.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 
-# ---------------------------------------------------------------------------
-# Skill Definition
-# ---------------------------------------------------------------------------
+from micro_agent.definition import SkillDefinition
 
-
-@dataclass
-class SkillDefinition:
-    """A semantic skill/capability exposed by a Micro-Agent."""
-
-    id: str
-    name: str
-    description: str | None = None
-    input_metadata: dict[str, Any] = field(default_factory=dict)
-    output_metadata: dict[str, Any] = field(default_factory=dict)
-    tags: list[str] = field(default_factory=list)
-
+if TYPE_CHECKING:
+    from micro_agent.definition import MicroAgentDefinition
 
 # ---------------------------------------------------------------------------
 # Capability Contract
@@ -56,3 +49,22 @@ class CapabilityContract:
     def skills_by_tag(self, tag: str) -> list[SkillDefinition]:
         """Find all skills with a specific tag."""
         return [s for s in self.skills if tag in s.tags]
+
+
+def capability_contract_from_definition(
+    definition: MicroAgentDefinition,
+) -> CapabilityContract:
+    """Build a CapabilityContract from a MicroAgentDefinition."""
+    deps = definition.spec.dependencies
+    return CapabilityContract(
+        skills=list(deps.skills),
+        tools=[tool.name for tool in deps.tools],
+        mcp_servers=[server.ref for server in deps.mcp_servers],
+    )
+
+
+__all__ = [
+    "CapabilityContract",
+    "SkillDefinition",
+    "capability_contract_from_definition",
+]

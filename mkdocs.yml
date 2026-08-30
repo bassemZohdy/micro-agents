@@ -1,0 +1,20 @@
+site_name: Micro-Agents
+site_description: Cloud-native, independently deployable AI agents
+repo_url: https://github.com/bassem/micro-agents
+
+nav:
+  - Home: index.md
+  - Project Definition: ../PROJECT_DEFINITION.md
+  - Architecture:
+      - Micro-Agent Architecture: architecture/MICRO_AGENT_ARCHITECTURE.md
+      - Twelve-Factor Micro-Agent: architecture/TWELVE_FACTOR_MICRO_AGENT.md
+  - Schemas:
+      - Micro-Agent Definition v1alpha1: schemas/micro-agent-v1alpha1.json
+  - ADRs:
+      - 0001 Runtime-neutral definition: adr/0001-runtime-neutral-definition.md
+      - 0002 ADK-first runtime, fake model CI: adr/0002-adk-first-runtime-fake-model-ci.md
+      - 0003 Telemetry facade before OTel: adr/0003-telemetry-facade-before-otel.md
+      - 0004 Security and health modules: adr/0004-security-and-health-modules.md
+      - 0005 Deterministic policy enforcement: adr/0005-deterministic-policy-enforcement.md
+      - 0006 SQLite session reference: adr/0006-sqlite-session-reference.md
+  - CHANGELOG: ../CHANGELOG.md

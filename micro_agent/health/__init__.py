@@ -1,4 +1,4 @@
-"""Backward-compatibility shim — moved to :mod:`micro_agent.health`."""
+"""Micro-Agent Health — liveness, readiness, and dependency health."""
 
 from micro_agent.health.health import (
     DependencyHealth,

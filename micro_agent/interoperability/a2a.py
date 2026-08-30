@@ -75,11 +75,81 @@ class A2AResponse:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class A2AConfig:
-    """A2A configuration."""
+# ---------------------------------------------------------------------------
+# A2A Configuration
+# ---------------------------------------------------------------------------
 
-    enabled: bool = False
-    endpoint: str | None = None
-    protocol_version: str = "1.0"
-    security: dict[str, Any] = field(default_factory=dict)
+# The canonical A2AConfig is the pydantic model in
+# micro_agent.definition.models; re-exported here so A2A consumers have one
+# import path without a duplicate type.
+from micro_agent.definition import A2AConfig  # noqa: E402
+
+__all__ = [
+    "A2AConfig",
+    "A2AMessage",
+    "A2AResponse",
+    "A2ATask",
+    "AgentCard",
+    "AgentSkill",
+    "a2a_well_known_path",
+    "agent_card_from_definition",
+    "skills_mapping",
+]
+
+
+# ---------------------------------------------------------------------------
+# Agent Card generation (definition -> A2A)
+# ---------------------------------------------------------------------------
+
+_A2A_WELL_KNOWN_PATH = "/.well-known/agent.json"
+
+
+def skills_mapping(definition: Any) -> list[AgentSkill]:
+    """Map a definition's skills to A2A AgentCard skills.
+
+    Conversion helper between the definition's SkillDefinition (pydantic) and
+    the A2A AgentSkill shape (dataclass).
+    """
+    return [
+        AgentSkill(
+            id=skill.id,
+            name=skill.name,
+            description=skill.description,
+            tags=list(skill.tags),
+        )
+        for skill in definition.spec.dependencies.skills
+    ]
+
+
+def agent_card_from_definition(
+    definition: Any,
+    base_url: str | None = None,
+    capabilities: dict[str, bool] | None = None,
+) -> AgentCard:
+    """Generate an A2A AgentCard from a MicroAgentDefinition."""
+    a2a_config = definition.spec.interoperability.a2a if definition.spec.interoperability else None
+    url = base_url or (a2a_config.endpoint if a2a_config else "") or ""
+    security: dict[str, Any] = {}
+    identity_requirements = (
+        definition.spec.security.identity_requirements if definition.spec.security else {}
+    )
+    if identity_requirements.get("require_caller_identity"):
+        security = {"callerIdentityRequired": True}
+    return AgentCard(
+        name=definition.metadata.name,
+        description=definition.metadata.description or "",
+        version=definition.metadata.version,
+        url=url,
+        skills=skills_mapping(definition),
+        capabilities=capabilities or {"streaming": False, "pushNotifications": False},
+        security=security,
+        metadata={
+            "protocolVersion": a2a_config.protocol_version if a2a_config else "1.0",
+            "labels": dict(definition.metadata.labels),
+        },
+    )
+
+
+def a2a_well_known_path() -> str:
+    """The A2A well-known agent-card endpoint path."""
+    return _A2A_WELL_KNOWN_PATH

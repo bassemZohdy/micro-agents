@@ -2,6 +2,7 @@
 
 from micro_agent.models.fake import FakeModelConfig, FakeModelProvider
 from micro_agent.models.model import ModelConfig, ModelProvider, ModelResponse
+from micro_agent.models.openai_compat import OpenAICompatConfig, OpenAICompatProvider
 
 __all__ = [
     "FakeModelConfig",
@@ -9,4 +10,6 @@ __all__ = [
     "ModelConfig",
     "ModelProvider",
     "ModelResponse",
+    "OpenAICompatConfig",
+    "OpenAICompatProvider",
 ]

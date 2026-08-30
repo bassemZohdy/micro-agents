@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
-      - run: mypy micro_agent
+      - run: mypy micro_agent runtimes
 
   schema:
     runs-on: ubuntu-latest
@@ -50,7 +50,54 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest --cov=micro_agent --cov-report=term-missing
+      - run: pytest -m "not integration and not e2e" --cov=micro_agent --cov-report=term-missing
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: pytest -m "integration" -v
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: pytest -m "e2e" -v
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t micro-agent:ci .
+      - name: Smoke test
+        run: |
+          docker run --rm -d --name micro-agent-smoke \
+            -p 8080:8080 \
+            -v "$PWD/examples/residency-renewal.yaml:/etc/micro-agent/agent.yaml:ro" \
+            micro-agent:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health/live > /dev/null; then
+              echo "service healthy"
+              curl -sf http://localhost:8080/health/ready
+              curl -sf http://localhost:8080/v1/capabilities
+              docker rm -f micro-agent-smoke > /dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "service did not become healthy"
+          docker logs micro-agent-smoke || true
+          docker rm -f micro-agent-smoke > /dev/null || true
+          exit 1
 
   security:
     runs-on: ubuntu-latest
@@ -61,3 +108,26 @@ jobs:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
       - run: pip-audit
+
+  sbom:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          artifact-name: micro-agents-sbom.spdx.json
+
+  docs:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install mkdocs mkdocs-material
+      - run: mkdocs gh-deploy --force

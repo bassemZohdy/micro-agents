@@ -580,12 +580,12 @@ Initial implementation choices:
 
 ```text
 Language              Python
-Initial runtime       Google ADK
+Initial runtime       Google ADK (fake model for CI; OpenAI-compatible provider)
 Configuration         YAML
-HTTP runtime          FastAPI or equivalent
-MCP                   official MCP-compatible implementation
-A2A                   supported standard SDK/protocol
-Observability         OpenTelemetry
+HTTP runtime          FastAPI
+MCP                   integration manager + security (SDK wire client pluggable)
+A2A                   agent-card discovery served; full protocol client planned
+Observability         telemetry facade now; OpenTelemetry exporter planned
 Containers            OCI-compatible
 Deployment            Kubernetes/OpenShift compatible
 ```
@@ -614,13 +614,31 @@ proprietary container orchestration
 
 # Status
 
-The project is currently in architecture definition and initial framework implementation.
+The framework runs end to end: a YAML definition loads into a
+`DefaultMicroAgent` bound to the ADK runtime and is served over FastAPI
+(`POST /v1/invoke`, health, capability, and A2A agent-card endpoints) with a
+container entrypoint and Kubernetes manifests.
 
-See:
+Implemented today: a real agent loop with RuntimeSemantics enforcement
+(timeouts, max iterations, error policy), generic tool resolution, MCP
+integration with security controls (attach-by-configuration), deterministic
+policy enforcement and side-effect deduplication, session/memory integration
+with a persistent SQLite session provider, telemetry spans/metrics/logs with
+secret redaction, and active health probes. CI covers lint, strict typing
+(including `runtimes/`), schema drift, unit/integration/e2e tests, container
+smoke, SBOM, and release automation.
+
+Remaining boundaries: a production MCP wire-protocol client plugs into the
+existing manager factory, OpenTelemetry export swaps into the `Telemetry`
+facade, and A2A currently covers discovery (agent card), not the full task
+protocol. See `CHANGELOG.md` and `TODO.md`.
+
+See also:
 
 ```text
 PROJECT_DEFINITION.md
+docs/architecture/
+docs/adr/
+CHANGELOG.md
 TODO.md
 ```
-
-for architectural rules and implementation milestones.

@@ -1,37 +1,41 @@
-"""Micro-Agent Observability — health, logging, metrics, tracing, identity, policy, side effects."""
+"""Micro-Agent Observability — telemetry.
 
-from micro_agent.observability.health import (
+Identity, policy, side effects, and health live in
+:mod:`micro_agent.security` and :mod:`micro_agent.health`; the imports below
+are backward-compatibility re-exports.
+"""
+
+from micro_agent.health import (
     DependencyHealth,
+    DependencyProbe,
     HealthChecker,
     HealthStatus,
     LivenessResult,
     ReadinessResult,
 )
-from micro_agent.observability.identity import (
-    AgentIdentity,
-    CallerIdentity,
-    RuntimeIdentity,
-    SecurityContext,
-    UserContext,
-)
-from micro_agent.observability.policy import (
-    AgentPolicy,
-    PolicyDecision,
-    PolicyEffect,
-    PolicyEvaluator,
-    PolicyRule,
-)
-from micro_agent.observability.side_effects import (
-    Operation,
-    OperationRegistry,
-    OperationResult,
-    RetryClassification,
-)
 from micro_agent.observability.telemetry import (
     MetricPoint,
     MetricsCollector,
     StructuredLogger,
+    Telemetry,
     TraceSpan,
+    redact_mapping,
+)
+from micro_agent.security import (
+    AgentIdentity,
+    AgentPolicy,
+    CallerIdentity,
+    Operation,
+    OperationRegistry,
+    OperationResult,
+    PolicyDecision,
+    PolicyEffect,
+    PolicyEvaluator,
+    PolicyRule,
+    RetryClassification,
+    RuntimeIdentity,
+    SecurityContext,
+    UserContext,
 )
 
 __all__ = [
@@ -39,6 +43,7 @@ __all__ = [
     "AgentPolicy",
     "CallerIdentity",
     "DependencyHealth",
+    "DependencyProbe",
     "HealthChecker",
     "HealthStatus",
     "LivenessResult",
@@ -56,6 +61,8 @@ __all__ = [
     "RuntimeIdentity",
     "SecurityContext",
     "StructuredLogger",
+    "Telemetry",
     "TraceSpan",
     "UserContext",
+    "redact_mapping",
 ]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -71,22 +72,56 @@ class MemoryProvider(ABC):
 
 
 class InMemoryMemoryProvider(MemoryProvider):
-    """In-memory memory provider for development and testing."""
+    """In-memory memory provider for development and testing.
 
-    def __init__(self) -> None:
+    Enforces an optional MemoryPolicy: max_entries evicts the
+    least-recently-stored entry, ttl_seconds expires entries on read,
+    and auto_store is exposed for callers deciding whether to persist
+    interactions automatically.
+    """
+
+    def __init__(self, policy: MemoryPolicy | None = None) -> None:
+        self.policy = policy or MemoryPolicy()
         self._entries: dict[str, MemoryEntry] = {}
+        self._stored_at: dict[str, float] = {}
 
     def _key(self, key: str, scope: str | None) -> str:
-        return f"{scope or 'default'}:{key}"
+        # Default scope matches MemoryEntry.scope's default so that
+        # store(MemoryEntry(key=...)) / get(key=...) round-trip.
+        return f"{scope or 'agent'}:{key}"
+
+    def _is_expired(self, k: str, now: float | None = None) -> bool:
+        if self.policy.ttl_seconds is None:
+            return False
+        stored = self._stored_at.get(k)
+        if stored is None:
+            return False
+        return (now or monotonic()) - stored >= self.policy.ttl_seconds
+
+    def _evict_if_full(self) -> None:
+        if self.policy.max_entries is None:
+            return
+        while len(self._entries) >= self.policy.max_entries:
+            oldest = next(iter(self._entries))
+            del self._entries[oldest]
+            self._stored_at.pop(oldest, None)
 
     async def store(self, entry: MemoryEntry) -> None:
-        self._entries[self._key(entry.key, entry.scope)] = entry
+        k = self._key(entry.key, entry.scope)
+        # Re-storing an existing key must not evict itself.
+        if k not in self._entries:
+            self._evict_if_full()
+        self._entries[k] = entry
+        self._stored_at[k] = monotonic()
 
     async def search(
         self, query: str, scope: str | None = None, limit: int = 10
     ) -> list[MemoryEntry]:
+        now = monotonic()
         results = []
-        for entry in self._entries.values():
+        for k, entry in self._entries.items():
+            if self._is_expired(k, now):
+                continue
             if scope and entry.scope != scope:
                 continue
             if query.lower() in str(entry.value).lower():
@@ -96,16 +131,27 @@ class InMemoryMemoryProvider(MemoryProvider):
         return results
 
     async def get(self, key: str, scope: str | None = None) -> MemoryEntry | None:
-        return self._entries.get(self._key(key, scope))
+        k = self._key(key, scope)
+        if k in self._entries and self._is_expired(k):
+            del self._entries[k]
+            self._stored_at.pop(k, None)
+            return None
+        return self._entries.get(k)
 
     async def delete(self, key: str, scope: str | None = None) -> bool:
         k = self._key(key, scope)
         if k in self._entries:
             del self._entries[k]
+            self._stored_at.pop(k, None)
             return True
         return False
 
     async def list_entries(self, scope: str | None = None) -> list[MemoryEntry]:
-        if scope is None:
-            return list(self._entries.values())
-        return [e for e in self._entries.values() if e.scope == scope]
+        now = monotonic()
+        results = []
+        for k, entry in self._entries.items():
+            if self._is_expired(k, now):
+                continue
+            if scope is None or entry.scope == scope:
+                results.append(entry)
+        return results

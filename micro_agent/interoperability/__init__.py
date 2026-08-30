@@ -7,6 +7,9 @@ from micro_agent.interoperability.a2a import (
     A2ATask,
     AgentCard,
     AgentSkill,
+    a2a_well_known_path,
+    agent_card_from_definition,
+    skills_mapping,
 )
 from micro_agent.interoperability.http_api import (
     ROUTES,
@@ -38,6 +41,9 @@ __all__ = [
     "InvokeResponse",
     "InvokeResponseModel",
     "ROUTES",
+    "a2a_well_known_path",
+    "agent_card_from_definition",
     "create_app",
     "serialize_response",
+    "skills_mapping",
 ]

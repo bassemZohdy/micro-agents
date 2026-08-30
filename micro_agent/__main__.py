@@ -15,8 +15,8 @@ import uvicorn
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_file
 from micro_agent.interoperability import create_app
-from micro_agent.observability import HealthChecker
-from runtimes.adk import AdkRuntime
+from micro_agent.observability import HealthChecker, Telemetry
+from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,16 +44,18 @@ def parse_args() -> argparse.Namespace:
 
 async def run(args: argparse.Namespace) -> None:
     definition = load_definition_from_file(args.definition)
-    runtime = AdkRuntime()
+    telemetry = Telemetry()
+    runtime = AdkRuntime(AdkRuntimeConfig(telemetry=telemetry))
     agent = DefaultMicroAgent(definition, runtime)
 
     await agent.initialize()
     await agent.start()
 
     health_checker = HealthChecker()
-    health_checker.add_dependency("runtime")
+    for name, probe in runtime.health_probes().items():
+        health_checker.add_dependency(name, probe=probe)
 
-    app = create_app(agent, health_checker)
+    app = create_app(agent, health_checker, telemetry=telemetry)
 
     config = uvicorn.Config(
         app,
@@ -68,6 +70,7 @@ async def run(args: argparse.Namespace) -> None:
     finally:
         await agent.stop()
         await agent.shutdown()
+        await runtime.close()
 
 
 def main() -> None:

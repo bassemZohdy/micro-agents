@@ -13,7 +13,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from micro_agent.core import AgentRequest, DefaultMicroAgent
-from micro_agent.observability import HealthChecker
+from micro_agent.interoperability.a2a import (
+    a2a_well_known_path,
+    agent_card_from_definition,
+)
+from micro_agent.observability import HealthChecker, Telemetry
 
 # ---------------------------------------------------------------------------
 # API Models (Pydantic for FastAPI)
@@ -131,6 +135,8 @@ def serialize_response(data: Any) -> str:
 def create_app(
     agent: DefaultMicroAgent,
     health_checker: HealthChecker | None = None,
+    telemetry: Telemetry | None = None,
+    base_url: str | None = None,
 ) -> FastAPI:
     """Create a FastAPI application for a Micro-Agent."""
     app = FastAPI(
@@ -139,16 +145,40 @@ def create_app(
         description=agent.definition.metadata.description or "",
     )
     checker = health_checker or HealthChecker()
+    telemetry = telemetry or Telemetry()
+    telemetry.logger.set_context(
+        agent_id=agent.identity.agent_id,
+        agent_version=agent.identity.agent_version,
+    )
+
+    agent_card = agent_card_from_definition(agent.definition, base_url=base_url)
+
+    @app.get(a2a_well_known_path(), response_model=None)
+    async def get_agent_card() -> dict[str, Any]:
+        """A2A well-known agent card for discovery."""
+        telemetry.increment("http_requests_total", {"route": "/.well-known/agent.json"})
+        return asdict(agent_card)
 
     @app.post("/v1/invoke", response_model=InvokeResponseModel)
     async def invoke(request: InvokeRequestModel) -> InvokeResponseModel:
+        telemetry.increment("http_requests_total", {"route": "/v1/invoke", "method": "POST"})
         agent_request = AgentRequest(
             input=request.input,
             request_id=request.request_id or "",
             session_id=request.session_id,
             caller_metadata=request.caller_metadata,
         )
+        telemetry.logger.info(
+            "invoke request",
+            request_id=agent_request.request_id,
+            session_id=request.session_id,
+        )
         response = await agent.invoke(agent_request)
+        telemetry.logger.info(
+            "invoke completed",
+            request_id=agent_request.request_id,
+            status=response.status,
+        )
         return InvokeResponseModel(
             output=response.output,
             request_id=response.request_id,
@@ -168,7 +198,7 @@ def create_app(
 
     @app.get("/health/ready", response_model=HealthResponseModel)
     async def readiness() -> HealthResponseModel:
-        result = checker.check_readiness()
+        result = await checker.probe_readiness()
         return HealthResponseModel(
             status=result.status.value,
             details={
