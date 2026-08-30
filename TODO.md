@@ -118,7 +118,7 @@ and the transcript can be replayed from session storage.
       boundary.
 - [x] Add uniqueness and format validation for names, skills, tools, MCP refs,
       versions, transports, URLs, scopes, and runtime capabilities.
-- [ ] Separate model alias/reference from provider model ID.
+- [x] Separate model alias/reference from provider model ID.
 - [ ] Define overlays and environment-specific endpoint bindings without
       mutating the logical definition.
 - [ ] Add compatibility fixtures and migration guidance for future API

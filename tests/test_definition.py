@@ -166,6 +166,24 @@ class TestSemanticValidation:
         with pytest.raises(DefinitionError):
             load_definition_from_dict(data)
 
+    def test_model_alias_and_provider_id_are_distinct(self):
+        data = self._base()
+        data["spec"] = {
+            "behavior": {"instructions": "Validate this definition."},
+            "dependencies": {
+                "model": {
+                    "ref": "logical-reasoning",
+                    "model_id": "provider-model-v2",
+                    "provider": "openai-compatible",
+                    "endpoint": "https://llm.example.com/v1",
+                }
+            },
+        }
+        definition = load_definition_from_dict(data)
+        assert definition.spec.dependencies.model is not None
+        assert definition.spec.dependencies.model.ref == "logical-reasoning"
+        assert definition.spec.dependencies.model.model_id == "provider-model-v2"
+
     def test_duplicate_dependency_names_are_rejected(self):
         data = self._base()
         data["spec"] = {

@@ -51,6 +51,7 @@ spec:
 
     model:
       ref: reasoning-model
+      model_id: provider-model-v2
       provider: anthropic
       timeout_seconds: 30
       generation:

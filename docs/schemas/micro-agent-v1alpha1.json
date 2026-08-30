@@ -361,6 +361,21 @@
           "title": "Ref",
           "type": "string"
         },
+        "model_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Provider-specific model identifier.",
+          "title": "Model Id"
+        },
         "provider": {
           "anyOf": [
             {

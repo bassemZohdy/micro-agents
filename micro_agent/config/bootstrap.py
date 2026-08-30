@@ -90,7 +90,7 @@ def _resolve_definition_config(definition: MicroAgentDefinition) -> ResolvedConf
     if model is not None:
         overrides = {
             "model_ref": model.ref,
-            "model_id": model.ref,
+            "model_id": model.model_id,
             "model_provider": model.provider,
             "model_endpoint": model.endpoint,
             "model_generation": dict(model.generation),
@@ -133,10 +133,15 @@ def _build_model_provider(
                 "OpenAI-compatible model provider requires model_endpoint or "
                 "MICRO_AGENT_MODEL_ENDPOINT"
             )
+        if not config.model_id:
+            raise BootstrapError(
+                "OpenAI-compatible model provider requires model_id or "
+                "MICRO_AGENT_MODEL_ID; model_ref is a logical alias only"
+            )
         return OpenAICompatProvider(
             OpenAICompatConfig(
                 endpoint=endpoint,
-                model_id=config.model_id or config.model_ref or "default",
+                model_id=config.model_id,
                 api_key=config.model_api_key,
                 timeout_seconds=float(config.model_timeout_seconds or 30),
             )

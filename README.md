@@ -74,6 +74,7 @@ spec:
   dependencies:
     model:
       ref: reasoning-model
+      model_id: provider-model-v2
     skills:
       - id: send-notification
         name: Send Notification
@@ -181,7 +182,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 342 tests. CI runs lint, typing, schema, unit,
+The current suite contains 344 tests. CI runs lint, typing, schema, unit,
 integration, E2E, package, container, separate runtime/development dependency
 audits, and strict documentation gates. Release tags repeat the quality gates,
 validate the tag against the package version, and publish only after all
