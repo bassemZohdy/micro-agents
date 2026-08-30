@@ -55,6 +55,12 @@ class AgentRequest:
     request_id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str | None = None
     caller_metadata: dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        """Reject invalid caller-provided deadlines before runtime work starts."""
+        if self.timeout_seconds is not None and self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than zero")
 
 
 @dataclass

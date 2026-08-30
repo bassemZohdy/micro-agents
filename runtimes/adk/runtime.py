@@ -11,8 +11,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
 from uuid import uuid4
 
 from micro_agent.core import (
@@ -46,6 +47,53 @@ from micro_agent.tools import EchoTool, Tool
 
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 _MAX_SESSION_HISTORY_MESSAGES = 20
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class _InvocationDeadline:
+    """Absolute monotonic deadline shared by every invocation operation."""
+
+    expires_at: float | None
+
+    @classmethod
+    def from_seconds(cls, *timeouts: float | int | None) -> _InvocationDeadline:
+        """Build a deadline from the shortest configured timeout."""
+        configured = [float(value) for value in timeouts if value is not None]
+        if not configured:
+            return cls(None)
+        return cls(time.monotonic() + min(configured))
+
+    def remaining(self) -> float | None:
+        """Return remaining seconds, or ``None`` when no deadline is set."""
+        if self.expires_at is None:
+            return None
+        return self.expires_at - time.monotonic()
+
+    @property
+    def expired(self) -> bool:
+        """Whether the deadline has elapsed."""
+        remaining = self.remaining()
+        return remaining is not None and remaining <= 0
+
+    async def run(self, operation: Awaitable[_T], cap: float | int | None = None) -> _T:
+        """Await an operation using the remaining budget and an optional cap."""
+        remaining = self.remaining()
+        if cap is not None:
+            remaining = min(float(cap), remaining) if remaining is not None else float(cap)
+        if remaining is None:
+            return await operation
+        if remaining <= 0:
+            close = getattr(operation, "close", None)
+            if callable(close):
+                close()
+            raise TimeoutError("invocation deadline exceeded")
+        try:
+            return await asyncio.wait_for(operation, timeout=remaining)
+        except TimeoutError as exc:
+            if self.expired:
+                raise TimeoutError("invocation deadline exceeded") from exc
+            raise
 
 
 @dataclass
@@ -241,16 +289,25 @@ class AdkRuntime(AgentRuntime):
         semantics = definition.spec.runtime
         trace_id = request.request_id or str(uuid4())
         labels = {"agent": definition.metadata.name}
+        deadline = _InvocationDeadline.from_seconds(
+            semantics.timeout_seconds,
+            request.timeout_seconds,
+        )
 
         async def run_once() -> AgentResponse:
-            inner = self._invoke_inner(agent, request, trace_id)
-            if semantics.timeout_seconds:
-                return await asyncio.wait_for(inner, semantics.timeout_seconds)
-            return await inner
+            return await self._invoke_inner(agent, request, trace_id, deadline)
 
         start_time = time.monotonic()
         try:
             response = await run_once()
+        except TimeoutError:
+            self._telemetry.increment("agent_invocation_errors_total", labels)
+            self._telemetry.logger.error(
+                "invocation deadline exceeded",
+                request_id=request.request_id,
+                session_id=request.session_id,
+            )
+            raise
         except Exception as exc:
             self._telemetry.increment("agent_invocation_errors_total", labels)
             self._telemetry.logger.error(
@@ -260,6 +317,8 @@ class AdkRuntime(AgentRuntime):
                 error=str(exc),
             )
             if semantics.error_policy is ErrorPolicy.RETRY:
+                if deadline.expired:
+                    raise
                 try:
                     response = await run_once()
                 except Exception as retry_exc:
@@ -283,7 +342,11 @@ class AdkRuntime(AgentRuntime):
         return response
 
     async def _invoke_inner(
-        self, agent: RuntimeAgent, request: AgentRequest, trace_id: str
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        trace_id: str,
+        deadline: _InvocationDeadline,
     ) -> AgentResponse:
         definition: MicroAgentDefinition = agent._internal["definition"]
         model_provider: ModelProvider = agent._internal["model_provider"]
@@ -309,9 +372,11 @@ class AdkRuntime(AgentRuntime):
 
         session = None
         if session_provider is not None and request.session_id:
-            session = await session_provider.get(request.session_id) or (
-                await session_provider.create(request.session_id, ttl_seconds=session_ttl)
-            )
+            session = await deadline.run(session_provider.get(request.session_id))
+            if session is None:
+                session = await deadline.run(
+                    session_provider.create(request.session_id, ttl_seconds=session_ttl)
+                )
 
         inner_start = time.monotonic()
         messages: list[dict[str, Any]] = [
@@ -356,10 +421,7 @@ class AdkRuntime(AgentRuntime):
                 model_call = model_provider.generate(
                     model_config, messages, tools=tool_schemas or None
                 )
-                if model_config.timeout_seconds:
-                    response = await asyncio.wait_for(model_call, model_config.timeout_seconds)
-                else:
-                    response = await model_call
+                response = await deadline.run(model_call, cap=model_config.timeout_seconds)
             except Exception as exc:
                 model_span.add_event("model.error", {"error": str(exc)})
                 self._telemetry.finish_span(model_span)
@@ -387,7 +449,12 @@ class AdkRuntime(AgentRuntime):
                 break
 
             tool_results = await self._execute_tools(
-                tools, response.tool_requests, trace_id, agent_span.span_id, labels
+                tools,
+                response.tool_requests,
+                trace_id,
+                agent_span.span_id,
+                labels,
+                deadline=deadline,
             )
             all_tool_results.extend(tool_results)
             for result in tool_results:
@@ -404,20 +471,24 @@ class AdkRuntime(AgentRuntime):
                 {"role": "user", "content": json.dumps(request.input, default=str)}
             )
             session.messages.append({"role": "assistant", "content": response.content})
-            await session_provider.update(session, ttl_seconds=session_ttl)  # type: ignore[union-attr]
+            await deadline.run(
+                session_provider.update(session, ttl_seconds=session_ttl)  # type: ignore[union-attr]
+            )
 
         if (
             memory_provider is not None
             and (self._config.memory_policy or MemoryPolicy()).auto_store
         ):
-            await memory_provider.store(
-                MemoryEntry(
-                    key=f"invocation:{request.request_id or uuid4()}",
-                    value={
-                        "input": request.input,
-                        "output": response.content,
-                    },
-                    scope=memory_scope,
+            await deadline.run(
+                memory_provider.store(
+                    MemoryEntry(
+                        key=f"invocation:{request.request_id or uuid4()}",
+                        value={
+                            "input": request.input,
+                            "output": response.content,
+                        },
+                        scope=memory_scope,
+                    )
                 )
             )
 
@@ -486,6 +557,7 @@ class AdkRuntime(AgentRuntime):
         trace_id: str,
         parent_span_id: str,
         labels: dict[str, str],
+        deadline: _InvocationDeadline | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for tool_request in tool_requests:
@@ -561,12 +633,18 @@ class AdkRuntime(AgentRuntime):
             tool_start = time.monotonic()
             try:
                 timeout = tool.metadata.timeout_seconds or _DEFAULT_TOOL_TIMEOUT_SECONDS
-                result = await asyncio.wait_for(tool.execute(arguments), timeout)
+                if deadline is None:
+                    result = await asyncio.wait_for(tool.execute(arguments), timeout)
+                else:
+                    result = await deadline.run(tool.execute(arguments), cap=timeout)
                 output: Any = result.output
                 error: str | None = result.error
                 if result.is_error and not error:
                     error = "tool reported an error"
             except TimeoutError:
+                if deadline is not None and deadline.expired:
+                    self._telemetry.finish_span(span)
+                    raise
                 output = None
                 error = f"tool '{tool_name}' timed out"
             except Exception as exc:  # noqa: BLE001 — tool failures become results

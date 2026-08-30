@@ -62,6 +62,7 @@ class SlowTool(Tool):
     def __init__(self, delay: float, timeout_seconds: float | None = 5) -> None:
         self._delay = delay
         self._timeout = timeout_seconds
+        self.cancelled = False
 
     @property
     def metadata(self) -> ToolMetadata:
@@ -76,8 +77,46 @@ class SlowTool(Tool):
         return ToolOutputSchema()
 
     async def execute(self, arguments: dict) -> ToolResult:
-        await asyncio.sleep(self._delay)
+        try:
+            await asyncio.sleep(self._delay)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
         return ToolResult(output={"done": True})
+
+
+class SlowModelProvider(FakeModelProvider):
+    """Model double that records cancellation of an in-flight request."""
+
+    def __init__(self, delay: float) -> None:
+        super().__init__(FakeModelConfig(response="slow"))
+        self._delay = delay
+        self.cancelled = False
+
+    async def generate(self, config, messages, tools=None):
+        try:
+            await asyncio.sleep(self._delay)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        return await super().generate(config, messages, tools=tools)
+
+
+class SlowSessionProvider(InMemorySessionProvider):
+    """Session double that records cancellation before a state read."""
+
+    def __init__(self, delay: float) -> None:
+        super().__init__()
+        self._delay = delay
+        self.cancelled = False
+
+    async def get(self, session_id: str):
+        try:
+            await asyncio.sleep(self._delay)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        return await super().get(session_id)
 
 
 class TestRuntimeSemantics:
@@ -136,6 +175,33 @@ class TestRuntimeSemantics:
         response = await runtime.invoke(agent, AgentRequest(input={}))
         assert response.status == "success"
         assert response.metadata["iterations"] == 1
+
+    @pytest.mark.asyncio
+    async def test_request_deadline_cancels_model_call(self):
+        provider = SlowModelProvider(delay=1.0)
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = await runtime.create(_definition())
+
+        with pytest.raises(TimeoutError, match="deadline"):
+            await runtime.invoke(agent, AgentRequest(timeout_seconds=0.05))
+        assert provider.cancelled is True
+
+    @pytest.mark.asyncio
+    async def test_request_deadline_cancels_tool_call(self):
+        provider = FakeModelProvider(
+            FakeModelConfig(
+                response="done",
+                tool_requests=[{"name": "slow", "arguments": {}}],
+            )
+        )
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = await runtime.create(_definition())
+        slow = SlowTool(delay=1.0)
+        agent._internal["tools"] = {"slow": slow}
+
+        with pytest.raises(TimeoutError, match="deadline"):
+            await runtime.invoke(agent, AgentRequest(timeout_seconds=0.05))
+        assert slow.cancelled is True
 
     @pytest.mark.asyncio
     async def test_tool_timeout_enforced(self):
@@ -215,6 +281,19 @@ class TestSessionsAndMemory:
         roles = [m["role"] for m in session.messages]
         assert roles == ["user", "assistant"]
         assert session.metadata["created_at"]
+
+    @pytest.mark.asyncio
+    async def test_request_deadline_cancels_session_call(self):
+        session_provider = SlowSessionProvider(delay=1.0)
+        runtime = AdkRuntime(AdkRuntimeConfig(session_provider=session_provider))
+        agent = await runtime.create(_definition())
+
+        with pytest.raises(TimeoutError, match="deadline"):
+            await runtime.invoke(
+                agent,
+                AgentRequest(session_id="slow-session", timeout_seconds=0.05),
+            )
+        assert session_provider.cancelled is True
 
     @pytest.mark.asyncio
     async def test_session_ttl_from_definition(self):

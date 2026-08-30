@@ -66,6 +66,13 @@ class TestAgentRequest:
         assert req.input["action"] == "check"
         assert req.session_id == "sess-1"
 
+    def test_request_timeout_is_optional(self):
+        assert AgentRequest(timeout_seconds=2.5).timeout_seconds == 2.5
+
+    def test_request_timeout_must_be_positive(self):
+        with pytest.raises(ValueError, match="timeout_seconds"):
+            AgentRequest(timeout_seconds=0)
+
 
 class TestAgentResponse:
     """Test agent response."""

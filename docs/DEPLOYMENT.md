@@ -39,6 +39,9 @@ Before using this outside a disposable namespace:
 - add external shared state for multiple replicas
 - define a shutdown deadline and cancellation policy for requests that do not
   drain in time
+- enforce the same request body limit and deadline budget at the ingress or
+  gateway; this is required for chunked requests and protects work before it
+  reaches the application
 
 ## OpenShift
 

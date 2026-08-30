@@ -149,7 +149,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in; MCP adapters can be injected | plugin registry, tool-schema validation, and safe side-effect classification |
 | MCP | interfaces, security checks, fake client, manager | official SDK wire client and protocol lifecycle |
 | A2A | preliminary card generator and discovery route | A2A v1.0.1 card and task-protocol compliance |
-| State | in-memory providers, SQLite session example, bounded concurrency, and cancellation-aware shutdown | production shared providers and provider-specific deadlines |
+| State | in-memory providers, SQLite session example, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
 | Security | data types and programmatic policy evaluator | authentication, caller propagation, policy/credential resolution, approval flow |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -181,7 +181,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 333 tests. CI runs lint, typing, schema, unit,
+The current suite contains 339 tests. CI runs lint, typing, schema, unit,
 integration, E2E, package, container, separate runtime/development dependency
 audits, and strict documentation gates. Release tags repeat the quality gates,
 validate the tag against the package version, and publish only after all

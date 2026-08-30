@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `fa5d456` on 2026-08-30. Completed work is removed rather
+Baseline audited: `c6a2470` on 2026-08-30. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -41,7 +41,8 @@ OpenAI-compatible configuration using only external configuration changes.
 
 ### P0.3 Complete invocation concurrency controls
 
-- [ ] Propagate explicit deadlines through model, tool, MCP, and state calls.
+- [x] Propagate one invocation deadline through model, tool, MCP, and state
+      calls; cancellation reaches the active provider operation.
 
 Acceptance: concurrency is bounded, cancellation releases resources, and
 shutdown either drains within its deadline or cancels remaining work safely.

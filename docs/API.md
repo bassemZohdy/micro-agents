@@ -21,7 +21,8 @@ The current API is pre-release and unversioned beyond the `/v1` path.
   },
   "request_id": "request-123",
   "session_id": "session-456",
-  "caller_metadata": {}
+  "caller_metadata": {},
+  "timeout_seconds": 15
 }
 ```
 
@@ -37,6 +38,12 @@ that exceed it; applications can choose a smaller limit with the
 
 `request_id` is optional. When it is omitted or empty, the service generates a
 UUID and returns the same value in the response.
+
+`timeout_seconds` is an optional positive end-to-end deadline for the
+invocation. The runtime uses the shortest of the request deadline, the
+definition's overall timeout, and each model/tool timeout. Cancellation of any
+in-flight model, tool (including MCP adapters), session, or memory operation
+releases its resources and propagates to that provider.
 
 ## Invoke response
 
@@ -70,6 +77,17 @@ Oversized bodies return HTTP 413 with `code: request_too_large`. Other runtime
 exceptions can still surface as generic HTTP 500 responses until the complete
 error taxonomy and authentication middleware are implemented.
 
+An exhausted request or definition deadline returns HTTP 504:
+
+```json
+{
+  "detail": {
+    "code": "deadline_exceeded",
+    "message": "Invocation deadline exceeded"
+  }
+}
+```
+
 ## Invocation concurrency
 
 Definitions can bound concurrent calls and choose overload behavior:
@@ -83,9 +101,9 @@ spec:
 
 `reject` returns HTTP 429 (`code: invocation_overloaded`) before model
 invocation and includes `Retry-After: 1`. `wait` queues the caller until a
-slot is available. Cancellation releases a queued slot; propagating explicit
-deadlines through model, tool, MCP, and state providers remains an open
-production task.
+slot is available. Cancellation releases a queued slot. An invocation deadline
+is shared by every nested model, tool/MCP, session, and memory operation, so a
+retry cannot reset the caller's remaining budget.
 
 ## Health behavior
 
