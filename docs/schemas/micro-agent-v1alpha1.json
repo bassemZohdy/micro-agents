@@ -1,0 +1,768 @@
+{
+  "$defs": {
+    "A2AConfig": {
+      "additionalProperties": false,
+      "description": "Agent-to-Agent interoperability configuration.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "protocol_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol Version"
+        }
+      },
+      "title": "A2AConfig",
+      "type": "object"
+    },
+    "AgentBehavior": {
+      "additionalProperties": false,
+      "description": "Defines agent behavioral instructions and contracts.",
+      "properties": {
+        "instructions": {
+          "description": "System instructions for the agent.",
+          "minLength": 1,
+          "title": "Instructions",
+          "type": "string"
+        },
+        "input_contract": {
+          "$ref": "#/$defs/InputContract"
+        },
+        "output_contract": {
+          "$ref": "#/$defs/OutputContract"
+        }
+      },
+      "required": [
+        "instructions"
+      ],
+      "title": "AgentBehavior",
+      "type": "object"
+    },
+    "Dependencies": {
+      "additionalProperties": false,
+      "description": "All agent dependencies.",
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          },
+          "title": "Tools",
+          "type": "array"
+        },
+        "mcp_servers": {
+          "items": {
+            "$ref": "#/$defs/McpServerRef"
+          },
+          "title": "Mcp Servers",
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/SkillDefinition"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "knowledge": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeRef"
+          },
+          "title": "Knowledge",
+          "type": "array"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MemoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session": {
+          "$ref": "#/$defs/SessionConfig"
+        }
+      },
+      "title": "Dependencies",
+      "type": "object"
+    },
+    "ErrorPolicy": {
+      "description": "Error handling policy.",
+      "enum": [
+        "fail",
+        "retry",
+        "fallback"
+      ],
+      "title": "ErrorPolicy",
+      "type": "string"
+    },
+    "InputContract": {
+      "additionalProperties": false,
+      "description": "Describes the expected input for the agent.",
+      "properties": {
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/ParameterDefinition"
+          },
+          "title": "Parameters",
+          "type": "array"
+        }
+      },
+      "title": "InputContract",
+      "type": "object"
+    },
+    "Interoperability": {
+      "additionalProperties": false,
+      "description": "Interoperability configuration.",
+      "properties": {
+        "a2a": {
+          "$ref": "#/$defs/A2AConfig"
+        }
+      },
+      "title": "Interoperability",
+      "type": "object"
+    },
+    "KnowledgeRef": {
+      "additionalProperties": false,
+      "description": "Reference to an external knowledge source.",
+      "properties": {
+        "ref": {
+          "description": "Knowledge source reference identifier.",
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "source_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Type of knowledge source.",
+          "title": "Source Type"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "KnowledgeRef",
+      "type": "object"
+    },
+    "McpServerRef": {
+      "additionalProperties": false,
+      "description": "Reference to an MCP server.",
+      "properties": {
+        "ref": {
+          "description": "MCP server reference identifier.",
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "transport": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Transport type (stdio, sse, streamable-http).",
+          "title": "Transport"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "MCP server endpoint URL.",
+          "title": "Endpoint"
+        },
+        "credential_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to external credential.",
+          "title": "Credential Ref"
+        },
+        "allowed_capabilities": {
+          "description": "Allowed MCP capabilities.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Capabilities",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "McpServerRef",
+      "type": "object"
+    },
+    "MemoryRef": {
+      "additionalProperties": false,
+      "description": "Reference to a memory provider.",
+      "properties": {
+        "ref": {
+          "description": "Memory provider reference identifier.",
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Memory scope (user, agent, tenant, domain, application).",
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "MemoryRef",
+      "type": "object"
+    },
+    "MicroAgentSpec": {
+      "additionalProperties": false,
+      "description": "The specification of a Micro-Agent.",
+      "properties": {
+        "behavior": {
+          "$ref": "#/$defs/AgentBehavior"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/Dependencies"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeSemantics"
+        },
+        "interoperability": {
+          "$ref": "#/$defs/Interoperability"
+        },
+        "security": {
+          "$ref": "#/$defs/Security"
+        }
+      },
+      "required": [
+        "behavior"
+      ],
+      "title": "MicroAgentSpec",
+      "type": "object"
+    },
+    "ModelRef": {
+      "additionalProperties": false,
+      "description": "Reference to a model provider.",
+      "properties": {
+        "ref": {
+          "description": "Model reference identifier.",
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model provider name.",
+          "title": "Provider"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model endpoint URL.",
+          "title": "Endpoint"
+        },
+        "credential_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to external credential.",
+          "title": "Credential Ref"
+        },
+        "generation": {
+          "additionalProperties": true,
+          "description": "Generation configuration.",
+          "title": "Generation",
+          "type": "object"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model call timeout.",
+          "title": "Timeout Seconds"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "ModelRef",
+      "type": "object"
+    },
+    "ObjectMeta": {
+      "additionalProperties": false,
+      "description": "Standard object metadata.",
+      "properties": {
+        "name": {
+          "description": "Unique agent name.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "description": "Semantic version of the agent.",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-readable description.",
+          "title": "Description"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels.",
+          "title": "Labels",
+          "type": "object"
+        },
+        "annotations": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value annotations.",
+          "title": "Annotations",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ObjectMeta",
+      "type": "object"
+    },
+    "OutputContract": {
+      "additionalProperties": false,
+      "description": "Describes the expected output from the agent.",
+      "properties": {
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/ParameterDefinition"
+          },
+          "title": "Parameters",
+          "type": "array"
+        }
+      },
+      "title": "OutputContract",
+      "type": "object"
+    },
+    "ParameterDefinition": {
+      "additionalProperties": false,
+      "description": "Defines a single parameter in an input/output contract.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "description": "Parameter type (e.g. string, integer, boolean, object, array).",
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "ParameterDefinition",
+      "type": "object"
+    },
+    "RuntimeSemantics": {
+      "additionalProperties": false,
+      "description": "Runtime behavior configuration.",
+      "properties": {
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Overall invocation timeout.",
+          "title": "Timeout Seconds"
+        },
+        "max_iterations": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum agent iterations.",
+          "title": "Max Iterations"
+        },
+        "error_policy": {
+          "$ref": "#/$defs/ErrorPolicy",
+          "default": "fail"
+        },
+        "capabilities": {
+          "description": "Declared runtime capabilities.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        }
+      },
+      "title": "RuntimeSemantics",
+      "type": "object"
+    },
+    "Security": {
+      "additionalProperties": false,
+      "description": "Security configuration.",
+      "properties": {
+        "credential_refs": {
+          "description": "References to external credentials.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Credential Refs",
+          "type": "array"
+        },
+        "identity_requirements": {
+          "additionalProperties": true,
+          "title": "Identity Requirements",
+          "type": "object"
+        },
+        "policy_refs": {
+          "description": "References to policy definitions.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Policy Refs",
+          "type": "array"
+        }
+      },
+      "title": "Security",
+      "type": "object"
+    },
+    "SessionConfig": {
+      "additionalProperties": false,
+      "description": "Session configuration.",
+      "properties": {
+        "persistence": {
+          "default": "none",
+          "description": "Session persistence mode (none, external).",
+          "title": "Persistence",
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Session time-to-live.",
+          "title": "Ttl Seconds"
+        }
+      },
+      "title": "SessionConfig",
+      "type": "object"
+    },
+    "SkillDefinition": {
+      "additionalProperties": false,
+      "description": "Defines a semantic skill/capability.",
+      "properties": {
+        "id": {
+          "description": "Unique skill identifier.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Human-readable skill name.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "input_metadata": {
+          "additionalProperties": true,
+          "title": "Input Metadata",
+          "type": "object"
+        },
+        "output_metadata": {
+          "additionalProperties": true,
+          "title": "Output Metadata",
+          "type": "object"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "SkillDefinition",
+      "type": "object"
+    },
+    "ToolDefinition": {
+      "additionalProperties": false,
+      "description": "Defines a tool available to the agent.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool source (native, mcp, openapi).",
+          "title": "Source"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Seconds"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ToolDefinition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Micro-Agent Definition v1alpha1.\n\nThis is the top-level declarative definition of a Micro-Agent.\nIt contains no ADK-native or framework-native types.",
+  "properties": {
+    "api_version": {
+      "default": "microagents.io/v1alpha1",
+      "description": "API version of this definition.",
+      "pattern": "^microagents\\.io/v1alpha1$",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "kind": {
+      "default": "MicroAgent",
+      "description": "Resource kind.",
+      "pattern": "^MicroAgent$",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ObjectMeta"
+    },
+    "spec": {
+      "$ref": "#/$defs/MicroAgentSpec"
+    }
+  },
+  "required": [
+    "metadata",
+    "spec"
+  ],
+  "title": "MicroAgentDefinition",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microagents.io/schemas/v1alpha1/micro-agent.json"
+}

@@ -1,0 +1,168 @@
+"""Micro-Agent Configuration Framework.
+
+Implements configuration precedence:
+    Framework Defaults → Definition → Environment → Secret Bindings
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class SecretRef(BaseModel, extra="forbid"):
+    """Reference to an external secret."""
+
+    name: str = Field(..., min_length=1, description="Secret name/key.")
+    source: str | None = Field(None, description="Secret source (env, vault, k8s-secret).")
+
+
+class EnvironmentConfig(BaseModel, extra="forbid"):
+    """Environment-specific configuration overrides."""
+
+    model_endpoint: str | None = None
+    model_api_key_ref: SecretRef | None = None
+    mcp_endpoints: dict[str, str] = Field(default_factory=dict)
+    memory_endpoint: str | None = None
+    session_endpoint: str | None = None
+    log_level: str = "INFO"
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+@dataclass
+class ResolvedConfig:
+    """Final resolved configuration after applying precedence."""
+
+    model_ref: str | None = None
+    model_provider: str | None = None
+    model_endpoint: str | None = None
+    model_api_key: str | None = None
+    model_generation: dict[str, Any] = field(default_factory=dict)
+    model_timeout_seconds: int | None = None
+    mcp_endpoints: dict[str, str] = field(default_factory=dict)
+    memory_endpoint: str | None = None
+    session_endpoint: str | None = None
+    log_level: str = "INFO"
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Environment variable resolution
+# ---------------------------------------------------------------------------
+
+_ENV_PREFIX = "MICRO_AGENT_"
+
+
+def _env_key(name: str) -> str:
+    return f"{_ENV_PREFIX}{name.upper()}"
+
+
+def _read_env(name: str) -> str | None:
+    return os.environ.get(_env_key(name))
+
+
+def _resolve_secret(ref: SecretRef) -> str | None:
+    """Resolve a secret reference to its value.
+
+    Currently supports:
+    - env: read from environment variable
+    """
+    if ref.source == "env" or ref.source is None:
+        return os.environ.get(ref.name)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Configuration resolver
+# ---------------------------------------------------------------------------
+
+
+def resolve_config(
+    definition_overrides: dict[str, Any] | None = None,
+    env_config: EnvironmentConfig | None = None,
+) -> ResolvedConfig:
+    """Resolve configuration using precedence:
+    1. Framework defaults
+    2. Definition overrides
+    3. Environment configuration
+    4. Secret bindings
+    """
+    config = ResolvedConfig()
+
+    # Layer 1: Framework defaults (already set in dataclass)
+
+    # Layer 2: Definition overrides
+    if definition_overrides:
+        for key, value in definition_overrides.items():
+            if hasattr(config, key) and value is not None:
+                setattr(config, key, value)
+
+    # Layer 3: Environment configuration
+    if env_config:
+        if env_config.model_endpoint:
+            config.model_endpoint = env_config.model_endpoint
+        if env_config.mcp_endpoints:
+            config.mcp_endpoints.update(env_config.mcp_endpoints)
+        if env_config.memory_endpoint:
+            config.memory_endpoint = env_config.memory_endpoint
+        if env_config.session_endpoint:
+            config.session_endpoint = env_config.session_endpoint
+        config.log_level = env_config.log_level
+        config.extra.update(env_config.extra)
+
+    # Layer 3b: Environment variable overrides
+    env_model_endpoint = _read_env("model_endpoint")
+    if env_model_endpoint:
+        config.model_endpoint = env_model_endpoint
+
+    env_log_level = _read_env("log_level")
+    if env_log_level:
+        config.log_level = env_log_level
+
+    # Layer 4: Secret bindings
+    if env_config and env_config.model_api_key_ref:
+        config.model_api_key = _resolve_secret(env_config.model_api_key_ref)
+
+    return config
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ConfigDiagnostic:
+    """A configuration diagnostic message."""
+
+    level: str  # "error", "warning", "info"
+    message: str
+    path: str = ""
+
+
+def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
+    """Validate a resolved configuration and return diagnostics."""
+    diagnostics: list[ConfigDiagnostic] = []
+
+    if not config.model_ref and not config.model_endpoint:
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="warning",
+                message="No model reference or endpoint configured.",
+                path="model",
+            )
+        )
+
+    if config.log_level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message=f"Invalid log level: {config.log_level}",
+                path="log_level",
+            )
+        )
+
+    return diagnostics

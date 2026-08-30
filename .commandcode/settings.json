@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git:*)",
+      "Shell(mkdir:*)",
+      "Shell(touch:*)",
+      "Shell(pip:*)",
+      "Shell(pytest:*)",
+      "Shell(ruff:*)",
+      "Shell(mypy:*)",
+      "Shell(python -m micro_agent.definition.schema)",
+      "Shell(gh:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

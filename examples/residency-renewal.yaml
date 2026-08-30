@@ -1,0 +1,126 @@
+apiVersion: microagents.io/v1alpha1
+kind: MicroAgent
+
+metadata:
+  name: residency-renewal
+  version: 1.0.0
+  description: >
+    Handles residency renewal activities including eligibility checks,
+    renewal submission, and status tracking.
+  labels:
+    domain: residency
+    team: government-services
+  annotations:
+    owner: residency-team@example.com
+
+spec:
+
+  behavior:
+    instructions: |
+      Assist with residency renewal operations.
+      Check eligibility before submitting renewals.
+      Operate only within the declared capabilities.
+      Do not perform actions outside your bounded responsibility.
+
+    input_contract:
+      parameters:
+        - name: user_id
+          type: string
+          description: The user identifier.
+          required: true
+        - name: action
+          type: string
+          description: The requested action.
+          required: true
+
+    output_contract:
+      parameters:
+        - name: result
+          type: object
+          description: The action result.
+          required: true
+
+  dependencies:
+
+    model:
+      ref: reasoning-model
+      provider: anthropic
+      timeout_seconds: 30
+      generation:
+        temperature: 0.2
+        max_tokens: 4096
+
+    tools:
+      - name: check_eligibility
+        description: Check if a user is eligible for renewal.
+        source: native
+        timeout_seconds: 10
+      - name: submit_renewal
+        description: Submit a renewal application.
+        source: native
+        timeout_seconds: 30
+
+    mcp_servers:
+      - ref: residency-services
+        transport: streamable-http
+        endpoint: https://mcp.residency.example.com
+        timeout_seconds: 15
+      - ref: profile-services
+        transport: streamable-http
+        endpoint: https://mcp.profile.example.com
+
+    skills:
+      - id: check-eligibility
+        name: Check Eligibility
+        description: Determine whether a user is eligible for residency renewal.
+        tags:
+          - residency
+          - eligibility
+      - id: submit-renewal
+        name: Submit Renewal
+        description: Submit a residency renewal application on behalf of a user.
+        tags:
+          - residency
+          - submission
+      - id: check-renewal-status
+        name: Check Renewal Status
+        description: Check the current status of a renewal application.
+        tags:
+          - residency
+          - status
+
+    knowledge:
+      - ref: residency-rules
+        source_type: document
+        version: "2024.1"
+
+    memory:
+      ref: residency-memory
+      scope: user
+
+    session:
+      persistence: external
+      ttl_seconds: 3600
+
+  runtime:
+    timeout_seconds: 120
+    max_iterations: 10
+    error_policy: retry
+    capabilities:
+      - streaming
+      - structured-output
+
+  interoperability:
+    a2a:
+      enabled: true
+      endpoint: https://a2a.residency.example.com
+      protocol_version: "1.0"
+
+  security:
+    credential_refs:
+      - residency-api-key
+      - profile-api-key
+    identity_requirements:
+      require_caller_identity: true
+    policy_refs:
+      - residency-access-policy

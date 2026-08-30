@@ -1,0 +1,24 @@
+apiVersion: microagents.io/v1alpha1
+kind: MicroAgent
+
+metadata:
+  name: notification-agent
+  version: 0.1.0
+  description: Sends notifications through configured channels.
+
+spec:
+
+  behavior:
+    instructions: |
+      Send notifications to users through available channels.
+      Respect rate limits and delivery preferences.
+
+  dependencies:
+    model:
+      ref: reasoning-model
+    skills:
+      - id: send-notification
+        name: Send Notification
+        description: Send a notification to a user.
+        tags:
+          - notification
