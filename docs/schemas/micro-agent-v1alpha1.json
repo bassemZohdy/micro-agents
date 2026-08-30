@@ -575,6 +575,20 @@
           "description": "Maximum concurrent invocations for this agent.",
           "title": "Max Concurrency"
         },
+        "shutdown_timeout_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum time to drain invocations during shutdown.",
+          "title": "Shutdown Timeout Seconds"
+        },
         "concurrency_policy": {
           "$ref": "#/$defs/ConcurrencyPolicy",
           "default": "wait",

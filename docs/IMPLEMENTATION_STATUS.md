@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 313 pass | 260 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 317 pass | 264 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -57,11 +57,13 @@ Implemented:
   stop
 - definition-level concurrency limit with wait/reject overload behavior and
   stop wake-up handling
+- client cancellation propagation and bounded shutdown drain with cancellation
+  of stuck invocation tasks
 
 Gaps:
 
 - `runtimes/adk` does not use Google ADK
-- cancellation/deadline propagation is incomplete
+- explicit provider-specific deadline propagation remains incomplete
 - retrying the complete invocation can replay side effects
 - declared input/output contracts are not enforced
 

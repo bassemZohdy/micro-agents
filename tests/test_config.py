@@ -40,6 +40,11 @@ class TestResolveConfig:
         config = resolve_config()
         assert config.model_endpoint == "https://env.example.com"
 
+    def test_environment_log_level_override(self, monkeypatch):
+        monkeypatch.setenv("MICRO_AGENT_LOG_LEVEL", "DEBUG")
+        config = resolve_config()
+        assert config.log_level == "DEBUG"
+
     def test_secret_resolution(self, monkeypatch):
         monkeypatch.setenv("MY_API_KEY", "secret-value")
         config = resolve_config(

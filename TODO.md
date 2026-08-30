@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `bd077fa` on 2026-08-30. Completed work is removed rather
+Baseline audited: `0c12af7` on 2026-08-30. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -50,9 +50,10 @@ OpenAI-compatible configuration using only external configuration changes.
 
 - [x] Add a definition-level concurrency limit with explicit `wait` or
       `reject` overload behavior.
-- [ ] Propagate client cancellation and shutdown deadlines through runtime,
-      model, tool, MCP, and state calls.
-- [ ] Add cancellation, overload, repeated-stop, and shutdown-timeout race
+- [x] Propagate client cancellation through the agent/runtime boundary and
+      cancel in-flight work after a configured shutdown drain deadline.
+- [ ] Propagate explicit deadlines through model, tool, MCP, and state calls.
+- [x] Add cancellation, overload, repeated-stop, and shutdown-timeout race
       tests.
 
 Acceptance: concurrency is bounded, cancellation releases resources, and

@@ -26,10 +26,10 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | not wired |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | not wired |
-| `MICRO_AGENT_LOG_LEVEL` | `log_level` | not applied to Uvicorn/runtime logging |
+| `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
-Do not assume that setting these variables changes `python -m micro_agent`
-until P0.2 is complete.
+Memory and session endpoint variables are resolved for future provider
+bindings, but the executable bootstrap does not construct those providers yet.
 
 ## Secret references
 
@@ -79,7 +79,13 @@ spec:
   runtime:
     max_concurrency: 4
     concurrency_policy: wait  # or reject
+    shutdown_timeout_seconds: 30
 ```
+
+When `shutdown_timeout_seconds` is set, stop waits for active calls to drain
+for that duration, then cancels the remaining invocation tasks before closing
+the runtime. Provider-specific deadline propagation remains a production
+hardening item.
 
 ## Development fake mode
 

@@ -16,6 +16,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   fake mode explicitly.
 - Added definition-level invocation concurrency limits with explicit `wait` or
   `reject` overload behavior, including lifecycle stop-race coverage.
+- Added `shutdown_timeout_seconds` drain deadlines, cancellation propagation,
+  and regression tests for cancelled calls and repeated shutdown.
 
 ### Documentation
 
@@ -104,7 +106,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 313 collected (260 unit-selected and 53 integration/e2e-selected;
+- Tests: 317 collected (264 unit-selected and 53 integration/e2e-selected;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.
