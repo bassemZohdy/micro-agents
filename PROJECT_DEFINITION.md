@@ -1,1150 +1,285 @@
-# Micro-Agents
+# Micro-Agents — Project Definition
 
-## Project Definition
+## Purpose
 
-Project name:
+Micro-Agents defines an architectural style and a reference framework for
+cloud-native, independently deployable AI agents.
 
-```text
-Micro-Agents
-```
+The project adapts useful properties from microservices, cloud-native systems,
+the Twelve-Factor App, and distributed systems to agentic workloads. It must
+define concrete boundaries and operational properties; it must not merely
+rename an existing agent framework.
 
-Working repository:
+## Definition
 
-```text
-micro-agents
-```
+> A Micro-Agent is an independently deployable, narrowly scoped agentic
+> component that owns a bounded capability, declares its dependencies and
+> capability contract, externalizes configuration and persistent state, and
+> can be independently scaled, secured, observed, upgraded, and operated.
 
-Primary objectives:
+A Micro-Agent is not defined by model size, prompt length, tool count, or
+source-code size.
 
-```text
-Define Micro-Agent Architecture
+## Project deliverables
 
-Define the Micro-Agent unit
+1. **Micro-Agent Architecture** — the architectural style and qualification
+   criteria.
+2. **Micro-Agent Definition** — a versioned, runtime-neutral declarative
+   contract.
+3. **Micro-Agent Framework** — lifecycle and integration contracts for one
+   standalone agent.
+4. **Runtime SPI** — the smallest practical boundary between framework
+   semantics and a concrete agent runtime.
+5. **Google ADK reference adapter** — the first real runtime integration.
+6. **Operational baseline** — HTTP, health, security, telemetry, container,
+   and Kubernetes/OpenShift behavior.
 
-Define a declarative Micro-Agent Definition
+The repository currently delivers partial implementations of items 1–4 and a
+custom reference loop. Item 5 is not implemented: no Google ADK dependency or
+ADK API is present. Operational seams exist, but production bootstrap and
+end-to-end security/state/protocol integration are incomplete.
 
-Provide a lightweight Micro-Agent Framework
+## Architectural principles
 
-Provide a runtime abstraction
+### Bounded agentic capability
 
-Provide an initial Google ADK runtime implementation
-```
+Each Micro-Agent owns one coherent responsibility. A residency-renewal agent
+may check eligibility, submit a renewal, and check status because those skills
+belong to one bounded capability. It should not also own unrelated payment,
+health, travel, and property capabilities.
 
----
+### Independent deployment and scaling
 
-# 1. Project Purpose
+One Micro-Agent can be built, released, rolled back, replicated, and scaled
+without rebuilding unrelated agents.
 
-Micro-Agents defines an architectural style and reference framework for creating cloud-native, independently deployable AI agents.
+### Runtime-neutral definition
 
-The project takes proven principles from:
-
-```text
-Microservices Architecture
-Cloud-Native Architecture
-Twelve-Factor Applications
-Distributed Systems
-```
-
-and extends them to agentic applications.
-
-The project must not simply rename existing agent frameworks.
-
-It must define concrete architectural properties that distinguish a Micro-Agent from a generic AI agent.
-
----
-
-# 2. Definition of a Micro-Agent
-
-A Micro-Agent is:
-
-> An independently deployable, narrowly scoped agentic component that owns a bounded capability, exposes explicit capabilities, externalizes configuration and persistent state, and can be independently scaled, secured, observed, upgraded, and operated.
-
-A Micro-Agent is not defined by:
-
-```text
-number of lines of code
-prompt length
-number of tools
-model size
-```
-
-It is defined by architectural boundaries and operational independence.
-
----
-
-# 3. Fundamental Characteristics
-
-A Micro-Agent should have:
-
-```text
-bounded agentic capability
-
-independent deployment
-
-independent scaling
-
-explicit identity
-
-explicit configuration
-
-explicit dependencies
-
-explicit capability contract
-
-externalized persistent state
-
-disposable runtime instances
-
-observable behavior
-
-security boundaries
-
-resilience
-
-versioning
-
-standard interoperability
-```
-
----
-
-# 4. Bounded Agentic Capability
-
-A Micro-Agent owns one coherent agentic responsibility.
-
-Good example:
-
-```text
-Residency Renewal Agent
-
-Skills:
-- check eligibility
-- determine renewal requirements
-- submit renewal
-- check renewal status
-```
-
-Bad example:
-
-```text
-Everything Agent
-
-- residency
-- payments
-- property
-- health
-- travel
-- investment
-- customer support
-- notifications
-```
-
-A Micro-Agent may expose multiple related skills while maintaining one bounded domain responsibility.
-
----
-
-# 5. Independent Deployment
-
-A Micro-Agent should be independently deployable.
-
-Conceptually:
-
-```text
-Agent Definition
-       +
-Runtime Artifact
-       ↓
-Micro-Agent Deployment
-       ↓
-one or more replicas
-```
-
-Updating one Micro-Agent should not require rebuilding unrelated Micro-Agents.
-
----
-
-# 6. Independent Scaling
-
-Micro-Agent replicas should support independent horizontal scaling.
-
-```text
-Residency Agent
-
-Replica 1
-Replica 2
-Replica 3
-```
-
-Persistent state must not depend on one runtime instance.
-
----
-
-# 7. Externalized Configuration
-
-Environment-specific configuration should remain outside the runtime artifact.
-
-Examples:
-
-```text
-model endpoints
-MCP endpoints
-memory stores
-credentials
-timeouts
-policies
-deployment configuration
-```
-
-Secrets must remain externalized.
-
----
-
-# 8. Externalized State
-
-Runtime processes should be disposable.
-
-Persistent state should be stored in backing services.
-
-Separate:
-
-```text
-Session
-Memory
-Knowledge
-Operational state
-```
-
-Do not assume local process memory survives restart or scaling.
-
----
-
-# 9. Micro-Agent Definition
-
-A Micro-Agent should have a declarative definition.
-
-Conceptually:
-
-```yaml
-apiVersion: microagents.io/v1alpha1
-kind: MicroAgent
-
-metadata:
-  name: example-agent
-  version: 1.0.0
-
-spec:
-
-  description: ...
-
-  instructions: ...
-
-  model:
-    ref: model-name
-
-  skills:
-    - ...
-
-  tools:
-    - ...
-
-  mcps:
-    - ...
-
-  memory:
-    ...
-
-  session:
-    ...
-
-  interoperability:
-    ...
-```
-
-The definition represents the logical Micro-Agent.
-
-It must not expose runtime-framework-native objects.
-
----
-
-# 10. Definition Portability Goal
-
-The definition should contain sufficient semantics for a compatible runtime to reconstruct the same logical Micro-Agent.
-
-Conceptually:
-
-```text
-MicroAgentDefinition
-        │
-        ├── ADK Runtime
-        │      ↓
-        │   ADK Agent
-        │
-        └── Future Runtime
-               ↓
-          Equivalent logical agent
-```
-
-Exact model output is not expected to be deterministic across runtime implementations.
-
-Portable semantics are the goal.
-
----
-
-# 11. Definition vs State
-
-Micro-Agent Definition and Micro-Agent State are separate.
+The definition describes logical behavior, dependencies, runtime semantics,
+interoperability, and security requirements without embedding framework-native
+objects.
 
 ```text
 Definition
-    What the Micro-Agent is.
-
-State
-    Where a particular running logical instance currently is.
+    +-- metadata and version
+    +-- behavior and input/output contracts
+    +-- model, tools, MCP, skills, knowledge, memory, session
+    +-- runtime semantics
+    +-- interoperability
+    `-- security references
 ```
 
-Potential future portability:
+Deployment concerns such as image, replicas, resource limits, autoscaling,
+namespace, and secret bindings remain outside the logical definition.
+
+### Explicit capability contract
+
+Skills describe what the agent can do for callers. Tools describe executable
+mechanisms. A skill can use several tools, and a tool does not automatically
+become a public skill.
+
+### Bounded autonomy and safe side effects
+
+Autonomy is bounded by deterministic controls outside the prompt:
+
+- authenticated caller and workload identity
+- authorized skills, tools, and MCP servers
+- policy evaluation
+- confirmation or approval where required
+- timeout and resource budgets
+- idempotency and durable deduplication for retryable writes
+
+Prompt instructions are not an authorization boundary.
+
+### Externalized configuration, secrets, and state
+
+Environment-specific values and secret material remain outside the artifact.
+Persistent session, memory, knowledge, operational state, and idempotency
+records use backing services. In-memory and SQLite providers are development
+references, not evidence of production multi-replica state.
+
+### Disposable and concurrent runtime instances
+
+Runtime processes start quickly, handle concurrent invocations safely, drain
+in-flight work on shutdown, and can be replaced without losing persistent
+state.
+
+### Observable operation
+
+Logs, metrics, and traces include agent/version, request, session, caller,
+model, tool, MCP, policy, side-effect, latency, usage, and error context without
+leaking secrets or sensitive content.
+
+### Standard interoperability
+
+Use released MCP and A2A specifications instead of custom equivalents. Protocol
+claims require validation with an official or independently conformant SDK,
+not only project-local dataclasses.
+
+## Logical layers
 
 ```text
-Definition
-+
-Portable State
-       ↓
-Reconstruct / Resume
-```
-
-State portability is an extension of definition portability.
-
-It is not required for the first runtime implementation.
-
----
-
-# 12. Deployment Definition
-
-Operational deployment configuration must remain separate from the logical Micro-Agent definition.
-
-```text
+Architecture
+    |
+    v
 Micro-Agent Definition
-    logical agent
-
-Deployment Definition
-    replicas
-    CPU
-    memory
-    image
-    namespace
-    autoscaling
-    network policy
-    secret bindings
+    |
+    v
+Framework contracts
+    |
+    v
+Runtime SPI
+    |
+    +-- Google ADK adapter (target)
+    `-- additional adapters only after demonstrated need
 ```
 
-This permits one logical definition to be deployed into different environments.
+The framework owns shared semantics:
 
----
+- definition parsing and validation
+- configuration and secret references
+- lifecycle and request/response contracts
+- model, tool, MCP, skill, knowledge, memory, and session contracts
+- identity and policy context
+- health and observability
+- HTTP and standards-based interoperability
 
-# 13. Project Layers
+Concrete runtimes own framework-specific construction and invocation behavior.
+No runtime-native type crosses the common API.
 
-```text
-Micro-Agents
-│
-├── Architecture Definition
-│
-├── Micro-Agent Definition
-│
-├── Micro-Agent Core Framework
-│
-├── Runtime Abstraction
-│
-└── Runtime Implementations
-    └── ADK
-```
+## Definition compatibility
 
----
+The current API version is `microagents.io/v1alpha1`.
 
-# 14. Micro-Agent Core Framework
+- Unknown properties are rejected.
+- Additive optional fields may be introduced within `v1alpha1`.
+- Breaking semantic or structural changes require a new API version.
+- A runtime must reject unsupported required capabilities rather than silently
+  ignoring them.
+- A definition being schema-valid does not prove that every referenced
+  provider, tool, policy, or protocol capability is resolvable.
 
-The framework provides shared semantics and runtime services.
+## Runtime strategy
 
-Responsibilities:
+The project implements one runtime adapter first: Google ADK.
 
-```text
-definition parsing
-configuration
-validation
-lifecycle
-request/response contracts
-model configuration
-tools
-MCP
-skills
-memory
-sessions
-health
-observability
-interoperability
-graceful shutdown
-runtime selection/binding
-```
+The current `runtimes/adk` package is a custom model/tool loop and should be
+treated as a prototype until one of these actions is completed:
 
-It must remain lightweight.
+1. integrate Google ADK and prove the adapter with ADK-native lifecycle and
+   invocation tests; or
+2. rename the custom loop to a truthful built-in runtime and add a separate ADK
+   adapter.
 
----
-
-# 15. Runtime Abstraction
-
-The runtime abstraction separates Micro-Agent semantics from the implementation framework.
-
-Conceptually:
-
-```python
-class AgentRuntime:
-    async def create(self, definition): ...
-
-    async def start(self, agent): ...
-
-    async def invoke(self, agent, request): ...
-
-    async def stop(self, agent): ...
-
-    def capabilities(self): ...
-```
-
-Do not expose ADK-native types through common interfaces.
-
----
-
-# 16. Runtime Strategy
-
-Initial runtime:
-
-```text
-Google ADK
-```
-
-Do not implement ADK and LangChain simultaneously.
-
-Implementation order:
-
-```text
-Core semantics
-    ↓
-ADK vertical slice
-    ↓
-production-ready Micro-Agent
-    ↓
-evaluate need for another runtime
-```
-
-No second runtime should be implemented solely to prove abstraction purity.
-
----
-
-# 17. Runtime Capabilities
-
-Different runtimes may support different optional features.
-
-Provide capability reporting rather than artificially emulating unsupported functionality.
-
-Conceptually:
-
-```text
-RuntimeCapabilities
-
-streaming
-memory
-A2A
-MCP
-structured output
-callbacks/plugins
-checkpointing
-```
-
-A core profile may later define minimum Micro-Agent runtime requirements.
-
----
-
-# 18. Models
-
-Models are external dependencies.
-
-Micro-Agent definitions should avoid embedding credentials.
-
-Model configuration should support:
-
-```text
-provider
-model
-endpoint
-credential reference
-timeout
-generation defaults
-capabilities
-```
-
-Provider-specific behavior belongs in runtime or model adapters where necessary.
-
----
-
-# 19. MCP
-
-MCP is a first-class dependency.
-
-MCP may expose:
-
-```text
-tools
-resources
-prompts
-```
-
-A Micro-Agent may attach one or more MCP servers.
-
-MCP connection configuration must remain externalizable.
-
-Do not invent a custom MCP protocol.
-
----
-
-# 20. Tools
-
-Tools represent executable capabilities available to the Micro-Agent.
-
-Tool sources may include:
-
-```text
-runtime-native tools
-application tools
-OpenAPI
-MCP
-future standards
-```
-
-Tool execution should support:
-
-```text
-timeouts
-structured errors
-observability
-policy controls
-```
-
----
-
-# 21. Skills
-
-Skills represent externally advertised semantic capabilities.
-
-Examples:
-
-```text
-check-eligibility
-submit-renewal
-verify-document
-```
-
-A skill is not necessarily equivalent to one tool.
-
-Skills are useful for:
-
-```text
-agent discovery
-capability contracts
-authorization
-documentation
-A2A metadata
-routing
-```
-
----
-
-# 22. Session
-
-Session represents current conversational/runtime context.
-
-Examples:
-
-```text
-conversation history
-temporary state
-caller context
-current interaction
-```
-
-Session persistence should be externally configurable.
-
----
-
-# 23. Memory
-
-Memory represents information retained across interactions.
-
-Memory must remain distinct from Session.
-
-Potential memory scopes:
-
-```text
-user
-agent
-tenant
-domain
-application
-```
-
-Memory should be accessed through a service/provider contract.
-
----
-
-# 24. Knowledge
-
-Knowledge represents externally supplied domain information.
-
-Knowledge should remain distinct from:
-
-```text
-Memory
-Session
-Model training
-```
-
-Knowledge storage/retrieval should be treated as an attachable backing capability.
-
----
-
-# 25. Identity
-
-Every production Micro-Agent should have an explicit identity.
-
-Distinguish:
-
-```text
-user identity
-agent identity
-runtime/workload identity
-application identity
-```
-
-Identity should support policy and audit requirements.
-
----
-
-# 26. Bounded Autonomy
-
-An LLM's theoretical capabilities do not define a Micro-Agent's permitted autonomy.
-
-Autonomy is bounded by:
-
-```text
-skills
-instructions
-available tools
-available MCPs
-permissions
-policies
-guardrails
-identity
-```
-
----
-
-# 27. Safe Side Effects
-
-Operations with side effects should assume retries, failures, and possible replay.
-
-Examples:
-
-```text
-payment
-message sending
-database update
-external command
-application submission
-```
-
-Where appropriate support:
-
-```text
-idempotency
-deduplication
-operation identifiers
-approval
-policy validation
-```
-
----
-
-# 28. Resilience
-
-Micro-Agent resilience extends traditional distributed-system resilience.
-
-Categories include:
-
-```text
-network resilience
-model resilience
-tool resilience
-MCP resilience
-A2A resilience
-semantic failure handling
-```
-
-Potential mechanisms:
-
-```text
-timeout
-retry
-circuit breaker
-bulkhead
-rate limiting
-fallback model
-fallback agent
-```
-
-The core framework should not attempt to implement every distributed resilience feature itself.
-
----
-
-# 29. Observability
-
-Standard logs, metrics, and traces remain required.
-
-Agent-specific observability additionally includes:
-
-```text
-model invocation
-token usage
-tool invocation
-MCP invocation
-memory retrieval
-memory update
-A2A invocation
-policy decision
-agent version
-skill
-cost
-```
-
-Prefer OpenTelemetry-compatible instrumentation.
-
----
-
-# 30. Health
-
-Micro-Agent health has multiple levels.
-
-```text
-Process health
-Runtime readiness
-Dependency health
-Capability readiness
-```
-
-A process may be alive while critical dependencies such as its required model or MCP are unavailable.
-
-Health contracts should reflect this distinction.
-
----
-
-# 31. Twelve-Factor Foundation
-
-Micro-Agent Architecture adopts relevant twelve-factor principles.
-
-Mapping:
-
-```text
-Codebase
-    versioned Micro-Agent source/definition
-
-Dependencies
-    models, MCPs, libraries, runtime explicitly declared
-
-Config
-    environment configuration externalized
-
-Backing Services
-    model, memory, knowledge, MCP and stores treated as attached resources
-
-Build / Release / Run
-    separate artifact build, agent release and running instance
-
-Processes
-    runtime instances disposable and stateless where practical
-
-Port Binding
-    self-contained API/A2A endpoints
-
-Concurrency
-    horizontal scaling through replicas
-
-Disposability
-    fast startup and graceful shutdown
-
-Dev / Prod Parity
-    same agent/runtime artifact
-
-Logs
-    event streams / structured telemetry
-
-Admin Processes
-    migrations and administrative jobs separate
-```
-
----
-
-# 32. Agent-Specific Factors
-
-The architecture should extend the cloud-native baseline with agent-specific principles.
-
-Initial candidates:
-
-```text
-13. Explicit Agent Identity
-
-14. Capability Contract
-
-15. Bounded Autonomy
-
-16. Portable Agent Definition
-
-17. Externalized Agent State
-
-18. Agent Observability
-
-19. Safe Side Effects
-
-20. Standard Interoperability
-```
-
-The final factor set should be refined as an architectural deliverable rather than rushed into implementation.
-
----
-
-# 33. Agent Registry
-
-A future distributed architecture requires an Agent Registry.
-
-Traditional service discovery answers:
-
-```text
-Where is service X?
-```
-
-Agent discovery additionally answers:
-
-```text
-Which agent can perform capability X?
-```
-
-Therefore an Agent Registry may represent:
-
-```text
-identity
-version
-skills
-capabilities
-policies
-runtime instances
-endpoints
-health
-```
-
-Separate:
-
-```text
-Semantic Discovery
-```
-
-from:
-
-```text
-Technical Service Discovery
-```
-
-Do not replace Kubernetes/DNS/service-mesh discovery unnecessarily.
-
----
-
-# 34. Micro-Agent Cloud
-
-Distributed concerns are outside the initial core framework.
-
-A related project/layer may provide:
-
-```text
-Micro-Agent Cloud
-
-Configuration
-Agent Registry
-Agent Discovery
-Gateway
-Load Balancing
-Resilience
-Security
-Policy
-Messaging
-Distributed Observability
-```
-
-Micro-Agent Cloud is analogous in role to distributed-system frameworks that complement standalone application frameworks.
-
-The core Micro-Agent must not require Micro-Agent Cloud to run.
-
----
-
-# 35. Micro-Agent Cloud Configuration
-
-Potential responsibility:
-
-```text
-central configuration
-versioned definitions
-environment overlays
-configuration refresh
-secret references
-```
-
-It should not replace existing secret-management platforms.
-
----
-
-# 36. Micro-Agent Cloud Registry
-
-Potential operations:
-
-```text
-register
-unregister
-get agent
-search agent
-find by skill
-find by capability
-list instances
-health
-```
-
-Implementation should build on standards and existing infrastructure where possible.
-
----
-
-# 37. Micro-Agent Cloud Gateway
-
-Potential responsibilities:
-
-```text
-routing
-A2A gateway
-authentication
-authorization
-skill-level policy
-rate limiting
-observability
-registry integration
-```
-
-Intelligent semantic routing is not required initially.
-
----
-
-# 38. Micro-Agent Cloud Resilience
-
-Potential responsibilities:
-
-```text
-circuit breaking
-retry policy
-bulkheads
-rate limiting
-fallback
-load balancing
-```
-
-Reuse established libraries and infrastructure rather than rebuilding them.
-
----
-
-# 39. Service Mesh
-
-Micro-Agent Architecture must not create a proprietary replacement for service mesh.
-
-Existing infrastructure should continue to handle:
-
-```text
-mTLS
-workload networking
-traffic policy
-network telemetry
-service-level authorization
-```
-
-Agent-specific policy may operate above this layer.
-
----
-
-# 40. Deployment
-
-Primary production target:
-
-```text
-Kubernetes / OpenShift compatible
-```
-
-Containers should:
-
-```text
-run non-root
-support arbitrary UID where practical
-externalize state
-externalize secrets
-expose health
-handle SIGTERM gracefully
-avoid dynamic package installation
-support read-only root filesystem where practical
-```
-
----
-
-# 41. Programming Language
-
-Initial implementation:
-
-```text
-Python
-```
-
-Reason:
-
-```text
-initial ADK runtime
-agent ecosystem maturity
-MCP/A2A tooling
-rapid reference implementation
-```
-
-The architecture itself must remain language-independent.
-
----
-
-# 42. Testing
-
-Testing should include:
-
-```text
-definition validation
-configuration
-runtime lifecycle
-agent invocation
-model adapters
-MCP
-tools
-memory
-sessions
-health
-observability
-shutdown
-container execution
-```
-
-Tests must not require paid model access.
-
-Use deterministic fake models where appropriate.
-
----
-
-# 43. Architecture vs Implementation
-
-This distinction must be preserved.
-
-```text
-Micro-Agent Architecture
-    architectural style
-
-Micro-Agent Definition
-    declarative contract
-
-Micro-Agent Framework
-    reference programming model
-
-ADK Runtime
-    initial concrete implementation
-```
-
-Do not allow ADK-specific behavior to redefine the architecture.
-
----
-
-# 44. Non-Goals
-
-Do not initially build:
-
-```text
-workflow engine
-workflow DSL
-BPMN
-multi-agent orchestration platform
-control panel
-agent marketplace
-full Micro-Agent Cloud
-custom MCP
-custom A2A
-custom service mesh
-custom container orchestrator
-multiple runtime implementations
-distributed scheduler
-```
-
----
-
-# 45. Initial Reference Architecture
-
-```text
-                       MICRO-AGENTS
-
-                  Micro-Agent Definition
-                           │
-                           ▼
-                   Micro-Agent Core
-                           │
-                   Runtime Contract
-                           │
-                           ▼
-                      ADK Runtime
-                           │
-                           ▼
-                       Micro-Agent
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-        Model             MCP             Memory
-          │                │                │
-          └────────────────┼────────────────┘
-                           │
-                 ┌─────────┴─────────┐
-                 │                   │
-               HTTP                 A2A
-
-
-          Cloud-Native Infrastructure
-
- Kubernetes / OpenShift
- Service Mesh
- Secrets
- OpenTelemetry
- External Stores
-```
-
----
-
-# 46. Success Criteria
-
-The initial project succeeds when:
-
-1. Micro-Agent Architecture is clearly defined.
-2. The properties required to call something a Micro-Agent are explicit.
-3. A Micro-Agent can be declared through configuration.
-4. The declaration is independent from ADK-specific classes.
-5. The reference framework can validate and load the definition.
-6. The ADK runtime can construct the agent.
-7. Model, MCP, tools, session and memory can be attached.
-8. The Micro-Agent exposes health and observability.
-9. The Micro-Agent can run independently in a container.
-10. Multiple replicas can run with persistent state externalized.
-11. The same artifact can run across development and production configuration.
-12. The architecture provides a clear foundation for future Micro-Agent Cloud capabilities.
+No second third-party runtime should be added merely to demonstrate abstraction
+purity.
+
+## Protocol strategy
+
+- A2A baseline: v1.0.1.
+- MCP baseline: stable specification `2025-11-25`.
+- Draft and release-candidate features are opt-in experiments and do not define
+  the stable contract.
+- Protocol versions are explicit in definitions, runtime capabilities, tests,
+  and compatibility documentation.
+
+See [docs/STANDARDS.md](docs/STANDARDS.md).
+
+## Security model
+
+The framework distinguishes:
+
+- agent identity
+- caller/client identity
+- end-user and tenant context
+- workload/runtime identity
+
+Authentication occurs at the transport boundary. Authorization is evaluated
+against validated identity and declared skill/tool/MCP actions. Delegation is
+explicit; caller-provided metadata is never treated as authenticated identity.
+Credential references are resolved through an external secret provider and
+secret values never enter definitions, cards, logs, or response metadata.
+
+The current code defines several of these data structures but does not yet
+provide transport authentication, delegation, policy-reference resolution, or
+an approval workflow.
+
+## State model
+
+Keep these concepts distinct:
+
+| State | Purpose | Persistence expectation |
+|---|---|---|
+| Session | current interaction and conversation context | external when continuity is required |
+| Memory | retained information across interactions | external and policy-governed |
+| Knowledge | externally supplied domain information | versioned backing source |
+| Operational state | task, checkpoint, idempotency, audit | durable and concurrency-safe |
+
+SQLite can demonstrate provider behavior in one development environment. It is
+not the production shared-state recommendation for independently scheduled
+Kubernetes replicas.
+
+## Operational model
+
+The primary deployment target is Kubernetes/OpenShift-compatible OCI
+containers. A production baseline requires:
+
+- non-root and arbitrary-UID-friendly execution
+- read-only root filesystem where practical
+- external definitions, configuration, and secrets
+- liveness distinct from readiness
+- readiness failure reported with a non-success HTTP status
+- graceful termination and in-flight request draining
+- resource requests/limits and disruption behavior
+- immutable, versioned image references
+- external state and horizontally safe concurrency
+
+## Micro-Agent Cloud boundary
+
+Micro-Agent Cloud is a later, separate workstream for distributed concerns:
+
+- agent registry and semantic discovery
+- distributed configuration
+- gateway and A2A routing
+- resilience and traffic policy
+- distributed authorization and audit
+- cross-agent observability
+
+It does not own the standalone definition, runtime SPI, or the ability to run
+one Micro-Agent. Work starts only after the standalone production-readiness
+gate in [TODO.md](TODO.md) is satisfied.
+
+## Non-goals
+
+- workflow or BPMN engine
+- generic multi-agent orchestrator
+- visual control plane or marketplace
+- custom MCP or A2A protocol
+- custom service mesh or container orchestrator
+- distributed scheduler in the core framework
+- several shallow runtime adapters instead of one complete adapter
+
+## Success criteria
+
+The standalone project reaches its first production-capable milestone when:
+
+1. the definition is versioned, documented, schema-valid, and semantically
+   validated;
+2. a genuine Google ADK adapter constructs and runs the logical agent;
+3. the executable bootstrap selects real providers and resolves external
+   configuration and secrets;
+4. concurrent invocations and failure recovery are safe;
+5. model, tool, MCP, session, memory, knowledge, policy, and identity
+   dependencies are wired or explicitly rejected;
+6. MCP and A2A claims pass official-SDK compatibility tests;
+7. authentication, authorization, delegation context, approval, and durable
+   side-effect safety are enforced;
+8. health, OpenTelemetry, container, and Kubernetes/OpenShift behavior pass
+   acceptance tests;
+9. all required CI and security gates are green; and
+10. a versioned release can be reproduced, published, and deployed without
+    silently falling back to fake behavior.
+
+Current progress and evidence are maintained in
+[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md); prioritized
+work is maintained only in [TODO.md](TODO.md).

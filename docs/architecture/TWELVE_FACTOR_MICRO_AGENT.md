@@ -1,5 +1,10 @@
 # Twelve-Factor Micro-Agent
 
+> **Normative model.** These factors describe the target operating model. They
+> are not a statement of current repository conformance. See
+> [Implementation Status](../IMPLEMENTATION_STATUS.md) for the audited gap
+> analysis.
+
 This document maps the original Twelve-Factor App methodology to Micro-Agent Architecture and defines agent-specific factors.
 
 Each factor includes concrete implementation implications.
@@ -308,8 +313,8 @@ policy validation before side-effect execution
 Implementation:
 
 ```text
-A2A protocol for agent-to-agent communication
-MCP for tool and capability integration
+A2A v1.0.1 for agent-to-agent communication
+MCP 2025-11-25 stable specification for tool and capability integration
 HTTP API for external invocation
 standard health check endpoints
 no custom agent communication protocol
@@ -322,3 +327,8 @@ no custom agent communication protocol
 Each factor above includes concrete implementation implications.
 
 No factor exists as a purely philosophical statement.
+
+Acceptance requires executable evidence at the relevant boundary. Schema
+validation is not runtime portability, a fake client is not wire-protocol
+interoperability, a shared SQLite file is not an external multi-replica state
+service, and in-memory spans are not OpenTelemetry export or propagation.

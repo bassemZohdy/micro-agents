@@ -14,17 +14,34 @@ Thank you for your interest in contributing to Micro-Agents.
 ## Development Setup
 
 ```bash
-# Install dependencies
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Run tests
-pytest
-
-# Run linting
 ruff check .
+ruff format --check .
+mypy micro_agent runtimes
+pytest -q
 
-# Run type checking
-mypy micro_agent
+# Definition/schema drift
+python -m micro_agent.definition.schema
+git diff --exit-code docs/schemas/micro-agent-v1alpha1.json
+
+# Documentation
+pip install mkdocs mkdocs-material
+mkdocs build --strict
+```
+
+See [Implementation Status](docs/IMPLEMENTATION_STATUS.md) before starting.
+It records known failures on the latest audited commit; contributors should
+not hide or waive them locally.
+
+Use the existing pytest markers for targeted runs:
+
+```bash
+pytest -m "not integration and not e2e"
+pytest -m integration
+pytest -m e2e
 ```
 
 ## Pull Request Guidelines
@@ -32,6 +49,7 @@ mypy micro_agent
 - Keep PRs focused on a single change.
 - Include tests for new functionality.
 - Update documentation when behavior changes.
+- Update `TODO.md` only for open work and `CHANGELOG.md` for completed work.
 - Ensure all CI checks pass before requesting review.
 
 ## Commit Messages
@@ -48,7 +66,9 @@ Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`.
 
 ## Architecture Decisions
 
-Significant architectural changes should include an ADR (Architecture Decision Record) in `docs/adr/`.
+Significant architectural changes should include an ADR (Architecture Decision
+Record) in `docs/adr/`. An ADR must distinguish an accepted design from its
+implementation status; accepting a decision does not prove conformance.
 
 ## Code of Conduct
 

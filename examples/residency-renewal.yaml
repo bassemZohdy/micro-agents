@@ -1,3 +1,5 @@
+# Architecture/schema example. The current CLI does not wire this definition's
+# native tools, MCP servers, external state, policies, or real model provider.
 apiVersion: microagents.io/v1alpha1
 kind: MicroAgent
 

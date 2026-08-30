@@ -1,3 +1,5 @@
+# Executable development example. The current CLI uses the deterministic fake
+# model provider unless a runtime is constructed and injected programmatically.
 apiVersion: microagents.io/v1alpha1
 kind: MicroAgent
 

@@ -1,4 +1,4 @@
-"""ADK Runtime — initial vertical slice implementation."""
+"""Legacy ADK-named package containing the current custom runtime loop."""
 
 from runtimes.adk.runtime import AdkRuntime, AdkRuntimeConfig
 

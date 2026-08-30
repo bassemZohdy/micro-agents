@@ -6,6 +6,8 @@ metadata:
     app: micro-agent
 data:
   agent.yaml: |
+    # Architecture example only: the current executable does not wire the
+    # declared native tools, MCP servers, external state, policies, or model.
     apiVersion: microagents.io/v1alpha1
     kind: MicroAgent
 
