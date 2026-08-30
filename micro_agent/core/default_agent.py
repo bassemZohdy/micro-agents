@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from micro_agent.core.agent import (
     AgentCapabilities,
@@ -31,6 +32,7 @@ class DefaultMicroAgent(MicroAgent):
         self._lifecycle_lock = asyncio.Lock()
         self._capacity_available = asyncio.Condition(self._lifecycle_lock)
         self._active_invocations = 0
+        self._invocation_tasks: set[asyncio.Task[Any]] = set()
         self._idle = asyncio.Event()
         self._idle.set()
         self._stop_complete = asyncio.Event()
@@ -96,11 +98,16 @@ class DefaultMicroAgent(MicroAgent):
             runtime_agent = self._runtime_agent
             self._active_invocations += 1
             self._idle.clear()
+            current_task = asyncio.current_task()
+            if current_task is not None:
+                self._invocation_tasks.add(current_task)
         try:
             return await self._runtime.invoke(runtime_agent, request)
         finally:
             async with self._lifecycle_lock:
                 self._active_invocations -= 1
+                if current_task is not None:
+                    self._invocation_tasks.discard(current_task)
                 if self._active_invocations == 0:
                     self._idle.set()
                 self._capacity_available.notify_all()
@@ -124,7 +131,14 @@ class DefaultMicroAgent(MicroAgent):
             await self._stop_complete.wait()
             return
 
-        await self._idle.wait()
+        shutdown_timeout = self._definition.spec.runtime.shutdown_timeout_seconds
+        try:
+            if shutdown_timeout is None:
+                await self._idle.wait()
+            else:
+                await asyncio.wait_for(self._idle.wait(), timeout=shutdown_timeout)
+        except TimeoutError:
+            await self._cancel_in_flight()
         assert runtime_agent is not None
         try:
             await self._runtime.stop(runtime_agent)
@@ -136,6 +150,21 @@ class DefaultMicroAgent(MicroAgent):
         async with self._lifecycle_lock:
             self._state = AgentState.STOPPED
             self._stop_complete.set()
+
+    async def _cancel_in_flight(self) -> None:
+        """Cancel invocations that did not drain before the shutdown deadline."""
+        current_task = asyncio.current_task()
+        async with self._lifecycle_lock:
+            tasks = [
+                task
+                for task in self._invocation_tasks
+                if task is not current_task and not task.done()
+            ]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await self._idle.wait()
 
     async def shutdown(self) -> None:
         if self._runtime_agent:

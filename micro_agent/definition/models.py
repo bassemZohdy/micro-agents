@@ -180,6 +180,11 @@ class RuntimeSemantics(BaseModel, extra="forbid"):
     max_concurrency: int | None = Field(
         None, ge=1, description="Maximum concurrent invocations for this agent."
     )
+    shutdown_timeout_seconds: float | None = Field(
+        None,
+        gt=0,
+        description="Maximum time to drain invocations during shutdown.",
+    )
     concurrency_policy: ConcurrencyPolicy = Field(
         ConcurrencyPolicy.WAIT,
         description="Whether invocations wait for capacity or are rejected.",

@@ -224,6 +224,67 @@ class TestDefaultMicroAgent:
         await agent.stop()
         await agent.shutdown()
 
+    @pytest.mark.asyncio
+    async def test_cancelled_invocation_releases_capacity(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.runtime.max_concurrency = 1
+        runtime = ControlledRuntime(expected_invocations=1)
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        invocation = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        invocation.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await invocation
+        assert agent._active_invocations == 0
+
+        runtime.all_entered.clear()
+        follow_up = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        assert runtime.entered == 2
+        runtime.release.set()
+        await follow_up
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_deadline_cancels_stuck_invocation(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.runtime.shutdown_timeout_seconds = 0.05
+        runtime = ControlledRuntime(expected_invocations=1)
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        invocation = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        await agent.stop()
+
+        assert runtime.stop_called is True
+        assert agent.state == AgentState.STOPPED
+        with pytest.raises(asyncio.CancelledError):
+            await invocation
+
+    @pytest.mark.asyncio
+    async def test_repeated_stop_waits_for_the_existing_shutdown(self, definition):
+        runtime = ControlledRuntime()
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        invocation = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        first_stop = asyncio.create_task(agent.stop())
+        second_stop = asyncio.create_task(agent.stop())
+        await asyncio.sleep(0)
+        assert agent.state == AgentState.STOPPING
+        runtime.release.set()
+        await asyncio.gather(invocation, first_stop, second_stop)
+        assert agent.state == AgentState.STOPPED
+        assert runtime.stop_called is True
+
 
 class TestHTTPServer:
     """Test FastAPI HTTP server."""
