@@ -13,17 +13,16 @@ Maintain one reference runtime behind the small `AgentRuntime` SPI and a
 deterministic `FakeModelProvider` for tests. Production startup must require an
 explicit provider selection and must never silently fall back to the fake.
 
-Google ADK remains the intended first external framework adapter, but the
-current `runtimes/adk` implementation is a project-owned model/tool loop. It
-has no Google ADK dependency or ADK-native lifecycle. The executable bootstrap
-now selects the fake provider only when explicitly configured, or an
-OpenAI-compatible provider from definition/environment bindings. Other
-providers remain unsupported until an adapter is added.
+Google ADK remains the first external framework adapter. The project-owned
+loop stays in `runtimes/adk`, while `runtimes/google_adk` provides the genuine
+adapter behind the same SPI. The `google-adk` package is an optional pinned
+extra so fake-provider CI remains deterministic. The executable bootstrap
+still selects the custom loop by default; adapter selection and additional
+provider mappings remain open work.
 
 ## Consequences
 
 - CI needs no network or API keys; behavioral tests cover the full invoke loop.
-- The current package must be renamed to describe the custom loop or replaced
-  by a genuine ADK adapter.
+- The custom loop and genuine adapter have separate package boundaries.
 - Credential providers beyond environment bindings and a genuine ADK adapter
   remain release-blocking work.

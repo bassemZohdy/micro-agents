@@ -99,8 +99,25 @@ Alternatively set `provider: openai-compatible`, `endpoint`, and a
 `credential_ref` in the model definition. The referenced environment variable
 must exist before startup.
 
-The package name `runtimes.adk` does not currently mean that Google ADK is
-used. Treat this API as pre-release.
+The package `runtimes.adk` is the lightweight custom loop. The genuine Google
+ADK adapter is available separately through the optional `adk` extra:
+
+```bash
+python -m pip install -e ".[dev,adk]"
+```
+
+Construct `GoogleAdkRuntime` with an injected `ModelProvider` for deterministic
+tests or with a native Google model ID for a configured Google environment:
+
+```python
+from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
+
+runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+```
+
+The adapter owns ADK agent, runner, and session objects internally; only the
+runtime-neutral `AgentRuntime` contracts are exposed to callers. Full
+production bootstrap selection and external dependency mappings remain open.
 
 ## Container
 

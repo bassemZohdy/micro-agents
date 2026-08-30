@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 358 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 362 collected | 358 default tests plus four optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -71,6 +71,10 @@ Implemented:
 - configured model, session, memory, and declared MCP dependencies are probed
   before the runtime marks an agent ready; failures leave the agent non-ready
 - declared input/output contracts are enforced at the core invocation boundary
+- optional `runtimes/google_adk` adapter constructs Google ADK `LlmAgent`,
+  `Runner`, and session objects while keeping them behind the runtime SPI
+- ADK adapter bridges the existing model-provider contract, native tools,
+  session lifecycle, invocation deadlines, and terminal responses
 
 Current custom-runtime capability matrix:
 
@@ -85,7 +89,10 @@ Current custom-runtime capability matrix:
 
 Gaps:
 
-- `runtimes/adk` does not use Google ADK
+- the executable bootstrap still selects the custom loop; it does not yet
+  select the Google ADK adapter from deployment configuration
+- the ADK adapter does not yet map MCP, memory, policy, or OpenTelemetry
+  services into ADK-native services
 - retrying the complete invocation can replay side effects
 
 ### Models and tools
@@ -182,8 +189,6 @@ Implemented:
 
 - FastAPI invoke, liveness, readiness, capability, and preliminary card routes
 - active injected dependency probes
-- startup readiness probes for configured model, state, and declared MCP
-  dependencies; failures are normalized before an agent can become ready
 - generated HTTP request IDs and non-success unhealthy readiness
 - input/output contract checks at the core boundary and HTTP 422 diagnostics
 - concurrency overload mapped to HTTP 429 with retry guidance

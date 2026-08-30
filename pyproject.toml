@@ -39,6 +39,9 @@ docs = [
     "mkdocs>=1.6,<2.0",
     "mkdocs-material>=9.6,<10.0",
 ]
+adk = [
+    "google-adk==2.8.0",
+]
 
 [project.scripts]
 micro-agent = "micro_agent.__main__:main"
@@ -73,4 +76,5 @@ asyncio_mode = "auto"
 markers = [
     "integration: integration tests (real network service, MCP wiring)",
     "e2e: end-to-end tests (booted services, full invoke paths)",
+    "adk: Google ADK adapter tests (requires the optional adk extra)",
 ]

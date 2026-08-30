@@ -356,10 +356,10 @@ fallback model
  External Stores
 ```
 
-The runtime adapter is deliberately generic. Google ADK is the first intended
-external framework adapter. The current `runtimes/adk` package is a custom
-model/tool loop and must not be presented as Google ADK integration until it
-constructs and exercises supported ADK APIs.
+The runtime adapter is deliberately generic. Google ADK is the first external
+framework adapter. The `runtimes/adk` package is the custom built-in
+model/tool loop; the optional `runtimes/google_adk` package constructs and
+exercises supported ADK APIs through the same runtime-neutral SPI.
 
 ---
 

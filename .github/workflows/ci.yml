@@ -87,6 +87,17 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: pytest -m e2e -v
 
+  adk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev,adk]"
+      - run: pytest -m adk tests/test_google_adk_runtime.py -q
+
   build:
     runs-on: ubuntu-latest
     steps:

@@ -1,6 +1,6 @@
 # ADR 0008 — Runtime Adapter Truthfulness
 
-Date: 2026-08-30 · Status: Proposed
+Date: 2026-08-30 · Status: Accepted in part
 
 ## Context
 
@@ -9,21 +9,22 @@ model/tool loop. It does not depend on or invoke Google ADK. Package names and
 documentation that imply otherwise make capability and support claims that
 the implementation cannot demonstrate.
 
-## Proposed decision
+## Decision
 
 Only name an adapter after an external runtime when it constructs and invokes
 that runtime's supported APIs and passes adapter-specific integration tests.
-Either:
+The repository uses the separate-adapter option:
 
-1. rename the existing code as a built-in/reference loop and add a separate
-   Google ADK adapter; or
-2. replace the package internals with Google ADK while retaining the
+1. `runtimes/adk` remains the built-in/reference loop.
+2. `runtimes/google_adk` constructs and invokes Google ADK APIs behind the
    runtime-neutral `AgentRuntime` boundary.
+3. The Google ADK dependency is optional and pinned; default fake-provider CI
+   does not require credentials.
 
 ## Consequences
 
 - Documentation and capability reporting remain verifiable.
 - The deterministic custom loop may remain valuable for tests, examples, or a
   lightweight runtime, but it is not evidence of ADK support.
-- The final option requires a compatibility and migration review before this
-  ADR becomes accepted.
+- Production bootstrap selection and complete service mapping remain a
+  compatibility and migration follow-up.

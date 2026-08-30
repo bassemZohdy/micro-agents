@@ -17,12 +17,16 @@ the relevant P1 acceptance tests are green.
 
 ### P0.1 Implement a genuine Google ADK runtime
 
-- [ ] Decide the package boundary: rename the current custom loop to a built-in
-      runtime or replace its internals with Google ADK.
-- [ ] Add and pin the supported `google-adk` dependency.
-- [ ] Map definition behavior, model, tools, sessions, and runtime semantics to
-      ADK-native constructs without leaking ADK types through the SPI.
-- [ ] Add ADK lifecycle, invocation, tool-call, session, and failure tests.
+- [x] Keep the current custom loop as the built-in runtime and add a separate
+      Google ADK adapter package.
+- [x] Add and pin the supported `google-adk` dependency as an optional `adk`
+      extra.
+- [x] Map definition behavior, the model-provider bridge, native tools,
+      sessions, invocation deadlines, and terminal responses to ADK-native
+      constructs without leaking ADK types through the SPI.
+- [x] Add ADK lifecycle, invocation, tool-call, session, and failure tests.
+- [ ] Select the Google ADK adapter from executable deployment configuration
+      and map MCP, memory, policy, and OpenTelemetry services.
 - [x] Publish a runtime capability matrix and reject unsupported required
       capabilities at startup.
 
