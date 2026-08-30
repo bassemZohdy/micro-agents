@@ -17,6 +17,7 @@ from micro_agent.core import (
     AgentResponse,
 )
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.health import DependencyProbe
 
 _RUNTIME_CAPABILITY_NAMES = frozenset(
     {"streaming", "memory", "mcp", "a2a", "structured_output", "checkpointing"}
@@ -112,3 +113,16 @@ class AgentRuntime(ABC):
     @abstractmethod
     async def shutdown(self, agent: RuntimeAgent) -> None:
         """Release all runtime resources."""
+
+    def health_probes(self) -> dict[str, DependencyProbe]:
+        """Return active dependency probes exposed by this runtime.
+
+        Runtimes without external dependencies may use the default empty
+        mapping. Concrete runtimes can expose provider health checks for the
+        executable health endpoint.
+        """
+        return {}
+
+    async def close(self) -> None:
+        """Release runtime-wide resources after agent shutdown."""
+        return None

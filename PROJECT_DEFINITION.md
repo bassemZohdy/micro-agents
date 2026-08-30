@@ -36,8 +36,8 @@ source-code size.
 
 The repository currently delivers partial implementations of items 1–4, a
 custom reference loop, and an optional Google ADK adapter. Operational seams
-exist, but production bootstrap selection and end-to-end security/state/
-protocol integration are incomplete.
+exist, but production service mappings and end-to-end security/state/protocol
+integration are incomplete.
 
 ## Architectural principles
 
@@ -162,10 +162,10 @@ The current API version is `microagents.io/v1alpha1`.
 ## Runtime strategy
 
 The project keeps the custom loop as a lightweight built-in runtime and
-implements Google ADK first as a separate optional adapter. The
+implements Google ADK first as a separate optional adapter. Deployment
+configuration can select either runtime through `MICRO_AGENT_RUNTIME`; the
 `runtimes/google_adk` package is covered by ADK-native lifecycle and invocation
-tests, while executable bootstrap selection and production service mappings
-remain open work.
+tests, while production service mappings remain open work.
 
 No second third-party runtime should be added merely to demonstrate abstraction
 purity.

@@ -25,6 +25,7 @@ class SecretRef(BaseModel, extra="forbid"):
 class EnvironmentConfig(BaseModel, extra="forbid"):
     """Environment-specific configuration overrides."""
 
+    runtime: str | None = None
     model_id: str | None = None
     model_provider: str | None = None
     model_endpoint: str | None = None
@@ -40,6 +41,7 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
 class ResolvedConfig:
     """Final resolved configuration after applying precedence."""
 
+    runtime: str | None = None
     model_ref: str | None = None
     model_id: str | None = None
     model_provider: str | None = None
@@ -107,6 +109,8 @@ def resolve_config(
 
     # Layer 3: Environment configuration
     if env_config:
+        if env_config.runtime:
+            config.runtime = env_config.runtime
         if env_config.model_id:
             config.model_id = env_config.model_id
         if env_config.model_provider:
@@ -124,6 +128,10 @@ def resolve_config(
         config.extra.update(env_config.extra)
 
     # Layer 3b: Environment variable overrides
+    env_runtime = _read_env("runtime")
+    if env_runtime:
+        config.runtime = env_runtime
+
     env_model_endpoint = _read_env("model_endpoint")
     if env_model_endpoint:
         config.model_endpoint = env_model_endpoint

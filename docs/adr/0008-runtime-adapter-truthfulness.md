@@ -26,5 +26,4 @@ The repository uses the separate-adapter option:
 - Documentation and capability reporting remain verifiable.
 - The deterministic custom loop may remain valuable for tests, examples, or a
   lightweight runtime, but it is not evidence of ADK support.
-- Production bootstrap selection and complete service mapping remain a
-  compatibility and migration follow-up.
+- Complete service mapping remains a compatibility and migration follow-up.

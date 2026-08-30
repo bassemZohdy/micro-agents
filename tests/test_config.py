@@ -14,6 +14,7 @@ class TestResolveConfig:
 
     def test_defaults_only(self):
         config = resolve_config()
+        assert config.runtime is None
         assert config.log_level == "INFO"
         assert config.model_endpoint is None
         assert config.mcp_endpoints == {}
@@ -44,6 +45,11 @@ class TestResolveConfig:
         monkeypatch.setenv("MICRO_AGENT_LOG_LEVEL", "DEBUG")
         config = resolve_config()
         assert config.log_level == "DEBUG"
+
+    def test_environment_runtime_override(self, monkeypatch):
+        monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+        config = resolve_config()
+        assert config.runtime == "google-adk"
 
     def test_secret_resolution(self, monkeypatch):
         monkeypatch.setenv("MY_API_KEY", "secret-value")
@@ -99,6 +105,7 @@ class TestEnvironmentConfig:
     """Test environment configuration model."""
 
     def test_defaults(self):
+        assert EnvironmentConfig().runtime is None
         config = EnvironmentConfig()
         assert config.log_level is None
         assert config.mcp_endpoints == {}

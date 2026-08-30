@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 362 collected | 358 default tests plus four optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 369 collected | 365 default tests plus four optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -75,6 +75,9 @@ Implemented:
   `Runner`, and session objects while keeping them behind the runtime SPI
 - ADK adapter bridges the existing model-provider contract, native tools,
   session lifecycle, invocation deadlines, and terminal responses
+- executable bootstrap selects the custom loop by default or the Google ADK
+  adapter through `MICRO_AGENT_RUNTIME`; unsupported ADK service declarations
+  fail fast rather than being silently ignored
 
 Current custom-runtime capability matrix:
 
@@ -89,8 +92,6 @@ Current custom-runtime capability matrix:
 
 Gaps:
 
-- the executable bootstrap still selects the custom loop; it does not yet
-  select the Google ADK adapter from deployment configuration
 - the ADK adapter does not yet map MCP, memory, policy, or OpenTelemetry
   services into ADK-native services
 - retrying the complete invocation can replay side effects

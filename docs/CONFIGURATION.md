@@ -20,6 +20,7 @@ the service becomes ready.
 
 | Variable | Resolved field | Bootstrap status |
 |---|---|---|
+| `MICRO_AGENT_RUNTIME` | `runtime` | wired; `custom` (default) or `google-adk` selects the runtime implementation |
 | `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
@@ -67,6 +68,25 @@ Production requirements:
 - redact values from logs, traces, errors, cards, and responses
 - scope credentials to one dependency and least privilege
 - fail startup when a required credential cannot be resolved
+
+## Runtime selection
+
+Runtime choice belongs to deployment configuration rather than the portable
+definition. The default `custom` value selects the lightweight reference loop.
+Set `MICRO_AGENT_RUNTIME=google-adk` and install the optional `adk` extra to
+select the Google ADK adapter:
+
+```bash
+python -m pip install -e ".[dev,adk]"
+export MICRO_AGENT_RUNTIME=google-adk
+```
+
+The selector accepts `custom` (also `adk` or `reference`) and `google-adk`
+(also `google_adk`). The adapter currently supports the native Google model
+path and injected fake/OpenAI-compatible model providers. Definitions that
+declare Micro-Agent memory, sessions, MCP servers, or policy references fail
+fast under Google ADK until those services are mapped into ADK-native
+integrations; they are not silently ignored.
 
 ## Definition versus deployment configuration
 
