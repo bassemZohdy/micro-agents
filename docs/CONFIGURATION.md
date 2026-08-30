@@ -84,8 +84,10 @@ spec:
 
 When `shutdown_timeout_seconds` is set, stop waits for active calls to drain
 for that duration, then cancels the remaining invocation tasks before closing
-the runtime. Provider-specific deadline propagation remains a production
-hardening item.
+the runtime. Each HTTP invocation may also set a positive `timeout_seconds` to
+shorten the definition-level budget. The shortest request, definition, model,
+and tool timeout is shared with session, memory, and MCP operations; a retry
+cannot reset the remaining deadline.
 
 When `behavior.input_contract` or `behavior.output_contract` declares
 parameters, the runtime validates required fields, JSON-compatible types, and

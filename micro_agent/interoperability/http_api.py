@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from micro_agent.core import AgentRequest, DefaultMicroAgent, InvocationOverloadedError
 from micro_agent.definition import ContractValidationError
@@ -34,6 +34,11 @@ class InvokeRequestModel(BaseModel):
     request_id: str | None = None
     session_id: str | None = None
     caller_metadata: dict[str, Any] = {}
+    timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description="Optional end-to-end invocation deadline in seconds.",
+    )
 
 
 class InvokeResponseModel(BaseModel):
@@ -76,6 +81,7 @@ class InvokeRequest:
     request_id: str | None = None
     session_id: str | None = None
     caller_metadata: dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: float | None = None
 
 
 @dataclass
@@ -204,6 +210,7 @@ def create_app(
             input=request.input,
             session_id=request.session_id,
             caller_metadata=request.caller_metadata,
+            timeout_seconds=request.timeout_seconds,
         )
         if request.request_id:
             agent_request.request_id = request.request_id
@@ -228,6 +235,11 @@ def create_app(
                     "contract": exc.contract,
                     "errors": exc.errors,
                 },
+            ) from exc
+        except TimeoutError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail={"code": "deadline_exceeded", "message": "Invocation deadline exceeded"},
             ) from exc
         telemetry.logger.info(
             "invoke completed",

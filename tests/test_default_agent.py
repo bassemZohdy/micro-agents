@@ -65,6 +65,13 @@ class ControlledRuntime(AgentRuntime):
         return None
 
 
+class TimeoutRuntime(ControlledRuntime):
+    """Runtime double that surfaces an exhausted invocation deadline."""
+
+    async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+        raise TimeoutError("invocation deadline exceeded")
+
+
 def definition_identity(definition):
     from micro_agent.core import AgentIdentity
 
@@ -396,6 +403,26 @@ class TestHTTPServer:
             resp = await client.post("/v1/invoke", json={"input": {}})
             assert resp.status_code == 413
             assert resp.json()["code"] == "request_too_large"
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_deadline_error_returns_stable_504(self, definition):
+        agent = DefaultMicroAgent(definition, TimeoutRuntime())
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/invoke",
+                json={"input": {}, "timeout_seconds": 0.1},
+            )
+            assert resp.status_code == 504
+            assert resp.json()["detail"] == {
+                "code": "deadline_exceeded",
+                "message": "Invocation deadline exceeded",
+            }
         await agent.stop()
         await agent.shutdown()
 

@@ -18,6 +18,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   `reject` overload behavior, including lifecycle stop-race coverage.
 - Added `shutdown_timeout_seconds` drain deadlines, cancellation propagation,
   and regression tests for cancelled calls and repeated shutdown.
+- Added a shared per-invocation deadline budget, including optional HTTP
+  `timeout_seconds`, provider-call cancellation, and stable HTTP 504 deadline
+  errors.
 
 ### Documentation
 
@@ -112,7 +115,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 333 collected (updated unit, integration, and E2E coverage;
+- Tests: 339 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

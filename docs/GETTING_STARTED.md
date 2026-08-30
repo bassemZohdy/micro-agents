@@ -50,11 +50,15 @@ curl http://127.0.0.1:8080/health/ready
 curl http://127.0.0.1:8080/v1/capabilities
 curl -X POST http://127.0.0.1:8080/v1/invoke \
   -H 'Content-Type: application/json' \
-  -d '{"input":{"message":"hello"},"request_id":"demo-1"}'
+  -d '{"input":{"message":"hello"},"request_id":"demo-1","timeout_seconds":15}'
 ```
 
 Expected invoke content is the deterministic fake response unless the runtime
 is constructed programmatically with another provider.
+
+`timeout_seconds` is optional. It sets an end-to-end deadline for the request;
+the runtime cancels any active model, tool/MCP, session, or memory operation
+when that budget expires and the HTTP API returns 504.
 
 ## Run tests
 

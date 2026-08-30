@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 333 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 339 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -61,12 +61,14 @@ Implemented:
   stop wake-up handling
 - client cancellation propagation and bounded shutdown drain with cancellation
   of stuck invocation tasks
+- one invocation deadline budget shared across model, tool/MCP, session, and
+  memory operations; request deadlines are enforced and cancellation propagates
+  into the active provider call
 - declared input/output contracts are enforced at the core invocation boundary
 
 Gaps:
 
 - `runtimes/adk` does not use Google ADK
-- explicit provider-specific deadline propagation remains incomplete
 - retrying the complete invocation can replay side effects
 
 ### Models and tools
@@ -165,6 +167,8 @@ Implemented:
 - generated HTTP request IDs and non-success unhealthy readiness
 - input/output contract checks at the core boundary and HTTP 422 diagnostics
 - concurrency overload mapped to HTTP 429 with retry guidance
+- request/definition deadline exhaustion mapped to HTTP 504 with a stable
+  `deadline_exceeded` code
 - configurable `Content-Length` request-size guard (1 MiB default)
 - structured logger, in-memory metrics, and in-memory span tree
 
