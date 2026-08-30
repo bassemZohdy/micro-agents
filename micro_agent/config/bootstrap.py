@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from micro_agent.config.config import (
     EnvironmentConfig,
@@ -21,6 +22,7 @@ from micro_agent.config.config import (
     validate_config,
 )
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.memory import InMemoryMemoryProvider, MemoryPolicy, MemoryProvider
 from micro_agent.models import (
     FakeModelConfig,
     FakeModelProvider,
@@ -29,6 +31,7 @@ from micro_agent.models import (
     OpenAICompatProvider,
 )
 from micro_agent.observability import Telemetry
+from micro_agent.session import InMemorySessionProvider, SessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
@@ -74,9 +77,14 @@ def build_runtime(
 
     resolved = _resolve_definition_config(definition)
     provider = _build_model_provider(resolved, fake_model_config=fake_model_config)
+    session_provider = _build_session_provider(definition, resolved)
+    memory_provider = _build_memory_provider(definition, resolved)
     runtime = AdkRuntime(
         AdkRuntimeConfig(
             model_provider=provider,
+            session_provider=session_provider,
+            memory_provider=memory_provider,
+            memory_policy=MemoryPolicy() if memory_provider is not None else None,
             telemetry=telemetry,
         )
     )
@@ -111,6 +119,99 @@ def _resolve_definition_config(definition: MicroAgentDefinition) -> ResolvedConf
     if credential_ref is not None and resolved.model_api_key is None:
         raise BootstrapError(f"Required model credential '{credential_ref.name}' is not available")
     return resolved
+
+
+def _build_session_provider(
+    definition: MicroAgentDefinition, config: ResolvedConfig
+) -> SessionProvider | None:
+    """Construct the configured session provider, or fail before readiness.
+
+    ``memory`` and ``sqlite`` are the providers included in this distribution.
+    ``external`` is intentionally rejected until a deployment supplies an
+    external provider implementation; silently ignoring that declaration would
+    make a supposedly persistent agent lose state.
+    """
+    session = definition.spec.dependencies.session
+    endpoint = config.session_endpoint
+
+    if session.persistence == "none":
+        if endpoint:
+            raise BootstrapError(
+                "MICRO_AGENT_SESSION_ENDPOINT is set but session.persistence is 'none'"
+            )
+        return None
+
+    if session.persistence == "memory":
+        if endpoint and endpoint not in {"memory://", "inmemory://"}:
+            raise BootstrapError(
+                "session.persistence 'memory' only supports memory:// or inmemory:// "
+                "session endpoints"
+            )
+        return InMemorySessionProvider(ttl_seconds=session.ttl_seconds)
+
+    if session.persistence == "sqlite":
+        return SqliteSessionProvider(
+            path=_sqlite_path(endpoint),
+            ttl_seconds=session.ttl_seconds,
+        )
+
+    # The definition model constrains this value, but keep the branch explicit
+    # so a future persistence mode cannot silently fall through.
+    if not endpoint:
+        raise BootstrapError("session.persistence 'external' requires MICRO_AGENT_SESSION_ENDPOINT")
+    raise BootstrapError(
+        "session.persistence 'external' is declared, but no external session provider is configured"
+    )
+
+
+def _sqlite_path(endpoint: str | None) -> str:
+    """Normalize a SQLite endpoint into a path understood by sqlite3."""
+    if not endpoint:
+        # Keep the built-in provider useful for local development while making
+        # it clear in documentation that this is process-local state.
+        return ":memory:"
+    if endpoint in {":memory:", "sqlite:///:memory:", "sqlite://:memory:"}:
+        return ":memory:"
+    if endpoint.startswith("sqlite://"):
+        parsed = urlsplit(endpoint)
+        if parsed.scheme != "sqlite" or parsed.query or parsed.fragment:
+            raise BootstrapError("SQLite session endpoint must not include query or fragment")
+        if parsed.netloc and parsed.path:
+            # sqlite://host/path is ambiguous and could accidentally target a
+            # remote-looking location; require the conventional file form.
+            raise BootstrapError(
+                "SQLite session endpoint must use sqlite:///absolute/path or sqlite:///:memory:"
+            )
+        path = parsed.path
+        if not path:
+            raise BootstrapError("SQLite session endpoint must include a database path")
+        return path
+    if endpoint.startswith("file:"):
+        return endpoint
+    if "://" in endpoint:
+        raise BootstrapError("SQLite session endpoint must use the sqlite:// scheme")
+    return endpoint
+
+
+def _build_memory_provider(
+    definition: MicroAgentDefinition, config: ResolvedConfig
+) -> MemoryProvider | None:
+    """Construct the built-in memory provider for a declared memory dependency."""
+    memory = definition.spec.dependencies.memory
+    endpoint = config.memory_endpoint
+    if memory is None:
+        if endpoint:
+            raise BootstrapError(
+                "MICRO_AGENT_MEMORY_ENDPOINT is set but no memory dependency is declared"
+            )
+        return None
+
+    if endpoint and endpoint not in {"memory://", "inmemory://"}:
+        raise BootstrapError(
+            "memory dependency requires memory:// or inmemory://; external memory "
+            "providers are not configured"
+        )
+    return InMemoryMemoryProvider(MemoryPolicy())
 
 
 def _build_model_provider(

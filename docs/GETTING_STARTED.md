@@ -42,6 +42,13 @@ for lifecycle and HTTP development but is not a real model configuration. The
 bootstrap rejects a bare model reference so production configuration cannot
 silently use the fake provider.
 
+State bindings are explicit as well. A session with `persistence: memory` is
+process-local. `persistence: sqlite` uses `MICRO_AGENT_SESSION_ENDPOINT` when
+set (for example, `sqlite:///tmp/sessions.db`) and otherwise defaults to an
+in-memory SQLite database for development. A declared `memory` dependency uses
+the built-in in-memory provider. External state endpoints fail before startup
+until a matching provider is configured.
+
 ## Exercise the API
 
 ```bash
@@ -104,5 +111,6 @@ docker run --rm -p 8080:8080 \
   micro-agents:dev
 ```
 
-This validates the explicit fake-provider service only. It does not prove live
-model, MCP, authentication, external state, or A2A task interoperability.
+This validates the explicit fake-provider service and local bootstrap only. It
+does not prove live model, MCP, authentication, external state, or A2A task
+interoperability.

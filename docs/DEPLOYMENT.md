@@ -14,8 +14,10 @@ The image:
 - probes `/health/live`
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
-from the mounted definition and environment. It does not yet construct real
-MCP, state, policy, or non-environment secret providers.
+from the mounted definition and environment. It also constructs local
+in-memory memory/session providers and SQLite sessions when those persistence
+modes are declared. External MCP, state, policy, and non-environment secret
+providers remain unsupported and fail before readiness.
 
 ## Kubernetes manifests
 
@@ -54,7 +56,8 @@ the restricted security context constraints used by the target cluster.
 
 The sample declares two replicas but the CLI constructs no external session or
 memory provider. `SqliteSessionProvider` is a local development reference and
-is not the recommended shared store for independently scheduled pods.
+is not the recommended shared store for independently scheduled pods. An
+`external` persistence declaration fails fast until a real provider is wired.
 
 ## Production checklist
 

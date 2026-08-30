@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 344 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 351 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -44,7 +44,8 @@ Implemented:
 Gaps:
 
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
-  memory/session endpoint bindings still do not construct providers
+  built-in memory and SQLite/in-memory session bindings are now constructed;
+  external state providers remain unsupported and fail fast
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 
@@ -165,7 +166,8 @@ Implemented:
 
 Gaps:
 
-- bootstrap does not yet construct these state providers from endpoint bindings
+- bootstrap only constructs in-memory memory and in-memory/SQLite session
+  providers; external state endpoints are rejected until a provider is wired
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
 - SQLite access lacks explicit async serialization around one connection

@@ -31,10 +31,13 @@ definition remains runtime-neutral.
 
 ### P0.2 Build the production bootstrap/runtime factory
 
-- [ ] Construct tool registry, MCP client, session, memory, knowledge, policy,
-      telemetry, and credential providers from configuration.
+- [ ] Construct tool registry, MCP client, knowledge, policy, telemetry, and
+      non-environment credential providers from configuration.
+- [x] Construct the built-in memory and in-memory/SQLite session providers
+      from definition and endpoint bindings; reject unsupported external state
+      bindings before runtime creation.
 - [ ] Validate all required dependencies before readiness.
-- [ ] Remove or wire every currently dead `MICRO_AGENT_*` variable.
+- [x] Remove or wire every currently dead `MICRO_AGENT_*` variable.
 
 Acceptance: the same image starts in explicit fake mode and in a real
 OpenAI-compatible configuration using only external configuration changes.

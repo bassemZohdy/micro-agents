@@ -1,9 +1,9 @@
 """Custom runtime loop in the legacy ADK-named package.
 
-The runtime uses the fake model provider by default. Another provider may be
-injected through ``AdkRuntimeConfig``; the executable bootstrap does not yet
-select one from resolved configuration. This module does not integrate Google
-ADK, and no runtime-native types leak into definition or core contracts.
+The executable bootstrap selects the fake or OpenAI-compatible model provider
+and built-in state providers from resolved configuration. This module does not
+integrate Google ADK, and no runtime-native types leak into definition or core
+contracts.
 """
 
 from __future__ import annotations
@@ -247,10 +247,14 @@ class AdkRuntime(AgentRuntime):
         agent._internal = None
 
     async def close(self) -> None:
-        """Release runtime-level resources (HTTP connection pools, MCP)."""
+        """Release runtime-level resources (model, state providers, and MCP)."""
         aclose = getattr(self._model_provider, "aclose", None)
         if aclose is not None:
             await aclose()
+        for provider in (self._config.session_provider, self._config.memory_provider):
+            provider_close = getattr(provider, "aclose", None)
+            if provider_close is not None:
+                await provider_close()
         if self._config.mcp_manager is not None:
             await self._config.mcp_manager.aclose()
 
