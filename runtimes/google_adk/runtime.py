@@ -6,6 +6,11 @@ request/response contracts cross this module's public boundary; ADK objects
 are retained in the opaque runtime-agent handle.
 """
 
+# Google ADK is intentionally optional.  The dedicated ADK CI job installs its
+# type-bearing package; the default typecheck job must still validate this
+# module when those imports are unavailable.
+# mypy: disable_error_code="import-not-found,misc"
+
 from __future__ import annotations
 
 import asyncio
@@ -382,7 +387,7 @@ def _as_adk_tool(tool: Tool) -> Any:
             return types.FunctionDeclaration(
                 name=self.name,
                 description=self.description,
-                parameters=schema or None,  # type: ignore[arg-type]
+                parameters=cast(Any, schema or None),
             )
 
         async def run_async(self, *, args: dict[str, Any], tool_context: Any) -> Any:
