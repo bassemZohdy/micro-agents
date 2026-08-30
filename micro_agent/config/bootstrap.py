@@ -72,8 +72,8 @@ def build_runtime(
 
     Definition model fields provide the base values. ``MICRO_AGENT_*`` values
     override them, while a definition ``credential_ref`` resolves from the
-    named environment variable.  No provider health check is performed here;
-    :meth:`AdkRuntime.start` performs that check before readiness.
+    named environment variable. No provider health check is performed here;
+    the selected runtime performs its startup checks before readiness.
     """
 
     resolved = _resolve_definition_config(definition)
