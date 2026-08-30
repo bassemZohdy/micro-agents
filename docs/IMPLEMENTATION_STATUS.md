@@ -2,6 +2,7 @@
 
 Last audited: 2026-08-30  
 Documentation-audit baseline: `8e9efe6bdc7844661d2ed32eb291f3bc773a1368`
+Cleanup verification baseline: `656cb7fa7688628f661f33cf2e03de14ef2cca17`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -21,9 +22,10 @@ readiness or protocol compliance.
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
 
-Local tests can be affected by ambient SOCKS proxy variables because
-`httpx.AsyncClient` trusts environment proxy configuration and the project
-does not install the SOCKS extra. The remote test jobs passed.
+The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
+so ambient proxy variables cannot unexpectedly route model traffic or loopback
+tests. Deployments that require a proxy must opt in through the provider
+configuration; proxy policy is still part of the production hardening backlog.
 
 ## Capability assessment
 

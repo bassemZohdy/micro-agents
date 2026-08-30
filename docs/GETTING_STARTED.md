@@ -83,6 +83,7 @@ provider = OpenAICompatProvider(
         endpoint="https://llm.example.com/v1",
         model_id="example-model",
         api_key=None,  # resolve externally; do not hard-code credentials
+        trust_env=False,  # opt in explicitly if an HTTP proxy is required
     )
 )
 runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))

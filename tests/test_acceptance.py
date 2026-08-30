@@ -61,7 +61,7 @@ class TestRealNetworkService:
             port = server.servers[0].sockets[0].getsockname()[1]
             base = f"http://127.0.0.1:{port}"
 
-            async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+            async with httpx.AsyncClient(base_url=base, timeout=10.0, trust_env=False) as client:
                 invoke = await client.post(
                     "/v1/invoke", json={"input": {"q": "hi"}, "request_id": "net-1"}
                 )

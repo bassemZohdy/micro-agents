@@ -25,6 +25,7 @@ class OpenAICompatConfig:
     api_key: str | None = None
     timeout_seconds: float = 30.0
     default_headers: dict[str, str] = field(default_factory=dict)
+    trust_env: bool = False
 
 
 class OpenAICompatProvider(ModelProvider):
@@ -39,6 +40,7 @@ class OpenAICompatProvider(ModelProvider):
             base_url=config.endpoint.rstrip("/"),
             headers=headers,
             timeout=config.timeout_seconds,
+            trust_env=config.trust_env,
         )
 
     def _payload(
