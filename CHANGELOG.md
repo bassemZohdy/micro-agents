@@ -28,6 +28,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added startup readiness probes for the configured model, state providers,
   and declared MCP servers; dependency failures keep the agent out of READY
   with stable, non-sensitive runtime errors.
+- Added the optional pinned `google-adk` extra and a separate
+  `runtimes/google_adk` adapter that constructs ADK agents, runners, sessions,
+  native tools, and model-provider bridges behind the runtime SPI.
 
 ### Documentation
 
@@ -42,8 +45,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Audit corrections
 
-- `runtimes/adk` is a custom model/tool loop; it does not currently integrate
-  Google ADK.
+- `runtimes/adk` remains a custom model/tool loop; the separate optional
+  `runtimes/google_adk` adapter is the only package making Google ADK support
+  claims.
 - The CLI resolves fake or OpenAI-compatible model providers and built-in state
   providers from configuration, but does not yet construct MCP, policy,
   knowledge, external state, or non-environment credential services.
@@ -129,7 +133,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 358 collected (updated unit, integration, and E2E coverage;
+- Tests: 362 collected (358 default plus four optional Google ADK adapter tests;
+  updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

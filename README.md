@@ -10,9 +10,9 @@ capability and can be deployed, scaled, secured, observed, upgraded, and
 operated independently.
 
 > Project maturity: **pre-release reference implementation**. The definition,
-> core contracts, custom agent loop, HTTP service, and test doubles are useful
-> today. The repository is not yet a production-ready Google ADK runtime, MCP
-> host, or A2A server. See [Implementation status](docs/IMPLEMENTATION_STATUS.md)
+> core contracts, custom loop, optional Google ADK adapter, HTTP service, and
+> test doubles are useful today. The repository is not yet a production-ready
+> runtime, MCP host, or A2A server. See [Implementation status](docs/IMPLEMENTATION_STATUS.md)
 > and [TODO.md](TODO.md).
 
 ## What this repository contains
@@ -23,6 +23,7 @@ operated independently.
 - YAML definition loader and runtime-neutral core contracts
 - a small `AgentRuntime` service-provider interface
 - a custom reference agent loop currently located under `runtimes/adk`
+- an optional Google ADK adapter under `runtimes/google_adk`
 - fake and OpenAI-compatible model-provider implementations
 - tool, MCP, session, memory, knowledge, policy, health, and telemetry seams
 - FastAPI invocation, health, capability, and preliminary agent-card endpoints
@@ -46,15 +47,15 @@ Runtime SPI
         |
         +-- Current custom reference loop
         |
-        +-- Target Google ADK adapter
+        +-- Optional Google ADK adapter
         |
         `-- Future adapters only when justified
 ```
 
-The runtime-neutral contract is intentional. The current implementation must
-not, however, be described as Google ADK integration yet: the package has no
-`google-adk` dependency and uses no ADK API. Closing that gap is the first
-runtime milestone in the backlog.
+The runtime-neutral contract is intentional. The custom loop remains the
+lightweight default, while the optional `google-adk` extra provides a genuine
+ADK adapter without leaking ADK types through the SPI. Production bootstrap
+selection and the remaining dependency mappings are still backlog work.
 
 ## Definition example
 
@@ -145,12 +146,12 @@ state, or A2A task interoperability.
 | Area | Current state | Production gap |
 |---|---|---|
 | Definition | Typed loader, generated schema, semantic uniqueness/format checks, and runtime contract enforcement | compatibility policy and reference overlays need hardening |
-| Runtime | Custom bounded model/tool loop with startup capability checks | actual Google ADK adapter is absent |
-| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client | Google ADK adapter, richer credential providers, and live-model acceptance remain |
+| Runtime | Custom bounded model/tool loop plus optional Google ADK adapter with ADK lifecycle/session/tool tests | production bootstrap selection and full ADK dependency mappings remain |
+| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client; ADK bridge accepts injected providers | richer credential providers and live-model acceptance remain |
 | Tools | `echo` built in; MCP adapters can be injected | plugin registry, tool-schema validation, and safe side-effect classification |
 | MCP | interfaces, security checks, fake client, manager | official SDK wire client and protocol lifecycle |
 | A2A | preliminary card generator and discovery route | A2A v1.0.1 card and task-protocol compliance |
-| State | definition-wired in-memory memory/session and SQLite session bindings, startup readiness probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
+| State | definition-wired in-memory memory/session and SQLite session bindings, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
 | Security | data types and programmatic policy evaluator | authentication, caller propagation, policy/credential resolution, approval flow |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -182,11 +183,12 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 358 tests. CI runs lint, typing, schema, unit,
-integration, E2E, package, container, separate runtime/development dependency
-audits, and strict documentation gates. Release tags repeat the quality gates,
-validate the tag against the package version, and publish only after all
-verification succeeds.
+The current suite contains 362 collected tests: 358 in the default development
+environment plus four tests for the optional Google ADK adapter. CI runs lint,
+typing, schema, unit, integration, E2E, package, container, separate
+runtime/development dependency audits, and strict documentation gates. Release
+tags repeat the quality gates, validate the tag against the package version,
+and publish only after all verification succeeds.
 
 ## Documentation
 

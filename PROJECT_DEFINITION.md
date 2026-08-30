@@ -34,10 +34,10 @@ source-code size.
 6. **Operational baseline** — HTTP, health, security, telemetry, container,
    and Kubernetes/OpenShift behavior.
 
-The repository currently delivers partial implementations of items 1–4 and a
-custom reference loop. Item 5 is not implemented: no Google ADK dependency or
-ADK API is present. Operational seams exist, but production bootstrap and
-end-to-end security/state/protocol integration are incomplete.
+The repository currently delivers partial implementations of items 1–4, a
+custom reference loop, and an optional Google ADK adapter. Operational seams
+exist, but production bootstrap selection and end-to-end security/state/
+protocol integration are incomplete.
 
 ## Architectural principles
 
@@ -130,7 +130,7 @@ Framework contracts
     v
 Runtime SPI
     |
-    +-- Google ADK adapter (target)
+    +-- Google ADK adapter (optional, current)
     `-- additional adapters only after demonstrated need
 ```
 
@@ -161,15 +161,11 @@ The current API version is `microagents.io/v1alpha1`.
 
 ## Runtime strategy
 
-The project implements one runtime adapter first: Google ADK.
-
-The current `runtimes/adk` package is a custom model/tool loop and should be
-treated as a prototype until one of these actions is completed:
-
-1. integrate Google ADK and prove the adapter with ADK-native lifecycle and
-   invocation tests; or
-2. rename the custom loop to a truthful built-in runtime and add a separate ADK
-   adapter.
+The project keeps the custom loop as a lightweight built-in runtime and
+implements Google ADK first as a separate optional adapter. The
+`runtimes/google_adk` package is covered by ADK-native lifecycle and invocation
+tests, while executable bootstrap selection and production service mappings
+remain open work.
 
 No second third-party runtime should be added merely to demonstrate abstraction
 purity.

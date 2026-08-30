@@ -58,9 +58,10 @@ protocol negotiation, or real-server compatibility test.
 ## Google ADK
 
 Google ADK is a runtime implementation choice, not an interoperability
-protocol. A package may be called an ADK adapter only when it depends on and
-uses supported Google ADK APIs and proves the mapping with integration tests.
-The current `runtimes/adk` package does not meet that criterion.
+protocol. `runtimes/adk` is the custom built-in loop; the optional
+`runtimes/google_adk` package depends on and invokes supported Google ADK APIs
+and is covered by adapter tests. The adapter is still pre-release and does not
+claim full production service integration.
 
 ## Version policy
 
