@@ -9,19 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Identity Types
-# ---------------------------------------------------------------------------
+from micro_agent.core.agent import AgentIdentity
 
-
-@dataclass(frozen=True)
-class AgentIdentity:
-    """The identity of the Micro-Agent itself."""
-
-    agent_id: str
-    agent_name: str
-    agent_version: str
-    namespace: str = "default"
+# Re-export for backward compatibility
+__all__ = [
+    "AgentIdentity",
+    "CallerIdentity",
+    "RuntimeIdentity",
+    "SecurityContext",
+    "UserContext",
+]
 
 
 @dataclass(frozen=True)
@@ -50,11 +47,6 @@ class RuntimeIdentity:
     workload_id: str
     namespace: str = "default"
     service_account: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Security Context
-# ---------------------------------------------------------------------------
 
 
 @dataclass

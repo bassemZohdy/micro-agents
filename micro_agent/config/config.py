@@ -12,6 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+_UNSET = object()
+
 
 class SecretRef(BaseModel, extra="forbid"):
     """Reference to an external secret."""
@@ -28,7 +30,7 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     mcp_endpoints: dict[str, str] = Field(default_factory=dict)
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
-    log_level: str = "INFO"
+    log_level: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -110,7 +112,8 @@ def resolve_config(
             config.memory_endpoint = env_config.memory_endpoint
         if env_config.session_endpoint:
             config.session_endpoint = env_config.session_endpoint
-        config.log_level = env_config.log_level
+        if env_config.log_level is not None:
+            config.log_level = env_config.log_level
         config.extra.update(env_config.extra)
 
     # Layer 3b: Environment variable overrides
@@ -118,9 +121,25 @@ def resolve_config(
     if env_model_endpoint:
         config.model_endpoint = env_model_endpoint
 
+    env_model_api_key = _read_env("model_api_key")
+    if env_model_api_key:
+        config.model_api_key = env_model_api_key
+
     env_log_level = _read_env("log_level")
     if env_log_level:
         config.log_level = env_log_level
+
+    env_model_provider = _read_env("model_provider")
+    if env_model_provider:
+        config.model_provider = env_model_provider
+
+    env_memory_endpoint = _read_env("memory_endpoint")
+    if env_memory_endpoint:
+        config.memory_endpoint = env_memory_endpoint
+
+    env_session_endpoint = _read_env("session_endpoint")
+    if env_session_endpoint:
+        config.session_endpoint = env_session_endpoint
 
     # Layer 4: Secret bindings
     if env_config and env_config.model_api_key_ref:

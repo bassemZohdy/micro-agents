@@ -1,4 +1,4 @@
-"""Micro-Agent HTTP API.
+"""Micro-Agent HTTP API — FastAPI application.
 
 Exposes a Micro-Agent as an independent network service.
 """
@@ -6,11 +6,58 @@ Exposes a Micro-Agent as an independent network service.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from micro_agent.core import AgentRequest, DefaultMicroAgent
+from micro_agent.observability import HealthChecker
+
 # ---------------------------------------------------------------------------
-# API Models
+# API Models (Pydantic for FastAPI)
+# ---------------------------------------------------------------------------
+
+
+class InvokeRequestModel(BaseModel):
+    """HTTP invocation request."""
+
+    input: dict[str, Any] = {}
+    request_id: str | None = None
+    session_id: str | None = None
+    caller_metadata: dict[str, Any] = {}
+
+
+class InvokeResponseModel(BaseModel):
+    """HTTP invocation response."""
+
+    output: dict[str, Any] = {}
+    request_id: str = ""
+    session_id: str | None = None
+    status: str = "success"
+    error: str | None = None
+    metadata: dict[str, Any] = {}
+
+
+class HealthResponseModel(BaseModel):
+    """Health check response."""
+
+    status: str = "healthy"
+    details: dict[str, Any] = {}
+
+
+class CapabilitiesResponseModel(BaseModel):
+    """Capabilities response."""
+
+    agent_name: str = ""
+    agent_version: str = ""
+    skills: list[dict[str, Any]] = []
+    capabilities: dict[str, bool] = {}
+
+
+# ---------------------------------------------------------------------------
+# Legacy dataclass models (kept for backward compat)
 # ---------------------------------------------------------------------------
 
 
@@ -68,7 +115,88 @@ ROUTES = {
 
 
 def serialize_response(data: Any) -> str:
-    """Serialize a response to JSON."""
-    if hasattr(data, "__dict__"):
-        return json.dumps(data.__dict__, default=str)
+    """Serialize a response to JSON, handling nested dataclasses."""
+    if hasattr(data, "__dataclass_fields__"):
+        return json.dumps(asdict(data), default=str)
+    if hasattr(data, "model_dump"):
+        return json.dumps(data.model_dump(), default=str)
     return json.dumps(data, default=str)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI Application Factory
+# ---------------------------------------------------------------------------
+
+
+def create_app(
+    agent: DefaultMicroAgent,
+    health_checker: HealthChecker | None = None,
+) -> FastAPI:
+    """Create a FastAPI application for a Micro-Agent."""
+    app = FastAPI(
+        title=agent.definition.metadata.name,
+        version=agent.definition.metadata.version,
+        description=agent.definition.metadata.description or "",
+    )
+    checker = health_checker or HealthChecker()
+
+    @app.post("/v1/invoke", response_model=InvokeResponseModel)
+    async def invoke(request: InvokeRequestModel) -> InvokeResponseModel:
+        agent_request = AgentRequest(
+            input=request.input,
+            request_id=request.request_id or "",
+            session_id=request.session_id,
+            caller_metadata=request.caller_metadata,
+        )
+        response = await agent.invoke(agent_request)
+        return InvokeResponseModel(
+            output=response.output,
+            request_id=response.request_id,
+            session_id=response.session_id,
+            status=response.status,
+            error=response.error,
+            metadata=response.metadata,
+        )
+
+    @app.get("/health/live", response_model=HealthResponseModel)
+    async def liveness() -> HealthResponseModel:
+        result = checker.check_liveness()
+        return HealthResponseModel(
+            status="healthy" if result.alive else "unhealthy",
+            details=result.details,
+        )
+
+    @app.get("/health/ready", response_model=HealthResponseModel)
+    async def readiness() -> HealthResponseModel:
+        result = checker.check_readiness()
+        return HealthResponseModel(
+            status=result.status.value,
+            details={
+                "ready": result.is_ready,
+                "dependencies": [
+                    {"name": d.name, "status": d.status.value} for d in result.dependencies
+                ],
+            },
+        )
+
+    @app.get("/v1/capabilities", response_model=CapabilitiesResponseModel)
+    async def capabilities() -> CapabilitiesResponseModel:
+        caps = agent.capabilities
+        skills = [
+            {"id": s.id, "name": s.name, "description": s.description}
+            for s in agent.definition.spec.dependencies.skills
+        ]
+        return CapabilitiesResponseModel(
+            agent_name=agent.identity.agent_name,
+            agent_version=agent.identity.agent_version,
+            skills=skills,
+            capabilities={
+                "streaming": caps.streaming,
+                "structured_output": caps.structured_output,
+                "memory": caps.memory,
+                "mcp": caps.mcp,
+                "a2a": caps.a2a,
+            },
+        )
+
+    return app

@@ -95,7 +95,7 @@ class TestEnvironmentConfig:
 
     def test_defaults(self):
         config = EnvironmentConfig()
-        assert config.log_level == "INFO"
+        assert config.log_level is None
         assert config.mcp_endpoints == {}
         assert config.extra == {}
 

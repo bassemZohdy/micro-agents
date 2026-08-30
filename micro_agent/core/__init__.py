@@ -9,6 +9,7 @@ from micro_agent.core.agent import (
     AgentState,
     MicroAgent,
 )
+from micro_agent.core.default_agent import DefaultMicroAgent
 
 __all__ = [
     "AgentCapabilities",
@@ -17,5 +18,6 @@ __all__ = [
     "AgentRequest",
     "AgentResponse",
     "AgentState",
+    "DefaultMicroAgent",
     "MicroAgent",
 ]

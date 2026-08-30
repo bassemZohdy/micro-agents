@@ -27,6 +27,9 @@ spec:
       containers:
         - name: micro-agent
           image: micro-agent:latest
+          args:
+            - "--definition"
+            - "/etc/micro-agent/agent.yaml"
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -43,6 +46,8 @@ spec:
             - name: agent-config
               mountPath: /etc/micro-agent
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /health/live
@@ -72,4 +77,6 @@ spec:
         - name: agent-config
           configMap:
             name: micro-agent-definition
+        - name: tmp
+          emptyDir: {}
       terminationGracePeriodSeconds: 30

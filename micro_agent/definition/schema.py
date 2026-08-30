@@ -10,7 +10,7 @@ from micro_agent.definition.models import MicroAgentDefinition
 
 def generate_schema() -> dict[str, object]:
     """Generate JSON Schema for MicroAgentDefinition."""
-    schema = MicroAgentDefinition.model_json_schema()
+    schema = MicroAgentDefinition.model_json_schema(by_alias=True)
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = "https://microagents.io/schemas/v1alpha1/micro-agent.json"
     return schema

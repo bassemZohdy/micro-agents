@@ -11,9 +11,14 @@ from micro_agent.interoperability.a2a import (
 from micro_agent.interoperability.http_api import (
     ROUTES,
     CapabilitiesResponse,
+    CapabilitiesResponseModel,
     HealthResponse,
+    HealthResponseModel,
     InvokeRequest,
+    InvokeRequestModel,
     InvokeResponse,
+    InvokeResponseModel,
+    create_app,
     serialize_response,
 )
 
@@ -25,9 +30,14 @@ __all__ = [
     "AgentCard",
     "AgentSkill",
     "CapabilitiesResponse",
+    "CapabilitiesResponseModel",
     "HealthResponse",
+    "HealthResponseModel",
     "InvokeRequest",
+    "InvokeRequestModel",
     "InvokeResponse",
+    "InvokeResponseModel",
     "ROUTES",
+    "create_app",
     "serialize_response",
 ]

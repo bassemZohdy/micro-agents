@@ -59,5 +59,7 @@ def load_definition_from_file(path: Path | str) -> MicroAgentDefinition:
     path = Path(path)
     if not path.exists():
         raise DefinitionError(f"Definition file not found: {path}")
+    if path.is_dir():
+        raise DefinitionError(f"Definition path is a directory, not a file: {path}")
     content = path.read_text(encoding="utf-8")
     return load_definition_from_yaml(content)

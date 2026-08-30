@@ -736,11 +736,11 @@
   "additionalProperties": false,
   "description": "Micro-Agent Definition v1alpha1.\n\nThis is the top-level declarative definition of a Micro-Agent.\nIt contains no ADK-native or framework-native types.",
   "properties": {
-    "api_version": {
+    "apiVersion": {
       "default": "microagents.io/v1alpha1",
       "description": "API version of this definition.",
       "pattern": "^microagents\\.io/v1alpha1$",
-      "title": "Api Version",
+      "title": "Apiversion",
       "type": "string"
     },
     "kind": {
