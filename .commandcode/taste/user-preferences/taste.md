@@ -3,7 +3,7 @@
 - Prefers public repositories for open-source projects. Confidence: 0.9
 - Comfortable with `gh repo create --public --source=. --push` one-liner workflow. Confidence: 0.85
 - Prefers detailed, structured commit messages that summarize all work done in a milestone or session. Confidence: 0.8
-- Does NOT want bot/AI co-author attribution in commits — prefers commits attributed solely to themselves. Never include Co-authored-by trailers for bots. Confidence: 0.95
+- Never add Co-authored-by trailers or any co-author lines to git commit messages — commits should be attributed solely to the user. Confidence: 1.0
 - Prefers Apache 2.0 license for open-source projects. Confidence: 0.85
 - Prefers conventional commit types (`feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`). Confidence: 0.8
 - Values Architecture Decision Records (ADRs) for significant design decisions. Confidence: 0.8
