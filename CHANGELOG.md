@@ -4,6 +4,19 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Bootstrap
+
+- Added executable model bootstrap from definition and `MICRO_AGENT_*`
+  bindings, including model ID, provider, endpoint, timeout, generation, and
+  environment-backed credentials.
+- Added explicit fake/OpenAI-compatible provider selection with fail-fast
+  validation for unsupported providers, missing endpoints, bare model
+  references, and missing credentials.
+- Added bootstrap regression tests and updated the container smoke job to set
+  fake mode explicitly.
+- Added definition-level invocation concurrency limits with explicit `wait` or
+  `reject` overload behavior, including lifecycle stop-race coverage.
+
 ### Documentation
 
 - Reconciled the README, project definition, architecture, Twelve-Factor
@@ -19,9 +32,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 - `runtimes/adk` is a custom model/tool loop; it does not currently integrate
   Google ADK.
-- The CLI starts the deterministic fake provider and does not yet resolve or
-  construct real providers, MCP, state, policy, knowledge, or credential
-  services from configuration.
+- The CLI resolves fake or OpenAI-compatible model providers from configuration
+  but does not yet construct MCP, state, policy, knowledge, or non-environment
+  credential services from configuration.
 - The current A2A-shaped discovery route and fake MCP client prove internal
   seams, not standards compliance.
 - SQLite proves local file persistence only, and the in-tree telemetry facade
@@ -57,9 +70,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   `error_policy` (fail / retry / fallback) honored from RuntimeSemantics.
 - Generic tool resolution from definitions via a built-in registry;
   unresolved tools are reported instead of silently dropped.
-- `OpenAICompatProvider` — injectable model provider for a compatible
-  `/chat/completions` endpoint; executable configuration selection remains
-  open work.
+- `OpenAICompatProvider` — model provider for a compatible
+  `/chat/completions` endpoint, selected by executable definition/environment
+  configuration.
 - Session integration (history replay/persistence, TTL from definition) and
   memory auto-store behind `MemoryPolicy.auto_store`.
 - MCP integration seam: `FakeMcpClient` test double, `McpConnectionManager`
@@ -91,7 +104,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 304 collected (251 unit-selected and 53 integration/e2e-selected;
+- Tests: 313 collected (260 unit-selected and 53 integration/e2e-selected;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

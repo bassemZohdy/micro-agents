@@ -13,7 +13,7 @@ from micro_agent.core import (
     AgentState,
     DefaultMicroAgent,
 )
-from micro_agent.definition import load_definition_from_dict
+from micro_agent.definition import ConcurrencyPolicy, load_definition_from_dict
 from micro_agent.interoperability import create_app, serialize_response
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
@@ -182,6 +182,47 @@ class TestDefaultMicroAgent:
         await stopping
         assert runtime.stop_called is True
         assert agent.state == AgentState.STOPPED
+
+    @pytest.mark.asyncio
+    async def test_reject_policy_enforces_concurrency_limit(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.runtime.max_concurrency = 1
+        limited.spec.runtime.concurrency_policy = ConcurrencyPolicy.REJECT
+        runtime = ControlledRuntime(expected_invocations=1)
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        first = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        with pytest.raises(RuntimeError, match="concurrency limit"):
+            await agent.invoke(AgentRequest())
+
+        runtime.release.set()
+        await first
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_wait_policy_releases_capacity_after_completion(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.runtime.max_concurrency = 1
+        runtime = ControlledRuntime(expected_invocations=1)
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        first = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        second = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.sleep(0)
+        assert runtime.entered == 1
+
+        runtime.release.set()
+        await asyncio.gather(first, second)
+        assert runtime.entered == 2
+        await agent.stop()
+        await agent.shutdown()
 
 
 class TestHTTPServer:

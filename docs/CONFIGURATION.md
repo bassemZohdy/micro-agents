@@ -12,17 +12,18 @@ framework defaults
     < resolved secret binding
 ```
 
-`micro_agent.config.resolve_config()` implements part of this model as a
-library utility. The command-line process does not currently use it, so these
-values do not yet construct runtime providers.
+`micro_agent.config.resolve_config()` implements this precedence, and the
+executable bootstrap uses it to construct the configured model provider before
+the service becomes ready.
 
 ## Environment variables recognized by `resolve_config()`
 
 | Variable | Resolved field | Bootstrap status |
 |---|---|---|
-| `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | not wired |
-| `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | not wired |
-| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | not wired |
+| `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
+| `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the definition ref used as provider model ID |
+| `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
+| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | not wired |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | not wired |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | not applied to Uvicorn/runtime logging |
@@ -45,9 +46,10 @@ spec:
       - residency-api-key
 ```
 
-The current definition uses snake_case field names. Environment-backed
-`SecretRef` resolution exists in the separate configuration model, but the
-process bootstrap does not connect definition credential references to it.
+The current definition uses snake_case field names. A model
+`credential_ref` is resolved from that environment variable during bootstrap;
+startup fails if the reference is missing. Resolved values are never included
+in models, responses, logs, or exception text.
 
 Production requirements:
 
@@ -65,8 +67,23 @@ secret-provider bindings. Provider endpoints that vary by environment should
 ultimately use an overlay/binding mechanism rather than editing the base
 logical definition.
 
+## Invocation limits
+
+Definitions can bound concurrent requests at the agent boundary. The default
+`wait` policy queues callers until capacity is available; `reject` returns a
+runtime error immediately when the limit is full. Stopping an agent wakes
+queued callers so they cannot remain blocked:
+
+```yaml
+spec:
+  runtime:
+    max_concurrency: 4
+    concurrency_policy: wait  # or reject
+```
+
 ## Development fake mode
 
-Fake mode must be explicit before a stable release. The current CLI implicitly
-uses it and therefore must not be used as evidence of a real-provider
-deployment.
+Fake mode is explicit: set `provider: fake` in the definition or
+`MICRO_AGENT_MODEL_PROVIDER=fake`. A bare model reference without a provider or
+endpoint is rejected by the executable bootstrap. Fake mode is suitable for
+offline development and CI only, not evidence of a real-provider deployment.

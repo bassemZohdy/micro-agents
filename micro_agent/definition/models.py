@@ -165,11 +165,25 @@ class ErrorPolicy(StrEnum):
     FALLBACK = "fallback"
 
 
+class ConcurrencyPolicy(StrEnum):
+    """Behavior when the invocation concurrency limit is reached."""
+
+    WAIT = "wait"
+    REJECT = "reject"
+
+
 class RuntimeSemantics(BaseModel, extra="forbid"):
     """Runtime behavior configuration."""
 
     timeout_seconds: int | None = Field(None, ge=1, description="Overall invocation timeout.")
     max_iterations: int | None = Field(None, ge=1, description="Maximum agent iterations.")
+    max_concurrency: int | None = Field(
+        None, ge=1, description="Maximum concurrent invocations for this agent."
+    )
+    concurrency_policy: ConcurrencyPolicy = Field(
+        ConcurrencyPolicy.WAIT,
+        description="Whether invocations wait for capacity or are rejected.",
+    )
     error_policy: ErrorPolicy = Field(ErrorPolicy.FAIL, description="Error handling policy.")
     capabilities: list[str] = Field(
         default_factory=list, description="Declared runtime capabilities."

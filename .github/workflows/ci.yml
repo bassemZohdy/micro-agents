@@ -119,6 +119,7 @@ jobs:
           trap cleanup EXIT
           docker run --rm -d --name micro-agent-smoke \
             -p 8080:8080 \
+            -e MICRO_AGENT_MODEL_PROVIDER=fake \
             -v "$PWD/examples/notification-agent.yaml:/etc/micro-agent/agent.yaml:ro" \
             micro-agent:ci
           for i in $(seq 1 30); do

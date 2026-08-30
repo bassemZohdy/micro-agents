@@ -12,7 +12,7 @@ from micro_agent.core.agent import (
     AgentState,
     MicroAgent,
 )
-from micro_agent.definition import MicroAgentDefinition
+from micro_agent.definition import ConcurrencyPolicy, MicroAgentDefinition
 from micro_agent.runtime import AgentRuntime, RuntimeAgent
 
 
@@ -29,6 +29,7 @@ class DefaultMicroAgent(MicroAgent):
         self._state = AgentState.CREATED
         self._runtime_agent: RuntimeAgent | None = None
         self._lifecycle_lock = asyncio.Lock()
+        self._capacity_available = asyncio.Condition(self._lifecycle_lock)
         self._active_invocations = 0
         self._idle = asyncio.Event()
         self._idle.set()
@@ -83,6 +84,12 @@ class DefaultMicroAgent(MicroAgent):
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         async with self._lifecycle_lock:
+            max_concurrency = self._definition.spec.runtime.max_concurrency
+            policy = self._definition.spec.runtime.concurrency_policy
+            while max_concurrency is not None and self._active_invocations >= max_concurrency:
+                if policy == ConcurrencyPolicy.REJECT:
+                    raise RuntimeError(f"Invocation concurrency limit reached ({max_concurrency})")
+                await self._capacity_available.wait()
             if self._state != AgentState.READY:
                 raise RuntimeError(f"Cannot invoke from state {self._state.value}")
             assert self._runtime_agent is not None
@@ -96,6 +103,7 @@ class DefaultMicroAgent(MicroAgent):
                 self._active_invocations -= 1
                 if self._active_invocations == 0:
                     self._idle.set()
+                self._capacity_available.notify_all()
 
     async def stop(self) -> None:
         async with self._lifecycle_lock:
@@ -109,6 +117,7 @@ class DefaultMicroAgent(MicroAgent):
                 self._state = AgentState.STOPPING
                 wait_for_existing_stop = False
                 self._stop_complete.clear()
+                self._capacity_available.notify_all()
                 runtime_agent = self._runtime_agent
 
         if wait_for_existing_stop:

@@ -2,7 +2,7 @@
 
 Last audited: 2026-08-30  
 Documentation-audit baseline: `8e9efe6bdc7844661d2ed32eb291f3bc773a1368`
-Cleanup verification baseline: `a92894285843e86bb81235d1cc2bb612559b39d4`
+Cleanup verification baseline: `bd077fa005c2c5b5d12f9020b57d36121f09fa4d`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 304 pass | 251 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 313 pass | 260 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -22,10 +22,9 @@ readiness or protocol compliance.
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
 
-The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
-so ambient proxy variables cannot unexpectedly route model traffic or loopback
-tests. Deployments that require a proxy must opt in through the provider
-configuration; proxy policy is still part of the production hardening backlog.
+Local tests can be affected by ambient SOCKS proxy variables because
+`httpx.AsyncClient` trusts environment proxy configuration and the project
+does not install the SOCKS extra. The remote test jobs passed.
 
 ## Capability assessment
 
@@ -40,12 +39,11 @@ Implemented:
 
 Gaps:
 
-- the process bootstrap does not call `resolve_config()`
-- several environment variables are documented but do not affect the running
-  service
+- the bootstrap resolves model provider, endpoint, model ID, and credentials;
+  memory/session endpoint bindings still do not construct providers
 - schema validation does not resolve references or enforce several semantic
   constraints
-- model alias and provider model ID are not clearly separated
+- model alias and provider model ID need a versioned resource/catalog contract
 
 ### Runtime
 
@@ -57,12 +55,13 @@ Implemented:
 - session history, optional memory auto-store, injected policy, and telemetry
 - concurrency-safe service lifecycle, failure recovery, and in-flight drain on
   stop
+- definition-level concurrency limit with wait/reject overload behavior and
+  stop wake-up handling
 
 Gaps:
 
 - `runtimes/adk` does not use Google ADK
-- concurrency is not bounded and cancellation/deadline propagation is
-  incomplete
+- cancellation/deadline propagation is incomplete
 - retrying the complete invocation can replay side effects
 - declared input/output contracts are not enforced
 
@@ -76,8 +75,8 @@ Implemented:
 
 Gaps:
 
-- CLI always selects the fake provider
-- real provider credentials and endpoints are not resolved by bootstrap
+- CLI/provider bootstrap now selects explicit fake or OpenAI-compatible mode
+- broader provider credentials and endpoints are not yet supported
 - OpenAI-compatible follow-up messages omit assistant tool-call structures and
   tool-call IDs
 - only `echo` resolves from the built-in map; the residency example's native
@@ -147,7 +146,7 @@ Implemented:
 
 Gaps:
 
-- bootstrap constructs none of these providers
+- bootstrap does not yet construct these state providers from endpoint bindings
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
 - SQLite access lacks explicit async serialization around one connection

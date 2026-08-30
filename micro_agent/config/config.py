@@ -25,6 +25,8 @@ class SecretRef(BaseModel, extra="forbid"):
 class EnvironmentConfig(BaseModel, extra="forbid"):
     """Environment-specific configuration overrides."""
 
+    model_id: str | None = None
+    model_provider: str | None = None
     model_endpoint: str | None = None
     model_api_key_ref: SecretRef | None = None
     mcp_endpoints: dict[str, str] = Field(default_factory=dict)
@@ -39,6 +41,7 @@ class ResolvedConfig:
     """Final resolved configuration after applying precedence."""
 
     model_ref: str | None = None
+    model_id: str | None = None
     model_provider: str | None = None
     model_endpoint: str | None = None
     model_api_key: str | None = None
@@ -104,6 +107,10 @@ def resolve_config(
 
     # Layer 3: Environment configuration
     if env_config:
+        if env_config.model_id:
+            config.model_id = env_config.model_id
+        if env_config.model_provider:
+            config.model_provider = env_config.model_provider
         if env_config.model_endpoint:
             config.model_endpoint = env_config.model_endpoint
         if env_config.mcp_endpoints:
@@ -120,6 +127,10 @@ def resolve_config(
     env_model_endpoint = _read_env("model_endpoint")
     if env_model_endpoint:
         config.model_endpoint = env_model_endpoint
+
+    env_model_id = _read_env("model_id")
+    if env_model_id:
+        config.model_id = env_model_id
 
     env_model_api_key = _read_env("model_api_key")
     if env_model_api_key:

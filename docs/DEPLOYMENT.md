@@ -10,11 +10,12 @@ The image:
 - installs the local Python package
 - runs as UID/GID 1000
 - exposes port 8080
-- starts `python -m micro_agent`
+- starts `python -m micro_agent` with an externally mounted definition
 - probes `/health/live`
 
-The executable currently uses the fake model and does not construct real MCP,
-state, policy, or secret providers.
+The executable resolves an explicit fake or OpenAI-compatible model provider
+from the mounted definition and environment. It does not yet construct real
+MCP, state, policy, or non-environment secret providers.
 
 ## Kubernetes manifests
 

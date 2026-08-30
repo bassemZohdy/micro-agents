@@ -12,11 +12,11 @@ from pathlib import Path
 
 import uvicorn
 
+from micro_agent.config import build_runtime
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_file
 from micro_agent.interoperability import create_app
 from micro_agent.observability import HealthChecker, Telemetry
-from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,7 +45,8 @@ def parse_args() -> argparse.Namespace:
 async def run(args: argparse.Namespace) -> None:
     definition = load_definition_from_file(args.definition)
     telemetry = Telemetry()
-    runtime = AdkRuntime(AdkRuntimeConfig(telemetry=telemetry))
+    bootstrap = build_runtime(definition, telemetry=telemetry)
+    runtime = bootstrap.runtime
     agent = DefaultMicroAgent(definition, runtime)
 
     await agent.initialize()
@@ -61,7 +62,7 @@ async def run(args: argparse.Namespace) -> None:
         app,
         host=args.host,
         port=args.port,
-        log_level="info",
+        log_level=bootstrap.resolved.log_level.lower(),
     )
     server = uvicorn.Server(config)
 

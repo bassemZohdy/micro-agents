@@ -15,14 +15,15 @@ explicit provider selection and must never silently fall back to the fake.
 
 Google ADK remains the intended first external framework adapter, but the
 current `runtimes/adk` implementation is a project-owned model/tool loop. It
-has no Google ADK dependency or ADK-native lifecycle. `OpenAICompatProvider`
-can be injected through Python, but the command-line bootstrap does not select
-it from resolved configuration.
+has no Google ADK dependency or ADK-native lifecycle. The executable bootstrap
+now selects the fake provider only when explicitly configured, or an
+OpenAI-compatible provider from definition/environment bindings. Other
+providers remain unsupported until an adapter is added.
 
 ## Consequences
 
 - CI needs no network or API keys; behavioral tests cover the full invoke loop.
 - The current package must be renamed to describe the custom loop or replaced
   by a genuine ADK adapter.
-- Provider selection, credential resolution, and explicit fake/development
-  mode are release-blocking bootstrap work.
+- Credential providers beyond environment bindings and a genuine ADK adapter
+  remain release-blocking work.
