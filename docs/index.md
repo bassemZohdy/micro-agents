@@ -11,12 +11,12 @@ ADK, A2A, or MCP implementation.
 
 ## Start here
 
-- [Getting Started](GETTING_STARTED.md) — install, validate, and run the current
-  fake-provider development slice
+- [Getting Started](GETTING_STARTED.md) — install, validate, and run the
+  explicit fake-provider or OpenAI-compatible development slice
 - [Implementation Status](IMPLEMENTATION_STATUS.md) — audited capability and
   gap matrix at the latest reviewed commit
 - [Configuration](CONFIGURATION.md) — definition fields, environment values,
-  precedence, and current bootstrap limitations
+  precedence, provider selection, and bootstrap limitations
 - [HTTP API](API.md) — implemented routes and their current semantics
 - [Deployment](DEPLOYMENT.md) — development container/Kubernetes assets and the
   production hardening checklist

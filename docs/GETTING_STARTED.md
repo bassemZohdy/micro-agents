@@ -37,8 +37,10 @@ python -m micro_agent \
   --port 8080
 ```
 
-The command-line bootstrap currently runs `FakeModelProvider`. This is useful
-for lifecycle and HTTP development but is not a real model configuration.
+The example definition explicitly selects `FakeModelProvider`. This is useful
+for lifecycle and HTTP development but is not a real model configuration. The
+bootstrap rejects a bare model reference so production configuration cannot
+silently use the fake provider.
 
 ## Exercise the API
 
@@ -71,23 +73,20 @@ and E2E suites separately.
 
 ## Programmatic real-model injection
 
-`OpenAICompatProvider` exists, but there is no supported production bootstrap
-yet. Applications can inject it directly for development:
+The executable bootstrap can select `OpenAICompatProvider` from the definition
+or environment. For example:
 
 ```python
-from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
-from runtimes.adk import AdkRuntime, AdkRuntimeConfig
-
-provider = OpenAICompatProvider(
-    OpenAICompatConfig(
-        endpoint="https://llm.example.com/v1",
-        model_id="example-model",
-        api_key=None,  # resolve externally; do not hard-code credentials
-        trust_env=False,  # opt in explicitly if an HTTP proxy is required
-    )
-)
-runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+export MICRO_AGENT_MODEL_PROVIDER=openai-compatible
+export MICRO_AGENT_MODEL_ENDPOINT=https://llm.example.com/v1
+export MICRO_AGENT_MODEL_ID=example-model
+export MICRO_AGENT_MODEL_API_KEY='set-this-from-your-secret-manager'
+python -m micro_agent --definition examples/notification-agent.yaml
 ```
+
+Alternatively set `provider: openai-compatible`, `endpoint`, and a
+`credential_ref` in the model definition. The referenced environment variable
+must exist before startup.
 
 The package name `runtimes.adk` does not currently mean that Google ADK is
 used. Treat this API as pre-release.
@@ -101,4 +100,5 @@ docker run --rm -p 8080:8080 \
   micro-agents:dev
 ```
 
-This validates the fake-provider service only.
+This validates the explicit fake-provider service only. It does not prove live
+model, MCP, authentication, external state, or A2A task interoperability.

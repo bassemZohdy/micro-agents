@@ -60,6 +60,15 @@
       "title": "AgentBehavior",
       "type": "object"
     },
+    "ConcurrencyPolicy": {
+      "description": "Behavior when the invocation concurrency limit is reached.",
+      "enum": [
+        "wait",
+        "reject"
+      ],
+      "title": "ConcurrencyPolicy",
+      "type": "string"
+    },
     "Dependencies": {
       "additionalProperties": false,
       "description": "All agent dependencies.",
@@ -551,6 +560,25 @@
           "default": null,
           "description": "Maximum agent iterations.",
           "title": "Max Iterations"
+        },
+        "max_concurrency": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum concurrent invocations for this agent.",
+          "title": "Max Concurrency"
+        },
+        "concurrency_policy": {
+          "$ref": "#/$defs/ConcurrencyPolicy",
+          "default": "wait",
+          "description": "Whether invocations wait for capacity or are rejected."
         },
         "error_policy": {
           "$ref": "#/$defs/ErrorPolicy",

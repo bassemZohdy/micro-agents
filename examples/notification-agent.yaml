@@ -18,6 +18,8 @@ spec:
   dependencies:
     model:
       ref: reasoning-model
+      # Explicit development provider; replace with a live provider and endpoint.
+      provider: fake
     skills:
       - id: send-notification
         name: Send Notification

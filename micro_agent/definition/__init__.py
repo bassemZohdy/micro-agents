@@ -9,6 +9,7 @@ from micro_agent.definition.loader import (
 from micro_agent.definition.models import (
     A2AConfig,
     AgentBehavior,
+    ConcurrencyPolicy,
     Dependencies,
     ErrorPolicy,
     Interoperability,
@@ -28,6 +29,7 @@ from micro_agent.definition.models import (
 __all__ = [
     "A2AConfig",
     "AgentBehavior",
+    "ConcurrencyPolicy",
     "DefinitionError",
     "Dependencies",
     "ErrorPolicy",

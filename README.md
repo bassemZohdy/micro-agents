@@ -109,11 +109,22 @@ curl -X POST http://localhost:8080/v1/invoke \
   -d '{"input":{"message":"hello"}}'
 ```
 
-Important: `python -m micro_agent` currently uses `FakeModelProvider`. It does
-not yet select `OpenAICompatProvider` or other backing services from the YAML
-or `MICRO_AGENT_*` environment variables. The OpenAI-compatible provider can
-be injected through the Python API, but production bootstrap wiring remains
-open.
+The executable bootstrap now resolves the model provider from the definition
+and `MICRO_AGENT_*` environment variables. The development example explicitly
+sets `provider: fake`; a definition with a live endpoint (or
+`MICRO_AGENT_MODEL_PROVIDER=openai-compatible`) selects
+`OpenAICompatProvider`. A provider or endpoint is required—there is no silent
+fallback for a bare model reference.
+
+For an OpenAI-compatible endpoint, keep credentials out of the definition:
+
+```bash
+export MICRO_AGENT_MODEL_PROVIDER=openai-compatible
+export MICRO_AGENT_MODEL_ENDPOINT=https://llm.example.com/v1
+export MICRO_AGENT_MODEL_ID=example-model
+export MICRO_AGENT_MODEL_API_KEY='resolve-this-outside-source-control'
+python -m micro_agent --definition examples/notification-agent.yaml
+```
 
 ## Container
 
@@ -134,11 +145,11 @@ state, or A2A task interoperability.
 |---|---|---|
 | Definition | Typed loader and generated schema | semantic validation and compatibility policy need hardening |
 | Runtime | Custom bounded model/tool loop | actual Google ADK adapter is absent |
-| Models | Fake provider and injectable OpenAI-compatible HTTP client | CLI/runtime factory and credential wiring are absent |
+| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client | Google ADK adapter, richer credential providers, and live-model acceptance remain |
 | Tools | `echo` built in; MCP adapters can be injected | plugin registry, contract validation, and safe side-effect classification |
 | MCP | interfaces, security checks, fake client, manager | official SDK wire client and protocol lifecycle |
 | A2A | preliminary card generator and discovery route | A2A v1.0.1 card and task-protocol compliance |
-| State | in-memory providers and SQLite session example | production shared providers and concurrency guarantees |
+| State | in-memory providers, SQLite session example, and bounded invocation concurrency | production shared providers and cancellation/deadline guarantees |
 | Security | data types and programmatic policy evaluator | authentication, caller propagation, policy/credential resolution, approval flow |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, and sample manifests | production bootstrap and OpenShift hardening |
@@ -170,7 +181,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 304 tests. CI runs lint, typing, schema, unit,
+The current suite contains 313 tests. CI runs lint, typing, schema, unit,
 integration, E2E, package, container, separate runtime/development dependency
 audits, and strict documentation gates. Release tags repeat the quality gates,
 validate the tag against the package version, and publish only after all
