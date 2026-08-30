@@ -14,7 +14,14 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from micro_agent.core import AgentRequest, DefaultMicroAgent, InvocationOverloadedError
+from micro_agent.core import (
+    AgentRequest,
+    AuthenticationError,
+    AuthorizationError,
+    DefaultMicroAgent,
+    DependencyUnavailableError,
+    InvocationOverloadedError,
+)
 from micro_agent.definition import ContractValidationError
 from micro_agent.interoperability.a2a import (
     a2a_well_known_path,
@@ -240,6 +247,33 @@ def create_app(
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                 detail={"code": "deadline_exceeded", "message": "Invocation deadline exceeded"},
+            ) from exc
+        except AuthenticationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"WWW-Authenticate": "Bearer"},
+                detail={
+                    "code": "authentication_required",
+                    "message": "Authentication required",
+                },
+            ) from exc
+        except (AuthorizationError, PermissionError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "authorization_denied", "message": "Authorization denied"},
+            ) from exc
+        except (DependencyUnavailableError, ConnectionError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "dependency_unavailable",
+                    "message": "Required dependency unavailable",
+                },
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 — stable public error contract
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"code": "internal_error", "message": "Internal server error"},
             ) from exc
         telemetry.logger.info(
             "invoke completed",

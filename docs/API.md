@@ -73,9 +73,20 @@ Contract violations return HTTP 422 with a stable detail object:
 }
 ```
 
-Oversized bodies return HTTP 413 with `code: request_too_large`. Other runtime
-exceptions can still surface as generic HTTP 500 responses until the complete
-error taxonomy and authentication middleware are implemented.
+Oversized bodies return HTTP 413 with `code: request_too_large`. Runtime
+failures use stable detail codes and deliberately generic messages:
+
+| Condition | Status | Detail code |
+|---|---:|---|
+| authentication failure raised by an integration | 401 | `authentication_required` |
+| authorization or policy denial | 403 | `authorization_denied` |
+| invocation deadline exceeded | 504 | `deadline_exceeded` |
+| required model, state, or other dependency unavailable | 503 | `dependency_unavailable` |
+| unexpected runtime failure | 500 | `internal_error` |
+
+The 401 mapping is ready for an authentication middleware integration; the
+default application does not authenticate callers yet. Exception text is not
+returned in any of these responses.
 
 An exhausted request or definition deadline returns HTTP 504:
 
