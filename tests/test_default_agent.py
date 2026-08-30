@@ -13,7 +13,12 @@ from micro_agent.core import (
     AgentState,
     DefaultMicroAgent,
 )
-from micro_agent.definition import ConcurrencyPolicy, load_definition_from_dict
+from micro_agent.definition import (
+    ConcurrencyPolicy,
+    ContractValidationError,
+    InputContract,
+    load_definition_from_dict,
+)
 from micro_agent.interoperability import create_app, serialize_response
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
@@ -285,6 +290,43 @@ class TestDefaultMicroAgent:
         assert agent.state == AgentState.STOPPED
         assert runtime.stop_called is True
 
+    @pytest.mark.asyncio
+    async def test_input_contract_is_enforced_before_runtime(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.behavior.input_contract = InputContract.model_validate(
+            {"parameters": [{"name": "action", "type": "string"}]}
+        )
+        runtime = ControlledRuntime()
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        with pytest.raises(ContractValidationError, match="missing required"):
+            await agent.invoke(AgentRequest(input={}))
+        assert runtime.entered == 0
+        assert agent.state == AgentState.READY
+
+    @pytest.mark.asyncio
+    async def test_cancelled_waiter_releases_capacity(self, definition):
+        limited = definition.model_copy(deep=True)
+        limited.spec.runtime.max_concurrency = 1
+        runtime = ControlledRuntime(expected_invocations=1)
+        agent = DefaultMicroAgent(limited, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        first = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        waiter = asyncio.create_task(agent.invoke(AgentRequest()))
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        runtime.release.set()
+        await first
+        await agent.stop()
+        await agent.shutdown()
+
 
 class TestHTTPServer:
     """Test FastAPI HTTP server."""
@@ -304,6 +346,56 @@ class TestHTTPServer:
             data = resp.json()
             assert data["status"] == "success"
             assert UUID(data["request_id"])
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_contract_error_returns_stable_422(self, agent):
+        agent.definition.spec.behavior.input_contract = InputContract.model_validate(
+            {"parameters": [{"name": "action", "type": "string"}]}
+        )
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 422
+            assert resp.json()["detail"]["code"] == "contract_validation_failed"
+            assert resp.json()["detail"]["contract"] == "input"
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_overload_returns_stable_429(self, agent):
+        await agent.initialize()
+        await agent.start()
+        agent._definition.spec.runtime.max_concurrency = 1
+        agent._definition.spec.runtime.concurrency_policy = "reject"
+        # The first slot is occupied from the service's perspective; this
+        # isolates the HTTP mapping without racing a second client task.
+        agent._active_invocations = 1
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 429
+            assert resp.headers["retry-after"] == "1"
+            assert resp.json()["detail"] == {"code": "invocation_overloaded", "limit": 1}
+        agent._active_invocations = 0
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_request_size_limit_returns_413(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, max_request_bytes=8)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 413
+            assert resp.json()["code"] == "request_too_large"
         await agent.stop()
         await agent.shutdown()
 

@@ -38,9 +38,13 @@ spec:
 
     output_contract:
       parameters:
-        - name: result
-          type: object
-          description: The action result.
+        - name: content
+          type: string
+          description: The model-generated response.
+          required: true
+        - name: tool_results
+          type: array
+          description: Results returned by declared tools.
           required: true
 
   dependencies:

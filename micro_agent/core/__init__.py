@@ -7,6 +7,7 @@ from micro_agent.core.agent import (
     AgentRequest,
     AgentResponse,
     AgentState,
+    InvocationOverloadedError,
     MicroAgent,
 )
 from micro_agent.core.default_agent import DefaultMicroAgent
@@ -19,5 +20,6 @@ __all__ = [
     "AgentResponse",
     "AgentState",
     "DefaultMicroAgent",
+    "InvocationOverloadedError",
     "MicroAgent",
 ]

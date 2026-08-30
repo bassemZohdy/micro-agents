@@ -69,6 +69,14 @@ class AgentResponse:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+class InvocationOverloadedError(RuntimeError):
+    """Raised when an invocation exceeds the configured concurrency limit."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        super().__init__(f"Invocation concurrency limit reached ({limit})")
+
+
 # ---------------------------------------------------------------------------
 # Agent Context
 # ---------------------------------------------------------------------------

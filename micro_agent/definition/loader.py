@@ -35,8 +35,9 @@ def load_definition_from_dict(data: dict[str, object]) -> MicroAgentDefinition:
                     "type": err["type"],
                 }
             )
+        summary = "; ".join(f"{error['loc']}: {error['msg']}" for error in errors)
         raise DefinitionError(
-            f"Invalid Micro-Agent definition: {len(errors)} error(s)",
+            f"Invalid Micro-Agent definition: {len(errors)} error(s): {summary}",
             errors=errors,
         ) from exc
 

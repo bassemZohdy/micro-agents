@@ -87,6 +87,11 @@ for that duration, then cancels the remaining invocation tasks before closing
 the runtime. Provider-specific deadline propagation remains a production
 hardening item.
 
+When `behavior.input_contract` or `behavior.output_contract` declares
+parameters, the runtime validates required fields, JSON-compatible types, and
+unknown fields at the invocation boundary. An empty contract remains
+unconstrained for compatibility with minimal development definitions.
+
 ## Development fake mode
 
 Fake mode is explicit: set `provider: fake` in the definition or

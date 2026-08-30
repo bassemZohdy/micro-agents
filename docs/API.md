@@ -6,7 +6,7 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 
 | Method and path | Purpose | Current limitation |
 |---|---|---|
-| `POST /v1/invoke` | invoke the agent | no authentication or contract enforcement |
+| `POST /v1/invoke` | invoke the agent | no authentication; declared contracts are enforced |
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
 | `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy |
 | `GET /v1/capabilities` | runtime/skill metadata | reports runtime flags, not end-to-end readiness |
@@ -26,8 +26,14 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 ```
 
 `input` must currently be a JSON object. The definition's input contract is
-not enforced. `caller_metadata` is untrusted application data and must not be
-used as authenticated caller identity.
+enforced when parameters are declared: required fields, JSON-compatible types,
+and unknown fields are rejected. `caller_metadata` is untrusted application
+data and must not be used as authenticated caller identity.
+
+Requests are limited to 1 MiB by default when `create_app()` is used. A
+deployment gateway should apply the same limit and reject chunked requests
+that exceed it; applications can choose a smaller limit with the
+`max_request_bytes` factory argument.
 
 `request_id` is optional. When it is omitted or empty, the service generates a
 UUID and returns the same value in the response.
@@ -48,8 +54,38 @@ UUID and returns the same value in the response.
 }
 ```
 
-Error-to-HTTP-status mapping is not yet standardized. Runtime exceptions can
-surface as generic HTTP 500 responses.
+Contract violations return HTTP 422 with a stable detail object:
+
+```json
+{
+  "detail": {
+    "code": "contract_validation_failed",
+    "contract": "input",
+    "errors": ["missing required field 'message'"]
+  }
+}
+```
+
+Oversized bodies return HTTP 413 with `code: request_too_large`. Other runtime
+exceptions can still surface as generic HTTP 500 responses until the complete
+error taxonomy and authentication middleware are implemented.
+
+## Invocation concurrency
+
+Definitions can bound concurrent calls and choose overload behavior:
+
+```yaml
+spec:
+  runtime:
+    max_concurrency: 8
+    concurrency_policy: reject # or wait (the default)
+```
+
+`reject` returns HTTP 429 (`code: invocation_overloaded`) before model
+invocation and includes `Retry-After: 1`. `wait` queues the caller until a
+slot is available. Cancellation releases a queued slot; propagating explicit
+deadlines through model, tool, MCP, and state providers remains an open
+production task.
 
 ## Health behavior
 

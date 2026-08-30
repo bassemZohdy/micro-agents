@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 317 pass | 264 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 333 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -22,9 +22,10 @@ readiness or protocol compliance.
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
 
-Local tests can be affected by ambient SOCKS proxy variables because
-`httpx.AsyncClient` trusts environment proxy configuration and the project
-does not install the SOCKS extra. The remote test jobs passed.
+The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
+so ambient proxy variables cannot unexpectedly route model traffic or loopback
+tests. Deployments that require a proxy must opt in through provider
+configuration; proxy policy remains part of production hardening.
 
 ## Capability assessment
 
@@ -35,14 +36,15 @@ Implemented:
 - strict Pydantic `microagents.io/v1alpha1` model
 - YAML loader with diagnostics
 - generated draft-2020-12 JSON Schema and CI drift check
+- semantic validation for names, versions, references, transports, URLs,
+  scopes, capabilities, and duplicate collections
+- runtime-neutral input/output contract enforcement with stable diagnostics
 - a separate `resolve_config()` precedence utility
 
 Gaps:
 
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
   memory/session endpoint bindings still do not construct providers
-- schema validation does not resolve references or enforce several semantic
-  constraints
 - model alias and provider model ID need a versioned resource/catalog contract
 
 ### Runtime
@@ -59,13 +61,13 @@ Implemented:
   stop wake-up handling
 - client cancellation propagation and bounded shutdown drain with cancellation
   of stuck invocation tasks
+- declared input/output contracts are enforced at the core invocation boundary
 
 Gaps:
 
 - `runtimes/adk` does not use Google ADK
 - explicit provider-specific deadline propagation remains incomplete
 - retrying the complete invocation can replay side effects
-- declared input/output contracts are not enforced
 
 ### Models and tools
 
@@ -77,7 +79,6 @@ Implemented:
 
 Gaps:
 
-- CLI/provider bootstrap now selects explicit fake or OpenAI-compatible mode
 - broader provider credentials and endpoints are not yet supported
 - OpenAI-compatible follow-up messages omit assistant tool-call structures and
   tool-call IDs
@@ -162,12 +163,14 @@ Implemented:
 - FastAPI invoke, liveness, readiness, capability, and preliminary card routes
 - active injected dependency probes
 - generated HTTP request IDs and non-success unhealthy readiness
+- input/output contract checks at the core boundary and HTTP 422 diagnostics
+- concurrency overload mapped to HTTP 429 with retry guidance
+- configurable `Content-Length` request-size guard (1 MiB default)
 - structured logger, in-memory metrics, and in-memory span tree
 
 Gaps:
 
-- no stable error mapping, authentication middleware, request-size controls, or
-  streaming
+- no complete stable error taxonomy, authentication middleware, or streaming
 - telemetry is not OpenTelemetry and does not propagate standard trace context
 
 ### Packaging, release, and deployment
