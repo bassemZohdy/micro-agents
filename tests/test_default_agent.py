@@ -28,16 +28,22 @@ from runtimes.adk import AdkRuntime
 class ControlledRuntime(AgentRuntime):
     """Runtime test double that can hold concurrent invocations in flight."""
 
-    def __init__(self, expected_invocations: int = 1, failures: int = 0) -> None:
+    def __init__(
+        self,
+        expected_invocations: int = 1,
+        failures: int = 0,
+        runtime_capabilities: RuntimeCapabilities | None = None,
+    ) -> None:
         self.expected_invocations = expected_invocations
         self.failures = failures
+        self._runtime_capabilities = runtime_capabilities or RuntimeCapabilities()
         self.entered = 0
         self.all_entered = asyncio.Event()
         self.release = asyncio.Event()
         self.stop_called = False
 
     def capabilities(self) -> RuntimeCapabilities:
-        return RuntimeCapabilities()
+        return self._runtime_capabilities
 
     async def create(self, definition) -> RuntimeAgent:
         return RuntimeAgent(
@@ -139,6 +145,27 @@ class TestDefaultMicroAgent:
         await agent.initialize()
         await agent.start()
         await agent.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_rejects_unsupported_required_capability(self, definition):
+        definition.spec.runtime.capabilities = ["streaming"]
+        agent = DefaultMicroAgent(definition, ControlledRuntime())
+        await agent.initialize()
+
+        with pytest.raises(RuntimeError, match="streaming"):
+            await agent.start()
+        assert agent.state == AgentState.ERROR
+
+    @pytest.mark.asyncio
+    async def test_start_accepts_advertised_required_capability(self, definition):
+        definition.spec.runtime.capabilities = ["memory"]
+        runtime = ControlledRuntime(runtime_capabilities=RuntimeCapabilities(memory=True))
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+        assert agent.state == AgentState.READY
+        await agent.stop()
+        await agent.shutdown()
 
     @pytest.mark.asyncio
     async def test_capabilities(self, agent):
@@ -482,6 +509,7 @@ class TestHTTPServer:
             data = resp.json()
             assert data["agent_name"] == "test-agent"
             assert len(data["skills"]) == 1
+            assert data["capabilities"]["checkpointing"] is False
         await agent.stop()
         await agent.shutdown()
 

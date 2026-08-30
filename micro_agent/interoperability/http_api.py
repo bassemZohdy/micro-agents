@@ -280,7 +280,7 @@ def create_app(
 
     @app.get("/v1/capabilities", response_model=CapabilitiesResponseModel)
     async def capabilities() -> CapabilitiesResponseModel:
-        caps = agent.capabilities
+        caps = agent.runtime_capabilities
         skills = [
             {"id": s.id, "name": s.name, "description": s.description}
             for s in agent.definition.spec.dependencies.skills
@@ -289,13 +289,7 @@ def create_app(
             agent_name=agent.identity.agent_name,
             agent_version=agent.identity.agent_version,
             skills=skills,
-            capabilities={
-                "streaming": caps.streaming,
-                "structured_output": caps.structured_output,
-                "memory": caps.memory,
-                "mcp": caps.mcp,
-                "a2a": caps.a2a,
-            },
+            capabilities=caps.as_dict(),
         )
 
     return app

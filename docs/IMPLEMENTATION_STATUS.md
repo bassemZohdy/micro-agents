@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 339 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 342 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -64,7 +64,20 @@ Implemented:
 - one invocation deadline budget shared across model, tool/MCP, session, and
   memory operations; request deadlines are enforced and cancellation propagates
   into the active provider call
+- required runtime capabilities are checked at startup against an explicit
+  capability matrix and are surfaced by `GET /v1/capabilities`
 - declared input/output contracts are enforced at the core invocation boundary
+
+Current custom-runtime capability matrix:
+
+| Capability | Availability | Notes |
+|---|---|---|
+| `streaming` | false | streaming is not implemented |
+| `structured_output` | false | declared contracts are validated, but model structured-output APIs are not wired |
+| `memory` | configured | true only when a memory provider is injected |
+| `mcp` | configured | true only when an MCP manager is injected |
+| `a2a` | false | discovery is preliminary and task protocol is not implemented |
+| `checkpointing` | false | checkpoint persistence is not implemented |
 
 Gaps:
 

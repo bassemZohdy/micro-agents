@@ -18,6 +18,10 @@ from micro_agent.core import (
 )
 from micro_agent.definition import MicroAgentDefinition
 
+_RUNTIME_CAPABILITY_NAMES = frozenset(
+    {"streaming", "memory", "mcp", "a2a", "structured_output", "checkpointing"}
+)
+
 # ---------------------------------------------------------------------------
 # Runtime Capabilities
 # ---------------------------------------------------------------------------
@@ -33,6 +37,21 @@ class RuntimeCapabilities:
     a2a: bool = False
     structured_output: bool = False
     checkpointing: bool = False
+
+    def supports(self, capability: str) -> bool:
+        """Return whether this runtime advertises a named capability."""
+        return capability in _RUNTIME_CAPABILITY_NAMES and bool(getattr(self, capability, False))
+
+    def as_dict(self) -> dict[str, bool]:
+        """Return the capability matrix as a serializable mapping."""
+        return {
+            "streaming": self.streaming,
+            "memory": self.memory,
+            "mcp": self.mcp,
+            "a2a": self.a2a,
+            "structured_output": self.structured_output,
+            "checkpointing": self.checkpointing,
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -62,6 +62,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   references, transports, URLs, scopes, capabilities, and duplicate entries.
 - Add stable HTTP 429 overload responses with retry guidance and reject
   oversized request bodies before JSON parsing.
+- Enforce declared runtime capabilities at startup and expose the complete
+  capability matrix through the capabilities endpoint.
 
 ### CI and release
 
@@ -115,7 +117,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 339 collected (updated unit, integration, and E2E coverage;
+- Tests: 342 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.
