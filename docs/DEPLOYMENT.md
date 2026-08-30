@@ -16,8 +16,9 @@ The image:
 The executable resolves an explicit fake or OpenAI-compatible model provider
 from the mounted definition and environment. It also constructs local
 in-memory memory/session providers and SQLite sessions when those persistence
-modes are declared. External MCP, state, policy, and non-environment secret
-providers remain unsupported and fail before readiness.
+modes are declared. Startup probes the configured model, state providers, and
+declared MCP servers before readiness. External MCP, state, policy, and
+non-environment secret providers remain unsupported and fail before readiness.
 
 ## Kubernetes manifests
 

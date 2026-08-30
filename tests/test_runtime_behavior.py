@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from micro_agent.core import AgentRequest
+from micro_agent.core import AgentRequest, AgentState, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, MemoryPolicy
 from micro_agent.models import (
@@ -117,6 +117,20 @@ class SlowSessionProvider(InMemorySessionProvider):
             self.cancelled = True
             raise
         return await super().get(session_id)
+
+
+class FailingSessionProvider(InMemorySessionProvider):
+    """Session double that fails the startup readiness probe."""
+
+    async def list_active(self):
+        raise ConnectionError("session store unavailable")
+
+
+class FailingMemoryProvider(InMemoryMemoryProvider):
+    """Memory double that fails the startup readiness probe."""
+
+    async def list_entries(self, scope=None):
+        raise ConnectionError("memory store unavailable")
 
 
 class TestRuntimeSemantics:
@@ -452,6 +466,38 @@ class TestHealthProbes:
         assert checker.update_status("mcp", HealthStatus.UNHEALTHY) is True
         assert checker.check_readiness().is_ready is False
         assert checker.update_status("missing", HealthStatus.HEALTHY) is False
+
+
+class TestStartupReadiness:
+    """Configured dependencies must pass probes before the agent is ready."""
+
+    @pytest.mark.asyncio
+    async def test_session_provider_failure_blocks_readiness(self):
+        runtime = AdkRuntime(AdkRuntimeConfig(session_provider=FailingSessionProvider()))
+        definition = _definition()
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        try:
+            with pytest.raises(RuntimeError, match="session provider.*startup"):
+                await agent.start()
+            assert agent.state == AgentState.ERROR
+        finally:
+            await agent.shutdown()
+            await runtime.close()
+
+    @pytest.mark.asyncio
+    async def test_memory_provider_failure_blocks_readiness(self):
+        runtime = AdkRuntime(AdkRuntimeConfig(memory_provider=FailingMemoryProvider()))
+        definition = _definition()
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        try:
+            with pytest.raises(RuntimeError, match="memory provider.*startup"):
+                await agent.start()
+            assert agent.state == AgentState.ERROR
+        finally:
+            await agent.shutdown()
+            await runtime.close()
 
 
 class TestOpenAICompatProvider:
