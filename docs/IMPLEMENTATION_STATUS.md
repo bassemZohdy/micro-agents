@@ -2,7 +2,7 @@
 
 Last audited: 2026-08-30  
 Documentation-audit baseline: `8e9efe6bdc7844661d2ed32eb291f3bc773a1368`
-Cleanup verification baseline: `656cb7fa7688628f661f33cf2e03de14ef2cca17`
+Cleanup verification baseline: `a92894285843e86bb81235d1cc2bb612559b39d4`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
