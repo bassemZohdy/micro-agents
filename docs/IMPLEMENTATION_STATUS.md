@@ -185,12 +185,16 @@ Implemented:
 - concurrency overload mapped to HTTP 429 with retry guidance
 - request/definition deadline exhaustion mapped to HTTP 504 with a stable
   `deadline_exceeded` code
+- authorization, dependency, and unexpected runtime failures mapped to stable
+  HTTP 403/503/500 contracts; authentication failures have a reserved 401
+  mapping for a future middleware integration
 - configurable `Content-Length` request-size guard (1 MiB default)
 - structured logger, in-memory metrics, and in-memory span tree
 
 Gaps:
 
-- no complete stable error taxonomy, authentication middleware, or streaming
+- no authentication middleware or streaming; the stable error taxonomy still
+  requires a verified caller integration for 401 responses
 - telemetry is not OpenTelemetry and does not propagate standard trace context
 
 ### Packaging, release, and deployment

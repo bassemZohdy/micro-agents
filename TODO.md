@@ -146,8 +146,10 @@ state through an external service under concurrent load.
 - [x] Map definition-contract validation errors to a stable HTTP 422 response
       contract.
 - [x] Map concurrency overload to HTTP 429 with retry guidance.
-- [ ] Map authentication, authorization, timeout, dependency, and internal
-      errors to stable response contracts.
+- [ ] Add authentication middleware and map authentication failures to the
+      stable 401 response contract.
+- [x] Map authorization, timeout, dependency, and internal errors to stable
+      response contracts without leaking exception details.
 - [x] Add a default request-size guard.
 - [ ] Add CORS policy, rate-limiting integration points, and streaming only
       when runtime-supported.

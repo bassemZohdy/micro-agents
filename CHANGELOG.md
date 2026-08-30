@@ -70,6 +70,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   capability matrix through the capabilities endpoint.
 - Separate logical model references from provider-specific model IDs in the
   definition and executable bootstrap.
+- Add stable HTTP 403/503/500 mappings for authorization, dependency, and
+  unexpected runtime failures, plus a reserved 401 authentication mapping that
+  never exposes exception details.
 
 ### CI and release
 
@@ -123,7 +126,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 351 collected (updated unit, integration, and E2E coverage;
+- Tests: 355 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

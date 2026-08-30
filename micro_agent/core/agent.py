@@ -83,6 +83,18 @@ class InvocationOverloadedError(RuntimeError):
         super().__init__(f"Invocation concurrency limit reached ({limit})")
 
 
+class AuthenticationError(RuntimeError):
+    """Raised when a caller cannot be authenticated by the transport layer."""
+
+
+class AuthorizationError(PermissionError):
+    """Raised when an authenticated caller is not allowed to invoke an agent."""
+
+
+class DependencyUnavailableError(ConnectionError):
+    """Raised when a required model, tool, or state dependency is unavailable."""
+
+
 # ---------------------------------------------------------------------------
 # Agent Context
 # ---------------------------------------------------------------------------

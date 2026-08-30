@@ -11,7 +11,10 @@ from micro_agent.core import (
     AgentRequest,
     AgentResponse,
     AgentState,
+    AuthenticationError,
+    AuthorizationError,
     DefaultMicroAgent,
+    DependencyUnavailableError,
 )
 from micro_agent.definition import (
     ConcurrencyPolicy,
@@ -76,6 +79,17 @@ class TimeoutRuntime(ControlledRuntime):
 
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
         raise TimeoutError("invocation deadline exceeded")
+
+
+class ErrorRuntime(ControlledRuntime):
+    """Runtime double that surfaces a selected transport-facing error."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+        raise self.error
 
 
 def definition_identity(definition):
@@ -450,6 +464,34 @@ class TestHTTPServer:
                 "code": "deadline_exceeded",
                 "message": "Invocation deadline exceeded",
             }
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "expected_status", "expected_code"),
+        [
+            (AuthenticationError("token leaked in source error"), 401, "authentication_required"),
+            (AuthorizationError("policy details"), 403, "authorization_denied"),
+            (DependencyUnavailableError("database credentials"), 503, "dependency_unavailable"),
+            (RuntimeError("internal implementation detail"), 500, "internal_error"),
+        ],
+    )
+    async def test_runtime_errors_return_stable_http_contract(
+        self, definition, error, expected_status, expected_code
+    ):
+        agent = DefaultMicroAgent(definition, ErrorRuntime(error))
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == expected_status
+            assert resp.json()["detail"]["code"] == expected_code
+            assert "implementation detail" not in resp.text
+            if expected_status == 401:
+                assert resp.headers["www-authenticate"] == "Bearer"
         await agent.stop()
         await agent.shutdown()
 
