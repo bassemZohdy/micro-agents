@@ -172,7 +172,9 @@
       "properties": {
         "ref": {
           "description": "Knowledge source reference identifier.",
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Ref",
           "type": "string"
         },
@@ -214,13 +216,16 @@
       "properties": {
         "ref": {
           "description": "MCP server reference identifier.",
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Ref",
           "type": "string"
         },
         "transport": {
           "anyOf": [
             {
+              "pattern": "^(stdio|sse|streamable-http)$",
               "type": "string"
             },
             {
@@ -291,13 +296,16 @@
       "properties": {
         "ref": {
           "description": "Memory provider reference identifier.",
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Ref",
           "type": "string"
         },
         "scope": {
           "anyOf": [
             {
+              "pattern": "^(user|agent|tenant|domain|application)$",
               "type": "string"
             },
             {
@@ -347,13 +355,18 @@
       "properties": {
         "ref": {
           "description": "Model reference identifier.",
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Ref",
           "type": "string"
         },
         "provider": {
           "anyOf": [
             {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
               "type": "string"
             },
             {
@@ -422,14 +435,18 @@
       "description": "Standard object metadata.",
       "properties": {
         "name": {
-          "description": "Unique agent name.",
+          "description": "Unique DNS-compatible agent name.",
+          "maxLength": 63,
           "minLength": 1,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
           "title": "Name",
           "type": "string"
         },
         "version": {
           "description": "Semantic version of the agent.",
-          "minLength": 1,
+          "maxLength": 128,
+          "minLength": 5,
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
           "title": "Version",
           "type": "string"
         },
@@ -490,13 +507,16 @@
       "description": "Defines a single parameter in an input/output contract.",
       "properties": {
         "name": {
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$",
           "title": "Name",
           "type": "string"
         },
         "type": {
           "description": "Parameter type (e.g. string, integer, boolean, object, array).",
           "minLength": 1,
+          "pattern": "^(string|integer|number|boolean|object|array|null|any)$",
           "title": "Type",
           "type": "string"
         },
@@ -645,7 +665,8 @@
       "properties": {
         "persistence": {
           "default": "none",
-          "description": "Session persistence mode (none, external).",
+          "description": "Session persistence mode (none, memory, sqlite, external).",
+          "pattern": "^(none|memory|sqlite|external)$",
           "title": "Persistence",
           "type": "string"
         },
@@ -673,7 +694,9 @@
       "properties": {
         "id": {
           "description": "Unique skill identifier.",
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Id",
           "type": "string"
         },
@@ -725,7 +748,9 @@
       "description": "Defines a tool available to the agent.",
       "properties": {
         "name": {
+          "maxLength": 128,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$",
           "title": "Name",
           "type": "string"
         },
@@ -744,6 +769,7 @@
         "source": {
           "anyOf": [
             {
+              "pattern": "^(native|mcp|openapi)$",
               "type": "string"
             },
             {

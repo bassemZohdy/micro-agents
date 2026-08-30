@@ -6,13 +6,16 @@ Exposes a Micro-Agent as an independent network service.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from micro_agent.core import AgentRequest, DefaultMicroAgent
+from micro_agent.core import AgentRequest, DefaultMicroAgent, InvocationOverloadedError
+from micro_agent.definition import ContractValidationError
 from micro_agent.interoperability.a2a import (
     a2a_well_known_path,
     agent_card_from_definition,
@@ -117,6 +120,8 @@ ROUTES = {
     "GET /v1/capabilities": "Agent capabilities",
 }
 
+DEFAULT_MAX_REQUEST_BYTES = 1_048_576
+
 
 def serialize_response(data: Any) -> str:
     """Serialize a response to JSON, handling nested dataclasses."""
@@ -137,8 +142,12 @@ def create_app(
     health_checker: HealthChecker | None = None,
     telemetry: Telemetry | None = None,
     base_url: str | None = None,
+    max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
 ) -> FastAPI:
     """Create a FastAPI application for a Micro-Agent."""
+    if max_request_bytes < 1:
+        raise ValueError("max_request_bytes must be greater than zero")
+
     app = FastAPI(
         title=agent.definition.metadata.name,
         version=agent.definition.metadata.version,
@@ -152,6 +161,35 @@ def create_app(
     )
 
     agent_card = agent_card_from_definition(agent.definition, base_url=base_url)
+
+    @app.middleware("http")
+    async def enforce_request_size(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Reject oversized requests before FastAPI parses their JSON body.
+
+        Content-Length is checked before parsing. Clients using chunked transfer
+        should send a length header when operating behind a gateway that
+        enforces the same limit; deployment guidance requires that gateway guard.
+        """
+        raw_length = request.headers.get("content-length")
+        if raw_length is not None:
+            try:
+                content_length = int(raw_length)
+            except ValueError:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={"code": "invalid_content_length", "message": "Invalid Content-Length"},
+                )
+            if content_length > max_request_bytes:
+                return JSONResponse(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    content={
+                        "code": "request_too_large",
+                        "message": f"Request body exceeds {max_request_bytes} bytes",
+                    },
+                )
+        return await call_next(request)
 
     @app.get(a2a_well_known_path(), response_model=None)
     async def get_agent_card() -> dict[str, Any]:
@@ -174,7 +212,23 @@ def create_app(
             request_id=agent_request.request_id,
             session_id=request.session_id,
         )
-        response = await agent.invoke(agent_request)
+        try:
+            response = await agent.invoke(agent_request)
+        except InvocationOverloadedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": "1"},
+                detail={"code": "invocation_overloaded", "limit": exc.limit},
+            ) from exc
+        except ContractValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "code": "contract_validation_failed",
+                    "contract": exc.contract,
+                    "errors": exc.errors,
+                },
+            ) from exc
         telemetry.logger.info(
             "invoke completed",
             request_id=agent_request.request_id,

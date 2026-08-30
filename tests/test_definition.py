@@ -149,6 +149,78 @@ class TestInvalidDefinitions:
             load_definition_from_yaml("- just a list")
 
 
+class TestSemanticValidation:
+    """Definition-level constraints that JSON Schema alone cannot express."""
+
+    def _base(self) -> dict[str, object]:
+        return {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "semantic-agent", "version": "1.0.0"},
+            "spec": {"behavior": {"instructions": "Validate this definition."}},
+        }
+
+    def test_semver_and_name_format_are_enforced(self):
+        data = self._base()
+        data["metadata"] = {"name": "Not A Name", "version": "1"}
+        with pytest.raises(DefinitionError):
+            load_definition_from_dict(data)
+
+    def test_duplicate_dependency_names_are_rejected(self):
+        data = self._base()
+        data["spec"] = {
+            "behavior": {"instructions": "Validate this definition."},
+            "dependencies": {
+                "tools": [{"name": "echo"}, {"name": "echo"}],
+                "skills": [{"id": "greet", "name": "Greet"}, {"id": "greet", "name": "Again"}],
+            },
+        }
+        with pytest.raises(DefinitionError, match="unique"):
+            load_definition_from_dict(data)
+
+    def test_duplicate_contract_parameters_are_rejected(self):
+        data = self._base()
+        data["spec"] = {
+            "behavior": {
+                "instructions": "Validate this definition.",
+                "input_contract": {
+                    "parameters": [
+                        {"name": "value", "type": "string"},
+                        {"name": "value", "type": "string"},
+                    ]
+                },
+            }
+        }
+        with pytest.raises(DefinitionError, match="unique"):
+            load_definition_from_dict(data)
+
+    def test_mcp_transport_requires_matching_endpoint(self):
+        data = self._base()
+        data["spec"] = {
+            "behavior": {"instructions": "Validate this definition."},
+            "dependencies": {
+                "mcp_servers": [
+                    {"ref": "local", "transport": "stdio", "endpoint": "https://example.com"}
+                ]
+            },
+        }
+        with pytest.raises(DefinitionError, match="stdio"):
+            load_definition_from_dict(data)
+
+    def test_mcp_http_transport_requires_valid_url(self):
+        data = self._base()
+        data["spec"] = {
+            "behavior": {"instructions": "Validate this definition."},
+            "dependencies": {
+                "mcp_servers": [
+                    {"ref": "remote", "transport": "streamable-http", "endpoint": "not-a-url"}
+                ]
+            },
+        }
+        with pytest.raises(DefinitionError, match="URL"):
+            load_definition_from_dict(data)
+
+
 class TestYamlLoading:
     """Test YAML loading."""
 

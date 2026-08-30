@@ -1,5 +1,10 @@
 """Micro-Agent Definition — declarative agent specification."""
 
+from micro_agent.definition.contracts import (
+    ContractValidationError,
+    validate_input,
+    validate_output,
+)
 from micro_agent.definition.loader import (
     DefinitionError,
     load_definition_from_dict,
@@ -12,6 +17,7 @@ from micro_agent.definition.models import (
     ConcurrencyPolicy,
     Dependencies,
     ErrorPolicy,
+    InputContract,
     Interoperability,
     McpServerRef,
     MemoryRef,
@@ -19,6 +25,7 @@ from micro_agent.definition.models import (
     MicroAgentSpec,
     ModelRef,
     ObjectMeta,
+    OutputContract,
     RuntimeSemantics,
     Security,
     SessionConfig,
@@ -29,10 +36,12 @@ from micro_agent.definition.models import (
 __all__ = [
     "A2AConfig",
     "AgentBehavior",
+    "ContractValidationError",
     "ConcurrencyPolicy",
     "DefinitionError",
     "Dependencies",
     "ErrorPolicy",
+    "InputContract",
     "Interoperability",
     "McpServerRef",
     "MemoryRef",
@@ -40,6 +49,7 @@ __all__ = [
     "MicroAgentSpec",
     "ModelRef",
     "ObjectMeta",
+    "OutputContract",
     "RuntimeSemantics",
     "Security",
     "SessionConfig",
@@ -48,4 +58,6 @@ __all__ = [
     "load_definition_from_dict",
     "load_definition_from_file",
     "load_definition_from_yaml",
+    "validate_input",
+    "validate_output",
 ]

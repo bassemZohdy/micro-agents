@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `18a00d89` on 2026-08-30. Completed work is removed rather
+Baseline audited: `fa5d456` on 2026-08-30. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -113,9 +113,9 @@ and the transcript can be replayed from session storage.
 
 ### P1.4 Contract and semantic validation
 
-- [ ] Enforce definition input and output contracts at the HTTP/runtime
+- [x] Enforce definition input and output contracts at the HTTP/runtime
       boundary.
-- [ ] Add uniqueness and format validation for names, skills, tools, MCP refs,
+- [x] Add uniqueness and format validation for names, skills, tools, MCP refs,
       versions, transports, URLs, scopes, and runtime capabilities.
 - [ ] Separate model alias/reference from provider model ID.
 - [ ] Define overlays and environment-specific endpoint bindings without
@@ -139,10 +139,14 @@ state through an external service under concurrent load.
 
 ### P1.6 HTTP and health semantics
 
-- [ ] Map validation, authentication, authorization, timeout, dependency, and
-      internal errors to stable response contracts.
-- [ ] Add request/body limits, CORS policy, rate limiting integration points,
-      and streaming only when runtime-supported.
+- [x] Map definition-contract validation errors to a stable HTTP 422 response
+      contract.
+- [x] Map concurrency overload to HTTP 429 with retry guidance.
+- [ ] Map authentication, authorization, timeout, dependency, and internal
+      errors to stable response contracts.
+- [x] Add a default request-size guard.
+- [ ] Add CORS policy, rate-limiting integration points, and streaming only
+      when runtime-supported.
 - [ ] Document and version the public API.
 
 ### P1.7 OpenTelemetry and operational observability

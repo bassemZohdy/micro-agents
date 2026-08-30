@@ -11,9 +11,11 @@ from micro_agent.core.agent import (
     AgentRequest,
     AgentResponse,
     AgentState,
+    InvocationOverloadedError,
     MicroAgent,
 )
-from micro_agent.definition import ConcurrencyPolicy, MicroAgentDefinition
+from micro_agent.definition import MicroAgentDefinition, validate_input, validate_output
+from micro_agent.definition.models import ConcurrencyPolicy
 from micro_agent.runtime import AgentRuntime, RuntimeAgent
 
 
@@ -90,11 +92,12 @@ class DefaultMicroAgent(MicroAgent):
             policy = self._definition.spec.runtime.concurrency_policy
             while max_concurrency is not None and self._active_invocations >= max_concurrency:
                 if policy == ConcurrencyPolicy.REJECT:
-                    raise RuntimeError(f"Invocation concurrency limit reached ({max_concurrency})")
+                    raise InvocationOverloadedError(max_concurrency)
                 await self._capacity_available.wait()
             if self._state != AgentState.READY:
                 raise RuntimeError(f"Cannot invoke from state {self._state.value}")
             assert self._runtime_agent is not None
+            validate_input(self._definition.spec.behavior.input_contract, request.input)
             runtime_agent = self._runtime_agent
             self._active_invocations += 1
             self._idle.clear()
@@ -102,7 +105,9 @@ class DefaultMicroAgent(MicroAgent):
             if current_task is not None:
                 self._invocation_tasks.add(current_task)
         try:
-            return await self._runtime.invoke(runtime_agent, request)
+            response = await self._runtime.invoke(runtime_agent, request)
+            validate_output(self._definition.spec.behavior.output_contract, response.output)
+            return response
         finally:
             async with self._lifecycle_lock:
                 self._active_invocations -= 1
