@@ -1,7 +1,7 @@
 # Implementation Status
 
 Last audited: 2026-08-30  
-Documentation-audit baseline: `8e9efe6bdc7844661d2ed32eb291f3bc773a1368`
+Documentation-audit baseline: `87d1779eb54878ac73cea7730694d25b83400882`
 Cleanup verification baseline: `bd077fa005c2c5b5d12f9020b57d36121f09fa4d`
 
 This document separates implemented code from architectural intent. Passing
