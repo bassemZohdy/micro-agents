@@ -62,6 +62,8 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[dev]"
       - run: pytest -m "not integration and not e2e" --cov=micro_agent --cov-report=term-missing
+      - name: Verify executable bootstrap bindings
+        run: pytest tests/test_bootstrap.py -q
 
   integration:
     runs-on: ubuntu-latest

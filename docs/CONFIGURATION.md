@@ -24,12 +24,20 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
-| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | not wired |
-| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | not wired |
+| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for the built-in memory provider; external endpoints fail fast |
+| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
-Memory and session endpoint variables are resolved for future provider
-bindings, but the executable bootstrap does not construct those providers yet.
+When a definition declares `memory`, the bootstrap constructs the built-in
+in-memory provider. `MICRO_AGENT_MEMORY_ENDPOINT` may be `memory://` or
+`inmemory://`; other endpoints are rejected until an external memory provider
+is installed. Session persistence `memory` constructs an in-memory provider.
+Persistence `sqlite` accepts `MICRO_AGENT_SESSION_ENDPOINT` as
+`sqlite:///absolute/path` (or a plain SQLite path) and defaults to `:memory:`
+for development. Persistence `external` requires an endpoint but fails fast
+until a deployment supplies an external provider; it is never silently
+downgraded to local state. An endpoint without a matching definition is also
+rejected so configuration cannot be accidentally ignored.
 
 ## Secret references
 

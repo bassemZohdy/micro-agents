@@ -21,6 +21,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added a shared per-invocation deadline budget, including optional HTTP
   `timeout_seconds`, provider-call cancellation, and stable HTTP 504 deadline
   errors.
+- Wired definition-declared in-memory memory and in-memory/SQLite session
+  providers into executable bootstrap. SQLite endpoint bindings are honored,
+  unsupported external state fails before startup, and configured providers
+  close with the runtime.
 
 ### Documentation
 
@@ -37,9 +41,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 - `runtimes/adk` is a custom model/tool loop; it does not currently integrate
   Google ADK.
-- The CLI resolves fake or OpenAI-compatible model providers from configuration
-  but does not yet construct MCP, state, policy, knowledge, or non-environment
-  credential services from configuration.
+- The CLI resolves fake or OpenAI-compatible model providers and built-in state
+  providers from configuration, but does not yet construct MCP, policy,
+  knowledge, external state, or non-environment credential services.
 - The current A2A-shaped discovery route and fake MCP client prove internal
   seams, not standards compliance.
 - SQLite proves local file persistence only, and the in-tree telemetry facade
@@ -119,7 +123,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 344 collected (updated unit, integration, and E2E coverage;
+- Tests: 351 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

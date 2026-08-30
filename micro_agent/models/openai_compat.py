@@ -1,9 +1,9 @@
 """OpenAI-compatible HTTP model provider.
 
 Talks to an endpoint that implements the /chat/completions contract. The
-provider is injectable through the Python runtime configuration; the
-executable bootstrap does not yet select it from definition or environment
-configuration. The fake provider remains the CI default.
+provider is injectable through runtime configuration and selected by the
+executable bootstrap when a live endpoint is configured. The fake provider
+remains the CI default.
 """
 
 from __future__ import annotations
