@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 351 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 356 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |

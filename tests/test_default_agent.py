@@ -3,6 +3,7 @@
 import asyncio
 from uuid import UUID
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -474,6 +475,14 @@ class TestHTTPServer:
             (AuthenticationError("token leaked in source error"), 401, "authentication_required"),
             (AuthorizationError("policy details"), 403, "authorization_denied"),
             (DependencyUnavailableError("database credentials"), 503, "dependency_unavailable"),
+            (
+                httpx.ConnectError(
+                    "model unavailable",
+                    request=httpx.Request("POST", "https://model.example.test"),
+                ),
+                503,
+                "dependency_unavailable",
+            ),
             (RuntimeError("internal implementation detail"), 500, "internal_error"),
         ],
     )

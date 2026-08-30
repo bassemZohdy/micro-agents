@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -262,7 +263,7 @@ def create_app(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "authorization_denied", "message": "Authorization denied"},
             ) from exc
-        except (DependencyUnavailableError, ConnectionError) as exc:
+        except (DependencyUnavailableError, ConnectionError, httpx.RequestError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
