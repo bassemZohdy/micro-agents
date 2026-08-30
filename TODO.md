@@ -34,7 +34,9 @@ definition remains runtime-neutral.
 - [ ] Construct tool registry, MCP client, session, memory, knowledge, policy,
       telemetry, and credential providers from configuration.
 - [ ] Validate all required dependencies before readiness.
-- [ ] Remove or wire every currently dead `MICRO_AGENT_*` variable.
+- [ ] Add production MCP, state, knowledge, policy, telemetry, and credential
+      providers to the bootstrap; unsupported network endpoints must remain
+      fail-fast until their implementations exist.
 
 Acceptance: the same image starts in explicit fake mode and in a real
 OpenAI-compatible configuration using only external configuration changes.

@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 344 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 349 pass | Full unit, integration, and E2E suite; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -43,8 +43,9 @@ Implemented:
 
 Gaps:
 
-- the bootstrap resolves model provider, endpoint, model ID, and credentials;
-  memory/session endpoint bindings still do not construct providers
+- the bootstrap resolves model provider, endpoint, model ID, credentials, and
+  local memory/session endpoint bindings; production network state providers
+  are still not implemented
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 
@@ -68,6 +69,8 @@ Implemented:
 - required runtime capabilities are checked at startup against an explicit
   capability matrix and are surfaced by `GET /v1/capabilities`
 - declared input/output contracts are enforced at the core invocation boundary
+- executable bootstrap bindings for local `memory://` memory and session
+  providers, plus explicit `sqlite:///path` session persistence
 
 Current custom-runtime capability matrix:
 
@@ -165,7 +168,8 @@ Implemented:
 
 Gaps:
 
-- bootstrap does not yet construct these state providers from endpoint bindings
+- production state providers are not yet constructed from endpoint bindings;
+  only in-process memory and local SQLite are supported
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
 - SQLite access lacks explicit async serialization around one connection

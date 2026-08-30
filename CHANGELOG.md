@@ -37,9 +37,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 - `runtimes/adk` is a custom model/tool loop; it does not currently integrate
   Google ADK.
-- The CLI resolves fake or OpenAI-compatible model providers from configuration
-  but does not yet construct MCP, state, policy, knowledge, or non-environment
-  credential services from configuration.
+- The CLI resolves fake or OpenAI-compatible model providers and local state
+  providers from configuration, but does not yet construct production MCP,
+  shared state, policy, knowledge, or non-environment credential services.
 - The current A2A-shaped discovery route and fake MCP client prove internal
   seams, not standards compliance.
 - SQLite proves local file persistence only, and the in-tree telemetry facade
@@ -66,6 +66,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   capability matrix through the capabilities endpoint.
 - Separate logical model references from provider-specific model IDs in the
   definition and executable bootstrap.
+- Wire `MICRO_AGENT_MEMORY_ENDPOINT` and `MICRO_AGENT_SESSION_ENDPOINT` to
+  explicit local providers (`memory://` and `sqlite:///path`) with fail-fast
+  errors for unsupported production endpoints.
 
 ### CI and release
 
@@ -119,7 +122,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 344 collected (updated unit, integration, and E2E coverage;
+- Tests: 349 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

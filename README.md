@@ -85,8 +85,8 @@ spec:
 The complete schema is
 [`docs/schemas/micro-agent-v1alpha1.json`](docs/schemas/micro-agent-v1alpha1.json).
 The larger residency example demonstrates the available definition fields; it
-also declares integrations that the default command-line bootstrap does not
-yet construct.
+also declares integrations that require providers not yet available in the
+default command-line bootstrap.
 
 ## Quick start
 
@@ -126,6 +126,17 @@ export MICRO_AGENT_MODEL_ID=example-model
 export MICRO_AGENT_MODEL_API_KEY='resolve-this-outside-source-control'
 python -m micro_agent --definition examples/notification-agent.yaml
 ```
+
+Local state providers can be enabled without changing the logical definition:
+
+```bash
+export MICRO_AGENT_MEMORY_ENDPOINT=memory://
+export MICRO_AGENT_SESSION_ENDPOINT=sqlite:///var/lib/micro-agent/sessions.db
+```
+
+The bootstrap supports `memory://` for development memory/session state and
+`sqlite:///path` for local persistent sessions. Network state providers are
+rejected until their implementations are added.
 
 ## Container
 
@@ -182,7 +193,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 344 tests. CI runs lint, typing, schema, unit,
+The current suite contains 349 tests. CI runs lint, typing, schema, unit,
 integration, E2E, package, container, separate runtime/development dependency
 audits, and strict documentation gates. Release tags repeat the quality gates,
 validate the tag against the package version, and publish only after all

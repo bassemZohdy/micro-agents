@@ -24,12 +24,34 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
-| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | not wired |
-| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | not wired |
+| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired; `memory://` selects the local in-memory provider |
+| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired; `memory://` or `sqlite:///path` selects a local provider |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
-Memory and session endpoint variables are resolved for future provider
-bindings, but the executable bootstrap does not construct those providers yet.
+The executable bootstrap constructs local providers from these endpoint
+bindings. `memory://` is an in-process provider for development and CI;
+`sqlite:///path/to/sessions.db` is a local persistent reference provider.
+Production network providers (for example Redis or PostgreSQL) are not yet
+implemented and fail startup with an explicit unsupported-endpoint error.
+
+Definitions can also select the in-process session provider without an
+environment variable:
+
+```yaml
+spec:
+  dependencies:
+    memory:
+      ref: memory
+    session:
+      persistence: memory
+```
+
+SQLite persistence requires an explicit endpoint so a deployment cannot
+silently write state to an ephemeral working directory:
+
+```bash
+export MICRO_AGENT_SESSION_ENDPOINT=sqlite:///var/lib/micro-agent/sessions.db
+```
 
 ## Secret references
 

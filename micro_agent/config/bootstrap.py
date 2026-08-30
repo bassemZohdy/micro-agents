@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from micro_agent.config.config import (
     EnvironmentConfig,
@@ -21,6 +22,7 @@ from micro_agent.config.config import (
     validate_config,
 )
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.memory import InMemoryMemoryProvider, MemoryPolicy, MemoryProvider
 from micro_agent.models import (
     FakeModelConfig,
     FakeModelProvider,
@@ -29,6 +31,11 @@ from micro_agent.models import (
     OpenAICompatProvider,
 )
 from micro_agent.observability import Telemetry
+from micro_agent.session import (
+    InMemorySessionProvider,
+    SessionProvider,
+    SqliteSessionProvider,
+)
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
@@ -74,9 +81,14 @@ def build_runtime(
 
     resolved = _resolve_definition_config(definition)
     provider = _build_model_provider(resolved, fake_model_config=fake_model_config)
+    session_provider = _build_session_provider(definition, resolved)
+    memory_provider, memory_policy = _build_memory_provider(definition, resolved)
     runtime = AdkRuntime(
         AdkRuntimeConfig(
             model_provider=provider,
+            session_provider=session_provider,
+            memory_provider=memory_provider,
+            memory_policy=memory_policy,
             telemetry=telemetry,
         )
     )
@@ -157,6 +169,79 @@ def _build_model_provider(
     raise BootstrapError(
         "Model provider is not configured. Set provider: fake for offline "
         "development or configure an OpenAI-compatible endpoint."
+    )
+
+
+def _build_session_provider(
+    definition: MicroAgentDefinition, config: ResolvedConfig
+) -> SessionProvider | None:
+    """Construct the configured development session provider.
+
+    ``memory`` and ``sqlite`` are intentionally the only local providers
+    available from the executable bootstrap.  External URLs fail fast until a
+    production provider is explicitly implemented, rather than being accepted
+    and silently ignored.
+    """
+    session = definition.spec.dependencies.session
+    endpoint = (config.session_endpoint or "").strip()
+    if endpoint:
+        return _session_provider_from_endpoint(endpoint, session.ttl_seconds)
+    if session.persistence == "none":
+        return None
+    if session.persistence == "memory":
+        return InMemorySessionProvider(ttl_seconds=session.ttl_seconds)
+    if session.persistence == "sqlite":
+        raise BootstrapError(
+            "SQLite session persistence requires MICRO_AGENT_SESSION_ENDPOINT with a sqlite:// URL"
+        )
+    raise BootstrapError(
+        "External session persistence requires a supported MICRO_AGENT_SESSION_ENDPOINT provider"
+    )
+
+
+def _session_provider_from_endpoint(endpoint: str, ttl_seconds: int | None) -> SessionProvider:
+    """Resolve a session endpoint into a safe local provider."""
+    normalized = endpoint.lower()
+    if normalized in {"memory", "memory://", "inmemory", "inmemory://"}:
+        return InMemorySessionProvider(ttl_seconds=ttl_seconds)
+    if not normalized.startswith("sqlite://"):
+        raise BootstrapError("Unsupported session endpoint; use memory:// or sqlite:///path")
+
+    parsed = urlsplit(endpoint)
+    if parsed.query or parsed.fragment:
+        raise BootstrapError("SQLite session endpoint must not include query or fragment")
+    path = unquote(parsed.path)
+    if parsed.netloc and path:
+        raise BootstrapError("SQLite session endpoint must use a local path")
+    if parsed.netloc:
+        path = unquote(parsed.netloc)
+    if path in {"", "/"}:
+        raise BootstrapError("SQLite session endpoint requires a database path")
+    if path == "/:memory:":
+        path = ":memory:"
+    return SqliteSessionProvider(path, ttl_seconds=ttl_seconds)
+
+
+def _build_memory_provider(
+    definition: MicroAgentDefinition, config: ResolvedConfig
+) -> tuple[MemoryProvider | None, MemoryPolicy | None]:
+    """Construct the configured in-memory provider when requested."""
+    memory = definition.spec.dependencies.memory
+    endpoint = (config.memory_endpoint or "").strip()
+    if endpoint:
+        normalized = endpoint.lower()
+        if normalized not in {"memory", "memory://", "inmemory", "inmemory://"}:
+            raise BootstrapError(
+                "Unsupported memory endpoint; only memory:// is available in the bootstrap"
+            )
+        return InMemoryMemoryProvider(), MemoryPolicy()
+    if memory is None:
+        return None, None
+    if memory.ref.lower() in {"memory", "inmemory", "in-memory"}:
+        return InMemoryMemoryProvider(), MemoryPolicy()
+    raise BootstrapError(
+        f"Memory provider '{memory.ref}' is not configured; set "
+        "MICRO_AGENT_MEMORY_ENDPOINT=memory:// for the local provider"
     )
 
 

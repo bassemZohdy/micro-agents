@@ -248,9 +248,14 @@ class AdkRuntime(AgentRuntime):
 
     async def close(self) -> None:
         """Release runtime-level resources (HTTP connection pools, MCP)."""
-        aclose = getattr(self._model_provider, "aclose", None)
-        if aclose is not None:
-            await aclose()
+        closed: set[int] = set()
+        for provider in (self._model_provider, self._config.session_provider):
+            if id(provider) in closed:
+                continue
+            aclose = getattr(provider, "aclose", None)
+            if aclose is not None:
+                await aclose()
+                closed.add(id(provider))
         if self._config.mcp_manager is not None:
             await self._config.mcp_manager.aclose()
 
@@ -390,6 +395,7 @@ class AdkRuntime(AgentRuntime):
         model_config = ModelConfig(
             ref=model_ref.ref if model_ref else "default",
             provider=model_ref.provider if model_ref else None,
+            model_id=model_ref.model_id if model_ref else None,
             endpoint=model_ref.endpoint if model_ref else None,
             generation=model_ref.generation if model_ref else {},
             timeout_seconds=model_ref.timeout_seconds if model_ref else None,

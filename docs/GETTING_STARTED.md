@@ -92,6 +92,12 @@ Alternatively set `provider: openai-compatible`, `endpoint`, and a
 `credential_ref` in the model definition. The referenced environment variable
 must exist before startup.
 
+For local state during development, set `MICRO_AGENT_MEMORY_ENDPOINT=memory://`
+and/or `MICRO_AGENT_SESSION_ENDPOINT=memory://`. A persistent local session
+store uses `MICRO_AGENT_SESSION_ENDPOINT=sqlite:///path/to/sessions.db`.
+Redis, PostgreSQL, and other network state endpoints are rejected until a
+production provider is implemented.
+
 The package name `runtimes.adk` does not currently mean that Google ADK is
 used. Treat this API as pre-release.
 

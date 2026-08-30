@@ -14,8 +14,10 @@ The image:
 - probes `/health/live`
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
-from the mounted definition and environment. It does not yet construct real
-MCP, state, policy, or non-environment secret providers.
+from the mounted definition and environment. It constructs local development
+state providers when configured (`memory://` and `sqlite:///path`), but does
+not yet construct production MCP, shared state, policy, or non-environment
+secret providers.
 
 ## Kubernetes manifests
 
@@ -36,7 +38,9 @@ Before using this outside a disposable namespace:
   workflow
 - use an executable definition whose dependencies are actually wired
 - validate network egress to model/MCP endpoints
-- add external shared state for multiple replicas
+- add external shared state for multiple replicas; the supported local
+  `memory://` and `sqlite:///path` bindings are not suitable for this
+  deployment mode
 - define a shutdown deadline and cancellation policy for requests that do not
   drain in time
 - enforce the same request body limit and deadline budget at the ingress or
@@ -52,9 +56,9 @@ the restricted security context constraints used by the target cluster.
 
 ## Multi-replica warning
 
-The sample declares two replicas but the CLI constructs no external session or
-memory provider. `SqliteSessionProvider` is a local development reference and
-is not the recommended shared store for independently scheduled pods.
+The sample declares two replicas but the CLI has no external session or memory
+provider. `SqliteSessionProvider` is a local development reference and is not
+the recommended shared store for independently scheduled pods.
 
 ## Production checklist
 
