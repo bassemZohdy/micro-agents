@@ -8,7 +8,7 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 |---|---|---|
 | `POST /v1/invoke` | invoke the agent | no authentication; declared contracts are enforced |
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
-| `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy |
+| `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy; configured model, state, and declared MCP providers are probed before startup readiness |
 | `GET /v1/capabilities` | runtime/skill metadata | reports the runtime capability matrix, not end-to-end readiness |
 | `GET /.well-known/agent.json` | preliminary card | not the A2A v1 standard path or card |
 

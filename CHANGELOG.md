@@ -25,6 +25,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   providers into executable bootstrap. SQLite endpoint bindings are honored,
   unsupported external state fails before startup, and configured providers
   close with the runtime.
+- Added startup readiness probes for the configured model, state providers,
+  and declared MCP servers; dependency failures keep the agent out of READY
+  with stable, non-sensitive runtime errors.
 
 ### Documentation
 
@@ -126,7 +129,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 356 collected (updated unit, integration, and E2E coverage;
+- Tests: 358 collected (updated unit, integration, and E2E coverage;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.

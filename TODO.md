@@ -36,7 +36,10 @@ definition remains runtime-neutral.
 - [x] Construct the built-in memory and in-memory/SQLite session providers
       from definition and endpoint bindings; reject unsupported external state
       bindings before runtime creation.
-- [ ] Validate all required dependencies before readiness.
+- [x] Probe the configured model, state providers, and declared MCP servers
+      before marking the agent ready; startup failures remain non-ready.
+- [ ] Validate tool registry, knowledge, policy, telemetry, and credential
+      providers once those integrations are constructed.
 - [x] Remove or wire every currently dead `MICRO_AGENT_*` variable.
 
 Acceptance: the same image starts in explicit fake mode and in a real

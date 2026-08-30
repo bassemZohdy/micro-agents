@@ -201,10 +201,31 @@ class AdkRuntime(AgentRuntime):
         )
 
     async def start(self, agent: RuntimeAgent) -> None:
-        healthy = await self._model_provider.health_check()
+        try:
+            healthy = await self._model_provider.health_check()
+        except Exception as exc:  # noqa: BLE001 — startup errors become stable runtime failures
+            raise RuntimeError("model provider failed its health check at startup") from exc
         if not healthy:
             raise RuntimeError("model provider failed its health check at startup")
         definition: MicroAgentDefinition = agent._internal["definition"]
+
+        # State providers are required dependencies when configured. Probe
+        # them before marking the agent ready so a broken store cannot be
+        # discovered only on the first invocation.
+        session_provider = self._config.session_provider
+        if session_provider is not None:
+            try:
+                await session_provider.list_active()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("session provider failed its health check at startup") from exc
+
+        memory_provider = self._config.memory_provider
+        if memory_provider is not None:
+            try:
+                await memory_provider.list_entries()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("memory provider failed its health check at startup") from exc
+
         # Deterministic platform policy: denied MCP servers fail startup.
         if self._policy_evaluator is not None:
             for server in definition.spec.dependencies.mcp_servers:
@@ -231,6 +252,12 @@ class AdkRuntime(AgentRuntime):
                 )
                 for ref in [server.ref for server in definition.spec.dependencies.mcp_servers]
             }
+            try:
+                mcp_healthy = await mcp_manager.health_probe()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("MCP provider failed its health check at startup") from exc
+            if not mcp_healthy:
+                raise RuntimeError("MCP provider failed its health check at startup")
         agent._internal["started"] = True
         self._started = True
         self._telemetry.logger.info(

@@ -107,7 +107,10 @@ Definitions may require runtime capabilities with
 `spec.runtime.capabilities`, for example `memory` or `mcp`. Startup compares
 these names with the runtime capability matrix and fails before readiness when
 any required capability is unavailable. The matrix is also exposed by
-`GET /v1/capabilities`.
+`GET /v1/capabilities`. The runtime also probes the configured model, session,
+memory, and declared MCP providers before marking the agent ready; a failed
+probe leaves startup in an error state instead of deferring the failure to the
+first invocation.
 
 ## Development fake mode
 
