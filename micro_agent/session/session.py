@@ -156,10 +156,13 @@ class InMemorySessionProvider(SessionProvider):
 
     async def list_active(self) -> list[SessionMetadata]:
         now = _utc_now()
-        active = []
+        active: list[SessionMetadata] = []
+        expired: list[str] = []
         for sid, meta in self._metadata.items():
             if self._is_expired(meta, now):
-                await self.delete(sid)
+                expired.append(sid)
                 continue
             active.append(meta)
+        for sid in expired:
+            await self.delete(sid)
         return active

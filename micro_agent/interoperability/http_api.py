@@ -9,7 +9,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from pydantic import BaseModel
 
 from micro_agent.core import AgentRequest, DefaultMicroAgent
@@ -164,10 +164,11 @@ def create_app(
         telemetry.increment("http_requests_total", {"route": "/v1/invoke", "method": "POST"})
         agent_request = AgentRequest(
             input=request.input,
-            request_id=request.request_id or "",
             session_id=request.session_id,
             caller_metadata=request.caller_metadata,
         )
+        if request.request_id:
+            agent_request.request_id = request.request_id
         telemetry.logger.info(
             "invoke request",
             request_id=agent_request.request_id,
@@ -197,8 +198,10 @@ def create_app(
         )
 
     @app.get("/health/ready", response_model=HealthResponseModel)
-    async def readiness() -> HealthResponseModel:
+    async def readiness(response: Response) -> HealthResponseModel:
         result = await checker.probe_readiness()
+        if not result.is_ready:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthResponseModel(
             status=result.status.value,
             details={

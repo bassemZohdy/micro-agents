@@ -1,7 +1,7 @@
 # Implementation Status
 
 Last audited: 2026-08-30  
-Baseline commit: `bcfb45357af997327763c58130e254d32f95ad83`
+Documentation-audit baseline: `8e9efe6bdc7844661d2ed32eb291f3bc773a1368`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -12,13 +12,14 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 299 pass | 246 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 304 pass | 251 unit-selected and 53 integration/e2e-selected; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
-| Documentation publish | Pass | MkDocs job passed, though links/configuration required correction in this audit |
-| Strict type check | **Fail** | missing `types-PyYAML` |
-| Dependency audit | **Fail** | vulnerable `pytest 8.4.2` and runner `setuptools 79.0.1` |
-| Overall GitHub CI | **Fail** | [workflow run 33302589538](https://github.com/bassemZohdy/micro-agents/actions/runs/33302589538) |
+| Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
+| Documentation | Pass | strict MkDocs build on pull requests; publish only from `main` |
+| Strict type check | Pass | `types-PyYAML` is part of the development extra |
+| Dependency audit | Pass | runtime and development environments are audited separately |
+| Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
 
 Local tests can be affected by ambient SOCKS proxy variables because
 `httpx.AsyncClient` trusts environment proxy configuration and the project
@@ -52,13 +53,14 @@ Implemented:
 - custom async model/tool loop with overall/model/tool timeouts
 - one retry or fallback behavior
 - session history, optional memory auto-store, injected policy, and telemetry
+- concurrency-safe service lifecycle, failure recovery, and in-flight drain on
+  stop
 
 Gaps:
 
 - `runtimes/adk` does not use Google ADK
-- `DefaultMicroAgent` moves the whole agent to RUNNING for one request, so
-  concurrent requests can be rejected
-- one uncaught invocation failure leaves the agent in ERROR
+- concurrency is not bounded and cancellation/deadline propagation is
+  incomplete
 - retrying the complete invocation can replay side effects
 - declared input/output contracts are not enforced
 
@@ -147,7 +149,6 @@ Gaps:
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
 - SQLite access lacks explicit async serialization around one connection
-- expired in-memory sessions can mutate their dictionary during iteration
 - expired memory entries are skipped but not consistently purged
 - no production memory, knowledge, session, or idempotency provider
 
@@ -157,14 +158,13 @@ Implemented:
 
 - FastAPI invoke, liveness, readiness, capability, and preliminary card routes
 - active injected dependency probes
+- generated HTTP request IDs and non-success unhealthy readiness
 - structured logger, in-memory metrics, and in-memory span tree
 
 Gaps:
 
-- unhealthy readiness still returns HTTP 200, so Kubernetes sees success
 - no stable error mapping, authentication middleware, request-size controls, or
   streaming
-- omitted request IDs become empty strings rather than generated IDs
 - telemetry is not OpenTelemetry and does not propagate standard trace context
 
 ### Packaging, release, and deployment
@@ -172,15 +172,16 @@ Gaps:
 Implemented:
 
 - build metadata, Dockerfile, sample manifests
-- CI jobs for tests, schema, container, SBOM, docs, and security
-- tag-triggered PyPI/GHCR/GitHub release workflow
+- CI jobs for tests, schema, package/container smoke, separate dependency
+  audits, SBOM, and strict docs
+- tag-triggered, quality-gated PyPI/GHCR/GitHub release workflow
+- package metadata and `micro-agent` console entrypoint
 
 Gaps:
 
-- current required CI is red
-- release does not validate tag/package/changelog alignment
-- PyPI upload failure is silently converted into success
-- no wheel/sdist build gate on normal CI
+- release does not yet validate schema/image/changelog alignment
+- PyPI trusted publishing must be configured before the first tag
+- repository rulesets still need to make all main/release checks mandatory
 - fixed UID assumptions are not OpenShift arbitrary-UID friendly
 - sample Secret contains an empty value and no secret-manager workflow
 - deployment image uses `latest` and the example declares integrations that
@@ -194,6 +195,6 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The next implementation sequence is P0.1 through P0.5 in
+The next implementation sequence is P0.1 through P0.4 in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md),
 followed by A2A/MCP/provider interoperability and external state.

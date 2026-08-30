@@ -16,7 +16,7 @@ Thank you for your interest in contributing to Micro-Agents.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,docs]"
 
 ruff check .
 ruff format --check .
@@ -28,7 +28,6 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/micro-agent-v1alpha1.json
 
 # Documentation
-pip install mkdocs mkdocs-material
 mkdocs build --strict
 ```
 

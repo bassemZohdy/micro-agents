@@ -58,6 +58,19 @@ class TestSessionLifecycle:
         assert meta.expires_at is None
         assert await provider.get("sess-1") is not None
 
+    @pytest.mark.asyncio
+    async def test_list_active_removes_multiple_expired_sessions_safely(self):
+        provider = InMemorySessionProvider()
+        await provider.create("expired-1", ttl_seconds=0)
+        await provider.create("expired-2", ttl_seconds=0)
+        await provider.create("active")
+
+        active = await provider.list_active()
+
+        assert [meta.session_id for meta in active] == ["active"]
+        assert await provider.get("expired-1") is None
+        assert await provider.get("expired-2") is None
+
 
 class TestMemoryPolicyEnforcement:
     """MemoryPolicy enforcement: max_entries, ttl_seconds, auto_store."""

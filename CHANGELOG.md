@@ -26,8 +26,29 @@ All notable changes to the Micro-Agents project are documented in this file.
   seams, not standards compliance.
 - SQLite proves local file persistence only, and the in-tree telemetry facade
   is not OpenTelemetry export or propagation.
-- The latest GitHub CI run is red: type checking lacks `types-PyYAML`, and the
-  dependency audit reports vulnerable test/bootstrap packages.
+
+### Fixed
+
+- Made `DefaultMicroAgent` lifecycle concurrency-safe without a process-wide
+  READY/RUNNING transition; invocation failures no longer poison the agent,
+  and stop waits for active invocations to drain.
+- Generate request IDs when HTTP callers omit them and return HTTP 503 for an
+  unhealthy readiness result.
+- Remove multiple expired in-memory sessions without mutating the session map
+  during iteration.
+- Add regression coverage for concurrency, failure recovery, shutdown drain,
+  request IDs, readiness status, and multiple expired sessions.
+
+### CI and release
+
+- Added the PyYAML typing stubs and upgraded vulnerable test dependencies.
+- Split runtime and development dependency audits.
+- Added wheel/sdist build, clean-wheel installation, console-entrypoint smoke,
+  artifact upload, and strict documentation gates to pull requests.
+- Added package metadata and the `micro-agent` console command.
+- Made releases validate all quality gates and tag/package version alignment,
+  attach distributions and SBOM, and use PyPI trusted publishing without
+  masking publication failures.
 
 ### Added
 - Custom runtime agent loop, currently in the ADK-named package: model call →
@@ -70,13 +91,13 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 299 collected (246 unit-selected and 53 integration/e2e-selected;
+- Tests: 304 collected (251 unit-selected and 53 integration/e2e-selected;
   marker groups overlap) including behavioral
   runtime tests, factory-injected MCP configuration, real-socket network
   service, and shared-file SQLite session behavior.
-- CI workflows: integration and e2e jobs, container build + smoke test, SBOM,
-  docs publishing (MkDocs), and `release.yml` (tag → PyPI/GHCR + generated
-  notes). The current type and security jobs fail; see Implementation Status.
+- CI workflows: unit, integration, E2E, package/container smoke, separate
+  dependency audits, SBOM, strict docs build/publish, and a gated release to
+  PyPI/GHCR/GitHub Releases.
 - ADRs 0001–0008 (`docs/adr/`) and MkDocs site configuration.
 
 ## [0.1.0] — 2026-08-30

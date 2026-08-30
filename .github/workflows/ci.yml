@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -14,7 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff
+          cache: pip
+      - run: python -m pip install ruff
       - run: ruff check .
       - run: ruff format --check .
 
@@ -25,7 +33,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
       - run: mypy micro_agent runtimes
 
   schema:
@@ -35,7 +44,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
       - run: python -m micro_agent.definition.schema
       - run: git diff --exit-code docs/schemas/
 
@@ -49,7 +59,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev]"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
       - run: pytest -m "not integration and not e2e" --cov=micro_agent --cov-report=term-missing
 
   integration:
@@ -59,8 +70,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
-      - run: pytest -m "integration" -v
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest -m integration -v
 
   e2e:
     runs-on: ubuntu-latest
@@ -69,8 +81,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
-      - run: pytest -m "e2e" -v
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest -m e2e -v
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Install and smoke-test wheel
+        run: |
+          python -m venv /tmp/micro-agent-wheel
+          /tmp/micro-agent-wheel/bin/python -m pip install dist/*.whl
+          /tmp/micro-agent-wheel/bin/python -c "import micro_agent, runtimes.adk"
+          /tmp/micro-agent-wheel/bin/micro-agent --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
+          if-no-files-found: error
 
   container:
     runs-on: ubuntu-latest
@@ -80,34 +115,72 @@ jobs:
         run: docker build -t micro-agent:ci .
       - name: Smoke test
         run: |
+          cleanup() { docker rm -f micro-agent-smoke > /dev/null 2>&1 || true; }
+          trap cleanup EXIT
           docker run --rm -d --name micro-agent-smoke \
             -p 8080:8080 \
-            -v "$PWD/examples/residency-renewal.yaml:/etc/micro-agent/agent.yaml:ro" \
+            -v "$PWD/examples/notification-agent.yaml:/etc/micro-agent/agent.yaml:ro" \
             micro-agent:ci
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/health/live > /dev/null; then
-              echo "service healthy"
               curl -sf http://localhost:8080/health/ready
               curl -sf http://localhost:8080/v1/capabilities
-              docker rm -f micro-agent-smoke > /dev/null
               exit 0
             fi
             sleep 1
           done
-          echo "service did not become healthy"
-          docker logs micro-agent-smoke || true
-          docker rm -f micro-agent-smoke > /dev/null || true
+          docker logs micro-agent-smoke
           exit 1
 
-  security:
+  security-runtime:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
-      - run: pip-audit
+          cache: pip
+      - run: python -m pip install --upgrade pip setuptools pip-audit
+      - run: python -m pip install -e .
+      - run: pip-audit --skip-editable
+
+  security-development:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip setuptools
+      - run: python -m pip install -e ".[dev]"
+      - run: pip-audit --skip-editable
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[docs]"
+      - run: mkdocs build --strict
+
+  docs-deploy:
+    runs-on: ubuntu-latest
+    needs: docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[docs]"
+      - run: mkdocs gh-deploy --force
 
   sbom:
     runs-on: ubuntu-latest
@@ -118,16 +191,3 @@ jobs:
         with:
           format: spdx-json
           artifact-name: micro-agents-sbom.spdx.json
-
-  docs:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install mkdocs mkdocs-material
-      - run: mkdocs gh-deploy --force

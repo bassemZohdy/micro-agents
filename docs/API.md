@@ -8,7 +8,7 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 |---|---|---|
 | `POST /v1/invoke` | invoke the agent | no authentication or contract enforcement |
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
-| `GET /health/ready` | dependency readiness | returns HTTP 200 even when unhealthy |
+| `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy |
 | `GET /v1/capabilities` | runtime/skill metadata | reports runtime flags, not end-to-end readiness |
 | `GET /.well-known/agent.json` | preliminary card | not the A2A v1 standard path or card |
 
@@ -28,6 +28,9 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 `input` must currently be a JSON object. The definition's input contract is
 not enforced. `caller_metadata` is untrusted application data and must not be
 used as authenticated caller identity.
+
+`request_id` is optional. When it is omitted or empty, the service generates a
+UUID and returns the same value in the response.
 
 ## Invoke response
 
@@ -51,10 +54,8 @@ surface as generic HTTP 500 responses.
 ## Health behavior
 
 Liveness answers whether the process should be restarted. Readiness answers
-whether the instance can serve traffic. A production readiness endpoint must
-return a non-2xx response—normally 503—when a required dependency is
-unhealthy. The current implementation returns a body with
-`"status":"unhealthy"` but still uses HTTP 200.
+whether the instance can serve traffic. The readiness endpoint returns HTTP
+503 with `"status":"unhealthy"` when a required dependency fails its probe.
 
 ## A2A
 
@@ -66,4 +67,3 @@ GET /.well-known/agent-card.json
 
 The target card uses `supportedInterfaces`; full A2A also requires a standard
 message/task binding. See [Standards](STANDARDS.md).
-
