@@ -4,7 +4,8 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `bcfb453` on 2026-08-30.
+Baseline audited: `8e9efe6` on 2026-08-30. Completed work is removed rather
+than retained as checked boxes.
 
 ## Release gate
 
@@ -14,23 +15,7 @@ the relevant P1 acceptance tests are green.
 
 ## P0 — Correctness and truthful runtime
 
-### P0.1 Restore green CI and make gates reproducible
-
-- [ ] Add `types-PyYAML` to development/type-check dependencies.
-- [ ] Upgrade or constrain test/bootstrap packages so `pip-audit` has no
-      unhandled findings; the failed run found vulnerable `pytest 8.4.2` and
-      `setuptools 79.0.1`.
-- [ ] Audit production dependencies separately from development tooling while
-      keeping both reports visible.
-- [ ] Add a build job for wheel and sdist, then install and smoke-test the
-      built wheel.
-- [ ] Require every CI, security, schema, container, and documentation job
-      before release.
-
-Acceptance: one clean GitHub run on Python 3.11 and 3.12, with artifacts and
-logs linked from the release candidate.
-
-### P0.2 Implement a genuine Google ADK runtime
+### P0.1 Implement a genuine Google ADK runtime
 
 - [ ] Decide the package boundary: rename the current custom loop to a built-in
       runtime or replace its internals with Google ADK.
@@ -44,7 +29,7 @@ logs linked from the release candidate.
 Acceptance: tests prove ADK objects are constructed and invoked while the same
 definition remains runtime-neutral.
 
-### P0.3 Build the production bootstrap/runtime factory
+### P0.2 Build the production bootstrap/runtime factory
 
 - [ ] Make `python -m micro_agent` resolve configuration from definition,
       environment, and secret references.
@@ -60,21 +45,18 @@ definition remains runtime-neutral.
 Acceptance: the same image starts in explicit fake mode and in a real
 OpenAI-compatible configuration using only external configuration changes.
 
-### P0.4 Make invocation lifecycle concurrent and recoverable
+### P0.3 Complete invocation concurrency controls
 
-- [ ] Replace the process-wide READY/RUNNING transition with concurrency-safe
-      lifecycle and per-invocation state.
-- [ ] Keep serving after one failed invocation unless the runtime itself is
-      unhealthy.
-- [ ] Add bounded concurrency, cancellation, timeout propagation, and graceful
-      in-flight draining on shutdown.
-- [ ] Add parallel-request, cancellation, failure-recovery, and shutdown race
+- [ ] Add a configurable concurrency limit with explicit overload behavior.
+- [ ] Propagate client cancellation and shutdown deadlines through runtime,
+      model, tool, MCP, and state calls.
+- [ ] Add cancellation, overload, repeated-stop, and shutdown-timeout race
       tests.
 
-Acceptance: concurrent HTTP requests complete independently and a failed
-request does not permanently place the agent in ERROR.
+Acceptance: concurrency is bounded, cancellation releases resources, and
+shutdown either drains within its deadline or cancels remaining work safely.
 
-### P0.5 Enforce transport security and policy references
+### P0.4 Enforce transport security and policy references
 
 - [ ] Add authentication middleware and validated caller/client, user/tenant,
       and workload identity propagation.
@@ -156,7 +138,8 @@ and the transcript can be replayed from session storage.
 - [ ] Add a concurrency-safe PostgreSQL or Redis session provider.
 - [ ] Add production memory and operational/idempotency providers.
 - [ ] Add optimistic concurrency/versioning and tenant isolation.
-- [ ] Fix in-memory expiration cleanup and validate memory policy bounds.
+- [ ] Purge expired in-memory entries consistently and validate memory policy
+      bounds.
 - [ ] Add locking or clearly restrict the SQLite provider to single-process
       development use.
 - [ ] Close providers during shutdown and probe them for readiness.
@@ -166,10 +149,8 @@ state through an external service under concurrent load.
 
 ### P1.6 HTTP and health semantics
 
-- [ ] Return HTTP 503 when readiness is false and keep liveness process-only.
 - [ ] Map validation, authentication, authorization, timeout, dependency, and
       internal errors to stable response contracts.
-- [ ] Generate and propagate request IDs when callers omit them.
 - [ ] Add request/body limits, CORS policy, rate limiting integration points,
       and streaming only when runtime-supported.
 - [ ] Document and version the public API.
@@ -203,17 +184,17 @@ state through an external service under concurrent load.
 - [ ] Add NetworkPolicy, PodDisruptionBudget, autoscaling guidance, and
       topology spread as optional production examples.
 - [ ] Validate manifests in CI and test shutdown/readiness on Kubernetes.
-- [ ] Add image signing, provenance/attestation, dependency lock strategy, and
-      SBOM attachment to releases.
+- [ ] Add image signing, provenance/attestation, and a dependency lock
+      strategy.
 
 ### P1.10 Release correctness
 
-- [ ] Validate tag, package version, schema version, image tags, and changelog
-      alignment.
-- [ ] Remove the release workflow's silent PyPI failure fallback.
-- [ ] Add package metadata, console entry point, supported-Python classifiers,
-      and release installation test.
-- [ ] Publish only after the commit's required CI gates succeed.
+- [ ] Validate schema version, image tags, and changelog alignment in addition
+      to the existing tag/package-version check.
+- [ ] Protect `main` and release tags with the required CI checks in the GitHub
+      ruleset; workflow gates alone do not prevent an administrator bypass.
+- [ ] Configure and verify PyPI trusted publishing for this repository before
+      creating the first release tag.
 
 ## P2 — Framework maturity
 

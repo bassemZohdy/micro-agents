@@ -28,7 +28,7 @@ values do not yet construct runtime providers.
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | not applied to Uvicorn/runtime logging |
 
 Do not assume that setting these variables changes `python -m micro_agent`
-until P0.3 is complete.
+until P0.2 is complete.
 
 ## Secret references
 
@@ -70,4 +70,3 @@ logical definition.
 Fake mode must be explicit before a stable release. The current CLI implicitly
 uses it and therefore must not be used as evidence of a real-provider
 deployment.
-

@@ -65,8 +65,9 @@ pytest -m integration
 pytest -m e2e
 ```
 
-The current baseline needs `types-PyYAML` before strict mypy can pass in a
-fresh environment; this is tracked as P0.1.
+The development extra includes the PyYAML typing stubs required by strict
+mypy. CI runs unit-selected tests on Python 3.11 and 3.12 and runs integration
+and E2E suites separately.
 
 ## Programmatic real-model injection
 
@@ -100,4 +101,3 @@ docker run --rm -p 8080:8080 \
 ```
 
 This validates the fake-provider service only.
-

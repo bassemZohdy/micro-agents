@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from micro_agent.core.agent import (
     AgentCapabilities,
     AgentIdentity,
@@ -26,6 +28,11 @@ class DefaultMicroAgent(MicroAgent):
         self._runtime = runtime
         self._state = AgentState.CREATED
         self._runtime_agent: RuntimeAgent | None = None
+        self._lifecycle_lock = asyncio.Lock()
+        self._active_invocations = 0
+        self._idle = asyncio.Event()
+        self._idle.set()
+        self._stop_complete = asyncio.Event()
 
     @property
     def identity(self) -> AgentIdentity:
@@ -55,39 +62,71 @@ class DefaultMicroAgent(MicroAgent):
         return self._definition
 
     async def initialize(self) -> None:
-        if self._state != AgentState.CREATED:
-            raise RuntimeError(f"Cannot initialize from state {self._state.value}")
-        self._runtime_agent = await self._runtime.create(self._definition)
-        self._state = AgentState.INITIALIZED
+        async with self._lifecycle_lock:
+            if self._state != AgentState.CREATED:
+                raise RuntimeError(f"Cannot initialize from state {self._state.value}")
+            self._runtime_agent = await self._runtime.create(self._definition)
+            self._state = AgentState.INITIALIZED
 
     async def start(self) -> None:
-        if self._state != AgentState.INITIALIZED:
-            raise RuntimeError(f"Cannot start from state {self._state.value}")
-        assert self._runtime_agent is not None
-        self._state = AgentState.STARTING
-        await self._runtime.start(self._runtime_agent)
-        self._state = AgentState.READY
+        async with self._lifecycle_lock:
+            if self._state != AgentState.INITIALIZED:
+                raise RuntimeError(f"Cannot start from state {self._state.value}")
+            assert self._runtime_agent is not None
+            self._state = AgentState.STARTING
+            try:
+                await self._runtime.start(self._runtime_agent)
+            except Exception:
+                self._state = AgentState.ERROR
+                raise
+            self._state = AgentState.READY
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
-        if self._state != AgentState.READY:
-            raise RuntimeError(f"Cannot invoke from state {self._state.value}")
-        assert self._runtime_agent is not None
-        self._state = AgentState.RUNNING
+        async with self._lifecycle_lock:
+            if self._state != AgentState.READY:
+                raise RuntimeError(f"Cannot invoke from state {self._state.value}")
+            assert self._runtime_agent is not None
+            runtime_agent = self._runtime_agent
+            self._active_invocations += 1
+            self._idle.clear()
         try:
-            response = await self._runtime.invoke(self._runtime_agent, request)
-            self._state = AgentState.READY
-            return response
-        except Exception:
-            self._state = AgentState.ERROR
-            raise
+            return await self._runtime.invoke(runtime_agent, request)
+        finally:
+            async with self._lifecycle_lock:
+                self._active_invocations -= 1
+                if self._active_invocations == 0:
+                    self._idle.set()
 
     async def stop(self) -> None:
-        if self._state in (AgentState.STOPPED, AgentState.CREATED):
+        async with self._lifecycle_lock:
+            if self._state in (AgentState.STOPPED, AgentState.CREATED):
+                return
+            if self._state == AgentState.STOPPING:
+                wait_for_existing_stop = True
+                runtime_agent = None
+            else:
+                assert self._runtime_agent is not None
+                self._state = AgentState.STOPPING
+                wait_for_existing_stop = False
+                self._stop_complete.clear()
+                runtime_agent = self._runtime_agent
+
+        if wait_for_existing_stop:
+            await self._stop_complete.wait()
             return
-        assert self._runtime_agent is not None
-        self._state = AgentState.STOPPING
-        await self._runtime.stop(self._runtime_agent)
-        self._state = AgentState.STOPPED
+
+        await self._idle.wait()
+        assert runtime_agent is not None
+        try:
+            await self._runtime.stop(runtime_agent)
+        except Exception:
+            async with self._lifecycle_lock:
+                self._state = AgentState.ERROR
+                self._stop_complete.set()
+            raise
+        async with self._lifecycle_lock:
+            self._state = AgentState.STOPPED
+            self._stop_complete.set()
 
     async def shutdown(self) -> None:
         if self._runtime_agent:

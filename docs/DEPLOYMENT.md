@@ -34,10 +34,10 @@ Before using this outside a disposable namespace:
 - do not store real credentials in `secret.yaml`; use the platform's secret
   workflow
 - use an executable definition whose dependencies are actually wired
-- fix readiness to return HTTP 503 on failure
 - validate network egress to model/MCP endpoints
 - add external shared state for multiple replicas
-- test termination and in-flight draining
+- define a shutdown deadline and cancellation policy for requests that do not
+  drain in time
 
 ## OpenShift
 
@@ -57,11 +57,9 @@ is not the recommended shared store for independently scheduled pods.
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
 - [ ] authenticated HTTP and standards endpoints
-- [ ] non-2xx unhealthy readiness
 - [ ] external session, memory, and idempotency state
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation
 - [ ] resource, disruption, autoscaling, topology, and NetworkPolicy decisions
 - [ ] log/metric/trace export with sensitive-data controls
 - [ ] rollback and compatibility-tested release
-

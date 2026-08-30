@@ -1,13 +1,73 @@
 """Tests for DefaultMicroAgent and HTTP server."""
 
+import asyncio
+from uuid import UUID
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from micro_agent.core import AgentRequest, AgentState, DefaultMicroAgent
+from micro_agent.core import (
+    AgentCapabilities,
+    AgentRequest,
+    AgentResponse,
+    AgentState,
+    DefaultMicroAgent,
+)
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.interoperability import create_app, serialize_response
-from micro_agent.observability import HealthChecker
+from micro_agent.observability import HealthChecker, HealthStatus
+from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from runtimes.adk import AdkRuntime
+
+
+class ControlledRuntime(AgentRuntime):
+    """Runtime test double that can hold concurrent invocations in flight."""
+
+    def __init__(self, expected_invocations: int = 1, failures: int = 0) -> None:
+        self.expected_invocations = expected_invocations
+        self.failures = failures
+        self.entered = 0
+        self.all_entered = asyncio.Event()
+        self.release = asyncio.Event()
+        self.stop_called = False
+
+    def capabilities(self) -> RuntimeCapabilities:
+        return RuntimeCapabilities()
+
+    async def create(self, definition) -> RuntimeAgent:
+        return RuntimeAgent(
+            identity=definition_identity(definition),
+            capabilities=AgentCapabilities(),
+        )
+
+    async def start(self, agent: RuntimeAgent) -> None:
+        return None
+
+    async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+        self.entered += 1
+        if self.entered >= self.expected_invocations:
+            self.all_entered.set()
+        await self.release.wait()
+        if self.failures:
+            self.failures -= 1
+            raise RuntimeError("controlled invocation failure")
+        return AgentResponse(output={"ok": True}, request_id=request.request_id)
+
+    async def stop(self, agent: RuntimeAgent) -> None:
+        self.stop_called = True
+
+    async def shutdown(self, agent: RuntimeAgent) -> None:
+        return None
+
+
+def definition_identity(definition):
+    from micro_agent.core import AgentIdentity
+
+    return AgentIdentity(
+        agent_id=f"{definition.metadata.name}-{definition.metadata.version}",
+        agent_name=definition.metadata.name,
+        agent_version=definition.metadata.version,
+    )
 
 
 @pytest.fixture
@@ -73,6 +133,56 @@ class TestDefaultMicroAgent:
         caps = agent.capabilities
         assert caps.streaming is False
 
+    @pytest.mark.asyncio
+    async def test_concurrent_invocations_do_not_change_lifecycle_state(self, definition):
+        runtime = ControlledRuntime(expected_invocations=2)
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        first = asyncio.create_task(agent.invoke(AgentRequest()))
+        second = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        assert agent.state == AgentState.READY
+
+        runtime.release.set()
+        responses = await asyncio.gather(first, second)
+        assert all(response.status == "success" for response in responses)
+        assert agent.state == AgentState.READY
+
+    @pytest.mark.asyncio
+    async def test_invocation_failure_does_not_poison_agent(self, definition):
+        runtime = ControlledRuntime(failures=1)
+        runtime.release.set()
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        with pytest.raises(RuntimeError, match="controlled invocation failure"):
+            await agent.invoke(AgentRequest())
+        assert agent.state == AgentState.READY
+        assert (await agent.invoke(AgentRequest())).status == "success"
+
+    @pytest.mark.asyncio
+    async def test_stop_drains_in_flight_invocations(self, definition):
+        runtime = ControlledRuntime()
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+
+        invocation = asyncio.create_task(agent.invoke(AgentRequest()))
+        await asyncio.wait_for(runtime.all_entered.wait(), timeout=1)
+        stopping = asyncio.create_task(agent.stop())
+        await asyncio.sleep(0)
+        assert agent.state == AgentState.STOPPING
+        assert runtime.stop_called is False
+
+        runtime.release.set()
+        await invocation
+        await stopping
+        assert runtime.stop_called is True
+        assert agent.state == AgentState.STOPPED
+
 
 class TestHTTPServer:
     """Test FastAPI HTTP server."""
@@ -91,6 +201,7 @@ class TestHTTPServer:
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "success"
+            assert UUID(data["request_id"])
         await agent.stop()
         await agent.shutdown()
 
@@ -120,6 +231,21 @@ class TestHTTPServer:
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "healthy"
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_health_not_ready_returns_503(self, agent):
+        await agent.initialize()
+        await agent.start()
+        checker = HealthChecker()
+        checker.add_dependency("model", status=HealthStatus.UNHEALTHY)
+        app = create_app(agent, checker)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/health/ready")
+            assert resp.status_code == 503
+            assert resp.json()["details"]["ready"] is False
         await agent.stop()
         await agent.shutdown()
 

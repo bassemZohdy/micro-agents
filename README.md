@@ -141,7 +141,7 @@ state, or A2A task interoperability.
 | State | in-memory providers and SQLite session example | production shared providers and concurrency guarantees |
 | Security | data types and programmatic policy evaluator | authentication, caller propagation, policy/credential resolution, approval flow |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
-| Operations | container and sample manifests | production bootstrap, readiness HTTP semantics, OpenShift hardening |
+| Operations | container, package/release gates, and sample manifests | production bootstrap and OpenShift hardening |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.
@@ -170,11 +170,11 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-As of commit `bcfb453`, 299 tests pass locally when proxy variables do not
-interfere with `httpx`. The corresponding GitHub CI run is red because the
-type-check job lacks `types-PyYAML` and the security audit detected vulnerable
-development/bootstrap packages. A passing test count must not be presented as
-a passing release gate.
+The current suite contains 304 tests. CI runs lint, typing, schema, unit,
+integration, E2E, package, container, separate runtime/development dependency
+audits, and strict documentation gates. Release tags repeat the quality gates,
+validate the tag against the package version, and publish only after all
+verification succeeds.
 
 ## Documentation
 
