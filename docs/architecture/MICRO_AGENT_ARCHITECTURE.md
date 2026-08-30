@@ -1,5 +1,10 @@
 # Micro-Agent Architecture
 
+> **Normative architecture.** This document defines the intended architecture,
+> not a claim that every criterion is implemented. See
+> [Implementation Status](../IMPLEMENTATION_STATUS.md) for audited conformance
+> and the project backlog for open work.
+
 ## 1. Architectural Goals
 
 Micro-Agent Architecture defines an architectural style for building cloud-native, independently deployable AI agents.
@@ -326,7 +331,7 @@ fallback model
                    Runtime Contract
                            │
                            ▼
-                      ADK Runtime
+                    Runtime Adapter
                            │
                            ▼
                        Micro-Agent
@@ -350,6 +355,11 @@ fallback model
  OpenTelemetry
  External Stores
 ```
+
+The runtime adapter is deliberately generic. Google ADK is the first intended
+external framework adapter. The current `runtimes/adk` package is a custom
+model/tool loop and must not be presented as Google ADK integration until it
+constructs and exercises supported ADK APIs.
 
 ---
 
@@ -396,3 +406,9 @@ exposes standard interoperability interfaces
 ```
 
 A component that fails to satisfy these criteria may be an AI agent but does not qualify as a Micro-Agent under this architecture.
+
+Qualification is evidence-based. A definition or interface alone does not
+establish a criterion: portability requires a second compatible consumer,
+standard interoperability requires an independent standards client, and
+independent scaling requires processes sharing external state under
+concurrent load.

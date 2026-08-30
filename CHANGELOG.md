@@ -4,23 +4,51 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+- Reconciled the README, project definition, architecture, Twelve-Factor
+  model, ADRs, examples, contributor guide, and deployment guidance with an
+  implementation audit at commit `bcfb453`.
+- Added getting-started, configuration, HTTP API, deployment, standards, and
+  implementation-status guides.
+- Rebuilt `TODO.md` as a prioritized open backlog with evidence-based
+  acceptance criteria and explicit production release gates.
+- Set A2A v1.0.1 and MCP `2025-11-25` as the stable compatibility targets.
+
+### Audit corrections
+
+- `runtimes/adk` is a custom model/tool loop; it does not currently integrate
+  Google ADK.
+- The CLI starts the deterministic fake provider and does not yet resolve or
+  construct real providers, MCP, state, policy, knowledge, or credential
+  services from configuration.
+- The current A2A-shaped discovery route and fake MCP client prove internal
+  seams, not standards compliance.
+- SQLite proves local file persistence only, and the in-tree telemetry facade
+  is not OpenTelemetry export or propagation.
+- The latest GitHub CI run is red: type checking lacks `types-PyYAML`, and the
+  dependency audit reports vulnerable test/bootstrap packages.
+
 ### Added
-- ADK runtime agent loop: model call → tool execution up to `max_iterations`,
+- Custom runtime agent loop, currently in the ADK-named package: model call →
+  tool execution up to `max_iterations`,
   overall `timeout_seconds`, tool/model timeout enforcement, and
   `error_policy` (fail / retry / fallback) honored from RuntimeSemantics.
 - Generic tool resolution from definitions via a built-in registry;
   unresolved tools are reported instead of silently dropped.
-- `OpenAICompatProvider` — real model provider for any /chat/completions
-  endpoint, selected by configuration (fake model remains the CI default).
+- `OpenAICompatProvider` — injectable model provider for a compatible
+  `/chat/completions` endpoint; executable configuration selection remains
+  open work.
 - Session integration (history replay/persistence, TTL from definition) and
   memory auto-store behind `MemoryPolicy.auto_store`.
-- MCP integration: `FakeMcpClient` test double, `McpConnectionManager`
-  (connect-by-configuration, `server:tool` adapters, resources/prompts
+- MCP integration seam: `FakeMcpClient` test double, `McpConnectionManager`
+  (factory-injected clients, `server:tool` adapters, resources/prompts
   metadata, health probe, graceful shutdown) and `McpSecurityPolicy` (TLS,
   endpoint allowlist, transport validation, response size limits).
-- A2A: `agent_card_from_definition()`, `skills_mapping()`, and the
-  `GET /.well-known/agent.json` endpoint; validated by an independent raw-JSON
-  HTTP client test.
+- A2A-shaped project models: `agent_card_from_definition()`,
+  `skills_mapping()`, and the preliminary `GET /.well-known/agent.json`
+  endpoint; covered by a raw-JSON project test, not official client
+  conformance.
 - Observability wiring: `Telemetry` facade (StructuredLogger with secret
   redaction + MetricsCollector + span tree) instruments the invocation path —
   invocation count/latency/errors, model latency, tokens, tool calls, policy
@@ -28,12 +56,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Active health: dependency probes with `probe_readiness()`, status updates
   after registration, real liveness probe; runtime exposes model/session/
   memory/MCP probes.
-- Policy enforcement in the runtime: `PolicyEvaluator` denies tools/side
+- Programmatically injected policy enforcement: `PolicyEvaluator` denies tools/side
   effects before execution and fails startup on denied MCP servers;
   `OperationRegistry` deduplicates idempotent side effects;
   `build_security_context()` loads definition security refs.
-- `SqliteSessionProvider` — persistent reference implementation proving the
-  multi-replica shared-session acceptance.
+- `SqliteSessionProvider` — local development persistence implementation with
+  shared-file contract tests.
 - Modules moved out of observability: `micro_agent/security/` (identity,
   policy, side effects, context) and `micro_agent/health/` (backward-compat
   re-exports kept).
@@ -42,13 +70,14 @@ All notable changes to the Micro-Agents project are documented in this file.
   added (`skills_mapping`, `capability_contract_from_definition`).
 - Deploy: `deploy/kubernetes/definition-configmap.yaml` (the deployment's
   missing `micro-agent-definition` ConfigMap).
-- Tests: 299 total (246 unit + 53 integration/e2e) including behavioral
-  runtime tests, MCP-by-configuration, real-socket network service, and
-  multi-replica session acceptance.
-- CI: integration and e2e jobs, container build + smoke test, SBOM, docs
-  publishing (mkdocs), `release.yml` (tag → PyPI/GHCR + generated notes);
-  `runtimes/` now strict-type-checked.
-- ADRs 0001–0006 (docs/adr/) and mkdocs site config.
+- Tests: 299 collected (246 unit-selected and 53 integration/e2e-selected;
+  marker groups overlap) including behavioral
+  runtime tests, factory-injected MCP configuration, real-socket network
+  service, and shared-file SQLite session behavior.
+- CI workflows: integration and e2e jobs, container build + smoke test, SBOM,
+  docs publishing (MkDocs), and `release.yml` (tag → PyPI/GHCR + generated
+  notes). The current type and security jobs fail; see Implementation Status.
+- ADRs 0001–0008 (`docs/adr/`) and MkDocs site configuration.
 
 ## [0.1.0] — 2026-08-30
 
@@ -132,10 +161,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 ### Milestone 13 — Knowledge
 - KnowledgeSource, KnowledgeEntry, KnowledgeRetriever ABC
 
-### Milestone 14 — ADK Runtime Vertical Slice
+### Milestone 14 — ADK-Named Runtime Vertical Slice
 - AdkRuntime implementing AgentRuntime
 - Uses FakeModelProvider for CI (no paid model required)
-- Agent construction, model binding, lifecycle
+- Custom agent construction, model binding, and lifecycle; Google ADK is not
+  integrated
 
 ### Milestone 15 — Runtime HTTP API
 - FastAPI application (create_app factory)
@@ -178,7 +208,7 @@ All notable changes to the Micro-Agents project are documented in this file.
 - .dockerignore
 - HEALTHCHECK, ENTRYPOINT with --definition arg
 
-### Milestone 23 — Kubernetes/OpenShift Baseline
+### Milestone 23 — Kubernetes-Oriented Baseline
 - Deployment (2 replicas, rolling update, health probes, resources)
 - Service (ClusterIP)
 - ConfigMap, Secret references
@@ -206,15 +236,15 @@ All notable changes to the Micro-Agents project are documented in this file.
 - FastAPI HTTP server with uvicorn
 - Graceful lifecycle (initialize → start → serve → stop → shutdown)
 
-### Known Limitations (resolved in Unreleased)
+### Known Limitations
 
-The 0.1.0 slice was intentionally minimal; the interface-only stubs listed
-below have since been implemented — see the Unreleased section and ADRs
-0002/0003 for the remaining boundaries:
+The 0.1.0 slice was intentionally minimal. Later work implemented useful
+interfaces and test seams, but the following production boundaries remain:
 
-- MCP ships a client integration seam (manager + security + fake client); a
-  production wire-protocol client (official SDK) plugs in via the manager's
-  client factory
+- MCP ships a client integration seam (manager + security + fake client), but
+  no production wire-protocol client or official-SDK interoperability test
 - OpenTelemetry export is not integrated yet; the in-tree `Telemetry` facade
   is the single swap point
-- A2A covers discovery (agent card) but not the full A2A task protocol
+- the current A2A-shaped discovery path/card is not A2A v1 compliant and no
+  full task protocol is implemented
+- executable provider/configuration/state/security bootstrap remains absent

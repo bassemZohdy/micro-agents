@@ -1,9 +1,9 @@
 """OpenAI-compatible HTTP model provider.
 
-Talks to any endpoint that implements the /chat/completions contract
-(OpenAI, vLLM, Ollama's OpenAI shim, Azure OpenAI gateways, ...). Selected
-when a definition/config supplies a real endpoint; the fake provider remains
-the CI default.
+Talks to an endpoint that implements the /chat/completions contract. The
+provider is injectable through the Python runtime configuration; the
+executable bootstrap does not yet select it from definition or environment
+configuration. The fake provider remains the CI default.
 """
 
 from __future__ import annotations

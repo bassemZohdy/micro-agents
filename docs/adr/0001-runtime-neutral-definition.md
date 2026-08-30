@@ -17,7 +17,9 @@ types appear in definition or core contracts.
 
 ## Consequences
 
-- Definitions are portable and externally validatable; the published schema
-  matches the loader exactly.
+- Definitions are structurally runtime-neutral and externally validatable;
+  the published schema matches the loader exactly.
 - Runtime-specific concepts (ADK agents, tools) are bound at runtime
   construction, never in the definition.
+- Behavioral portability remains unproven until two independent runtime
+  adapters consume the same definition and satisfy the same contract tests.

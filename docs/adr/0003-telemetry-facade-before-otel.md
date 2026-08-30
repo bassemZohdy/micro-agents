@@ -19,3 +19,5 @@ the runtime and HTTP layer at fixed call sites.
 - Agent/model/tool/MCP spans share trace IDs now; swapping the collector for
   an OTel exporter later changes only the facade, not call sites.
 - Secret redaction is centralized in the logger.
+- The facade is not itself OpenTelemetry-compatible evidence: it does not
+  propagate W3C trace context or export standard spans and metrics.

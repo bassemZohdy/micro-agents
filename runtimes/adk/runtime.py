@@ -1,8 +1,9 @@
-"""ADK Runtime — vertical slice implementation.
+"""Custom runtime loop in the legacy ADK-named package.
 
-Uses the fake model provider for CI by default; an OpenAI-compatible provider
-is selected when configured with a real endpoint. No ADK-native types leak
-into definition or core contracts.
+The runtime uses the fake model provider by default. Another provider may be
+injected through ``AdkRuntimeConfig``; the executable bootstrap does not yet
+select one from resolved configuration. This module does not integrate Google
+ADK, and no runtime-native types leak into definition or core contracts.
 """
 
 from __future__ import annotations

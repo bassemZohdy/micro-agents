@@ -1,20 +1,32 @@
 site_name: Micro-Agents
-site_description: Cloud-native, independently deployable AI agents
-repo_url: https://github.com/bassem/micro-agents
+site_description: Architecture and reference framework for independently deployable AI agents
+site_url: https://bassemzohdy.github.io/micro-agents/
+repo_url: https://github.com/bassemZohdy/micro-agents
+repo_name: bassemZohdy/micro-agents
+strict: true
+
+theme:
+  name: material
 
 nav:
   - Home: index.md
-  - Project Definition: ../PROJECT_DEFINITION.md
+  - Getting Started: GETTING_STARTED.md
+  - Implementation Status: IMPLEMENTATION_STATUS.md
+  - Configuration: CONFIGURATION.md
+  - HTTP API: API.md
+  - Deployment: DEPLOYMENT.md
+  - Standards: STANDARDS.md
   - Architecture:
       - Micro-Agent Architecture: architecture/MICRO_AGENT_ARCHITECTURE.md
       - Twelve-Factor Micro-Agent: architecture/TWELVE_FACTOR_MICRO_AGENT.md
-  - Schemas:
+  - Schema:
       - Micro-Agent Definition v1alpha1: schemas/micro-agent-v1alpha1.json
-  - ADRs:
+  - Decisions:
       - 0001 Runtime-neutral definition: adr/0001-runtime-neutral-definition.md
-      - 0002 ADK-first runtime, fake model CI: adr/0002-adk-first-runtime-fake-model-ci.md
+      - 0002 One runtime first: adr/0002-adk-first-runtime-fake-model-ci.md
       - 0003 Telemetry facade before OTel: adr/0003-telemetry-facade-before-otel.md
       - 0004 Security and health modules: adr/0004-security-and-health-modules.md
       - 0005 Deterministic policy enforcement: adr/0005-deterministic-policy-enforcement.md
-      - 0006 SQLite session reference: adr/0006-sqlite-session-reference.md
-  - CHANGELOG: ../CHANGELOG.md
+      - 0006 SQLite development persistence: adr/0006-sqlite-session-reference.md
+      - 0007 Stable protocol baselines: adr/0007-stable-protocol-baselines.md
+      - 0008 Runtime adapter truthfulness: adr/0008-runtime-adapter-truthfulness.md
