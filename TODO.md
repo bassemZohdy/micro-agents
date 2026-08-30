@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `0c12af7` on 2026-08-30. Completed work is removed rather
+Baseline audited: `18a00d89` on 2026-08-30. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -31,16 +31,9 @@ definition remains runtime-neutral.
 
 ### P0.2 Build the production bootstrap/runtime factory
 
-- [x] Make `python -m micro_agent` resolve model configuration from definition,
-      environment, and model credential references.
-- [x] Select the configured fake or OpenAI-compatible model provider; reject
-      bare model references and incomplete live configuration instead of
-      silently using `FakeModelProvider`.
 - [ ] Construct tool registry, MCP client, session, memory, knowledge, policy,
       telemetry, and credential providers from configuration.
 - [ ] Validate all required dependencies before readiness.
-- [x] Fail fast with redacted diagnostics for unsupported providers, missing
-      live endpoints, and unresolved model credentials.
 - [ ] Remove or wire every currently dead `MICRO_AGENT_*` variable.
 
 Acceptance: the same image starts in explicit fake mode and in a real
@@ -48,13 +41,7 @@ OpenAI-compatible configuration using only external configuration changes.
 
 ### P0.3 Complete invocation concurrency controls
 
-- [x] Add a definition-level concurrency limit with explicit `wait` or
-      `reject` overload behavior.
-- [x] Propagate client cancellation through the agent/runtime boundary and
-      cancel in-flight work after a configured shutdown drain deadline.
 - [ ] Propagate explicit deadlines through model, tool, MCP, and state calls.
-- [x] Add cancellation, overload, repeated-stop, and shutdown-timeout race
-      tests.
 
 Acceptance: concurrency is bounded, cancellation releases resources, and
 shutdown either drains within its deadline or cancels remaining work safely.
