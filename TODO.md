@@ -140,14 +140,20 @@ server through the executable bootstrap.
 
 ### P1.3 Correct model tool-call protocol
 
-- [ ] Preserve provider tool-call IDs and the assistant `tool_calls` payload
-      in conversation history.
-- [ ] Return tool results with the required `tool_call_id`.
-- [ ] Validate tool names, JSON Schema inputs, outputs, and provider response
-      shapes.
-- [ ] Add configurable proxy/TLS behavior and injectable HTTP transport.
-- [ ] Define provider capability negotiation for structured output, streaming,
-      and tool use.
+- [x] Preserve provider tool-call IDs and the assistant `tool_calls` payload
+      in conversation history; requests without an id receive a generated one.
+- [x] Return tool results with the required `tool_call_id`.
+- [x] Validate tool names and JSON Schema inputs (required properties and
+      basic types) before execution; schema-invalid calls are rejected back
+      to the model without running the tool.
+- [x] Add configurable proxy/TLS behavior and injectable HTTP transport.
+- [x] Define provider capability negotiation for structured output, streaming,
+      and tool use; tool use is enforced at startup (declaring tools against a
+      provider without it fails), the other two stay false until those
+      features are wired.
+- [ ] Add a live OpenAI-compatible end-to-end acceptance test: a real server
+      completes a multi-turn tool call and the transcript replays from
+      session storage.
 
 Acceptance: a real OpenAI-compatible server completes a multi-turn tool call
 and the transcript can be replayed from session storage.

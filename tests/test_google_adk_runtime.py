@@ -50,6 +50,11 @@ def _definition(
 class SequencedProvider(ModelProvider):
     """Provider double that emits one ADK tool call, then a final answer."""
 
+    def capabilities(self):
+        from micro_agent.models.model import ProviderCapabilities
+
+        return ProviderCapabilities(tool_use=True)
+
     def __init__(self) -> None:
         self.calls = 0
         self.messages: list[list[dict[str, object]]] = []
@@ -168,6 +173,11 @@ class _TelemetryCapture:
 
     async def health_check(self) -> bool:
         return True
+
+    def capabilities(self):
+        from micro_agent.models.model import ProviderCapabilities
+
+        return ProviderCapabilities(tool_use=True)
 
 
 @pytest.mark.asyncio

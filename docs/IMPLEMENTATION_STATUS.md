@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 466 collected | 397 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, propagation, and MCP SDK interop tests); the remaining 69 run in the integration/e2e jobs |
+| Tests | 474 collected | 401 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); the remaining 73 run in the integration/e2e jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -132,14 +132,22 @@ Implemented:
 - injectable OpenAI-compatible chat-completions provider
 - built-in `echo` tool and injected MCP tool adapters
 
+Implemented (additions):
+
+- provider tool-call IDs and the assistant `tool_calls` payload are preserved
+  in the conversation history and tool results carry `tool_call_id`
+- tool requests are validated against declared JSON Schema inputs before
+  execution
+- explicit proxy/TLS configuration and injectable HTTP clients for the
+  OpenAI-compatible provider
+- provider capability reporting with tool-use negotiation enforced at startup
+
 Gaps:
 
 - broader provider credentials and endpoints are not yet supported
-- OpenAI-compatible follow-up messages omit assistant tool-call structures and
-  tool-call IDs
 - only `echo` resolves from the built-in map; the residency example's native
   tools remain unresolved
-- no input/output JSON Schema validation around tool calls
+- no live OpenAI-compatible end-to-end acceptance run against a real server
 
 ### MCP
 

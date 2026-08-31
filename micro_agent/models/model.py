@@ -49,8 +49,25 @@ class ModelResponse:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class ProviderCapabilities:
+    """What a provider's wire protocol actually supports.
+
+    Runtimes use this to negotiate: declaring tools against a provider that
+    cannot call them fails at startup instead of silently dropping the tools.
+    """
+
+    tool_use: bool = False
+    streaming: bool = False
+    structured_output: bool = False
+
+
 class ModelProvider(ABC):
     """Abstract model provider interface."""
+
+    def capabilities(self) -> ProviderCapabilities:
+        """Report what the provider's protocol supports; conservative default."""
+        return ProviderCapabilities()
 
     @abstractmethod
     async def generate(

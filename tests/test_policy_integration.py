@@ -205,7 +205,7 @@ class TestToolPolicyEnforcement:
             AdkRuntimeConfig(
                 fake_model_config=FakeModelConfig(
                     response="done",
-                    tool_requests=[{"name": "echo", "arguments": {}}],
+                    tool_requests=[{"name": "echo", "arguments": {"message": "hi"}}],
                 ),
                 policy=policy,
                 telemetry=telemetry,
@@ -312,7 +312,12 @@ class TestOperationRegistry:
             AdkRuntimeConfig(
                 fake_model_config=FakeModelConfig(
                     response="done",
-                    tool_requests=[{"name": "echo", "arguments": {"idempotency_key": "k-1"}}],
+                    tool_requests=[
+                        {
+                            "name": "echo",
+                            "arguments": {"idempotency_key": "k-1", "message": "hi"},
+                        }
+                    ],
                 ),
                 operation_registry=registry,
             )

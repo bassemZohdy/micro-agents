@@ -13,12 +13,24 @@ from typing import Any
 
 import httpx
 
-from micro_agent.models.model import ModelConfig, ModelProvider, ModelResponse
+from micro_agent.models.model import (
+    ModelConfig,
+    ModelProvider,
+    ModelResponse,
+    ProviderCapabilities,
+)
 
 
 @dataclass
 class OpenAICompatConfig:
-    """Connection settings for an OpenAI-compatible endpoint."""
+    """Connection settings for an OpenAI-compatible endpoint.
+
+    ``http_client`` is an injection seam for tests and deployments that own
+    the transport; when omitted, the provider builds its own client honoring
+    ``trust_env``, ``verify_tls``, and ``proxy``. A proxy is an explicit
+    opt-in — ambient proxy environment variables are never trusted by
+    default.
+    """
 
     endpoint: str  # e.g. https://llm.example.com/v1
     model_id: str = "default"
@@ -26,6 +38,9 @@ class OpenAICompatConfig:
     timeout_seconds: float = 30.0
     default_headers: dict[str, str] = field(default_factory=dict)
     trust_env: bool = False
+    verify_tls: bool = True
+    proxy: str | None = None
+    http_client: httpx.AsyncClient | None = None
 
 
 class OpenAICompatProvider(ModelProvider):
@@ -33,14 +48,17 @@ class OpenAICompatProvider(ModelProvider):
 
     def __init__(self, config: OpenAICompatConfig) -> None:
         self._config = config
+        self._owns_client = config.http_client is None
         headers = {"Content-Type": "application/json", **config.default_headers}
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
-        self._client = httpx.AsyncClient(
+        self._client = config.http_client or httpx.AsyncClient(
             base_url=config.endpoint.rstrip("/"),
             headers=headers,
             timeout=config.timeout_seconds,
             trust_env=config.trust_env,
+            verify=config.verify_tls,
+            proxy=config.proxy,
         )
 
     def _payload(
@@ -86,6 +104,7 @@ class OpenAICompatProvider(ModelProvider):
         tool_calls = message.get("tool_calls") or []
         tool_requests = [
             {
+                "id": call.get("id"),
                 "name": call.get("function", {}).get("name", ""),
                 "arguments": _parse_arguments(call.get("function", {}).get("arguments")),
             }
@@ -98,6 +117,11 @@ class OpenAICompatProvider(ModelProvider):
             usage=dict(data.get("usage") or {}),
         )
 
+    def capabilities(self) -> ProviderCapabilities:
+        """Chat completions supports function calling; streaming and
+        structured-output APIs are not wired yet."""
+        return ProviderCapabilities(tool_use=True)
+
     async def health_check(self) -> bool:
         """GET /models as a cheap availability probe."""
         try:
@@ -107,8 +131,9 @@ class OpenAICompatProvider(ModelProvider):
             return False
 
     async def aclose(self) -> None:
-        """Release the underlying HTTP connection pool."""
-        await self._client.aclose()
+        """Release the underlying HTTP connection pool when we own it."""
+        if self._owns_client:
+            await self._client.aclose()
 
 
 def _parse_arguments(raw: Any) -> dict[str, Any]:

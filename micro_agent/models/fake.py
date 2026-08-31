@@ -8,7 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from micro_agent.models.model import ModelConfig, ModelProvider, ModelResponse
+from micro_agent.models.model import (
+    ModelConfig,
+    ModelProvider,
+    ModelResponse,
+    ProviderCapabilities,
+)
 
 
 @dataclass
@@ -63,6 +68,10 @@ class FakeModelProvider(ModelProvider):
             finish_reason="stop",
             usage=dict(self._config.usage),
         )
+
+    def capabilities(self) -> ProviderCapabilities:
+        """The deterministic provider exercises tool calling in tests."""
+        return ProviderCapabilities(tool_use=True)
 
     async def health_check(self) -> bool:
         """Always healthy."""

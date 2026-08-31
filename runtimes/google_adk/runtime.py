@@ -240,6 +240,20 @@ class GoogleAdkRuntime(AgentRuntime):
 
         definition: MicroAgentDefinition = agent._internal["definition"]
 
+        # Capability negotiation: declaring tools against a provider that
+        # cannot call them must fail at startup, not silently drop them.
+        # The native Google model path handles tools inside ADK.
+        declared_tools = definition.spec.dependencies.tools
+        if (
+            declared_tools
+            and self._model_provider is not None
+            and not self._model_provider.capabilities().tool_use
+        ):
+            raise RuntimeError(
+                "model provider does not support tool use; "
+                f"{len(declared_tools)} declared tools cannot be offered"
+            )
+
         # Deterministic platform policy: denied MCP servers, skills, or models
         # fail startup instead of surfacing as per-call denials later.
         if self._policy_evaluator is not None:

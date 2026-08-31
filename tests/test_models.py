@@ -104,3 +104,141 @@ class TestFakeModelProvider:
         response = await provider.generate(config, [{"role": "user", "content": "hi"}])
         assert response.usage["prompt_tokens"] == 100
         assert response.usage["completion_tokens"] == 50
+
+
+class TestOpenAICompatProvider:
+    """Wire-contract behavior of the OpenAI-compatible provider."""
+
+    def _provider(self, client) -> object:
+        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
+
+        return OpenAICompatProvider(
+            OpenAICompatConfig(
+                endpoint="https://llm.example.test/v1",
+                model_id="test-model",
+                http_client=client,
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_tool_call_ids_are_preserved_from_the_wire(self):
+        import json as jsonlib
+
+        import httpx
+
+        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
+
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["payload"] = jsonlib.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "finish_reason": "tool_calls",
+                            "message": {
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call_wire_1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "echo",
+                                            "arguments": '{"message": "hi"}',
+                                        },
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                    "usage": {"total_tokens": 9},
+                },
+            )
+
+        client = httpx.AsyncClient(
+            base_url="https://llm.example.test/v1", transport=httpx.MockTransport(handler)
+        )
+        provider = OpenAICompatProvider(
+            OpenAICompatConfig(
+                endpoint="https://llm.example.test/v1",
+                model_id="test-model",
+                http_client=client,
+            )
+        )
+        response = await provider.generate(
+            _model_config(),
+            messages=[],
+            tools=[
+                {
+                    "name": "echo",
+                    "description": "Echo",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {"message": {"type": "string"}},
+                        "required": ["message"],
+                    },
+                }
+            ],
+        )
+        await provider.aclose()
+        assert response.tool_requests[0]["id"] == "call_wire_1"
+        assert response.tool_requests[0]["name"] == "echo"
+        assert response.tool_requests[0]["arguments"] == {"message": "hi"}
+        # The provider sends the standard function-tool shape.
+        assert captured["payload"]["tools"][0]["type"] == "function"
+
+    @pytest.mark.asyncio
+    async def test_injected_client_is_used_and_not_closed(self):
+        import httpx
+
+        client = httpx.AsyncClient(
+            base_url="https://llm.example.test/v1",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"choices": []})
+            ),
+        )
+        provider = self._provider(client)
+        await provider.generate(_model_config(), messages=[])
+        await provider.aclose()
+        # The injected client stays usable — the provider does not own it.
+        assert not client.is_closed
+        await client.aclose()
+
+    def test_capabilities_report_tool_use(self):
+        import httpx
+
+        provider = self._provider(
+            httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda request: httpx.Response(200, json={}))
+            )
+        )
+        assert provider.capabilities().tool_use is True
+        assert provider.capabilities().streaming is False
+
+    def test_tls_and_proxy_options_reach_the_built_client(self):
+        import ssl
+
+        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
+
+        provider = OpenAICompatProvider(
+            OpenAICompatConfig(
+                endpoint="https://llm.example.test/v1",
+                model_id="test-model",
+                verify_tls=False,
+                proxy="http://proxy.example.test:3128",
+            )
+        )
+        try:
+            assert provider._client._transport._pool._ssl_context.verify_mode == ssl.CERT_NONE
+        finally:
+            import asyncio
+
+            asyncio.run(provider.aclose())
+
+
+def _model_config():
+    from micro_agent.models import ModelConfig
+
+    return ModelConfig(ref="test-model", model_id="test-model")

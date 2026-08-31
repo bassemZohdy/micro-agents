@@ -576,3 +576,180 @@ class TestOpenAICompatProvider:
 def _definition_model_config():
 
     return ModelConfig(ref="fake-model", model_id=None, generation={})
+
+
+class TestToolCallTranscript:
+    """Provider tool-call IDs and payloads survive in the conversation."""
+
+    def _provider(self):
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+
+        class OneShotProvider(FakeModelProvider):
+            async def generate(self, config, messages, tools=None):
+                if len(self.invocations) >= 1:
+                    self._config.tool_requests = []
+                else:
+                    self._config.tool_requests = [
+                        {
+                            "id": "call_wire_9",
+                            "name": "echo",
+                            "arguments": {"message": "transcript"},
+                        }
+                    ]
+                return await super().generate(config, messages, tools=tools)
+
+        return OneShotProvider(FakeModelConfig(response="done"))
+
+    @pytest.mark.asyncio
+    async def test_assistant_tool_calls_and_tool_call_id_in_history(self):
+        from micro_agent.core import AgentRequest, DefaultMicroAgent
+        from micro_agent.definition import load_definition_from_dict
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "transcript-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test."},
+                    "dependencies": {
+                        "model": {"ref": "fake-model", "provider": "fake"},
+                        "tools": [{"name": "echo", "source": "native"}],
+                    },
+                },
+            }
+        )
+        provider = self._provider()
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = DefaultMicroAgent(definition, runtime)
+        try:
+            await agent.initialize()
+            await agent.start()
+            response = await agent.invoke(AgentRequest(input={}))
+            assert response.status == "success"
+            history = provider.invocations[1]["messages"]
+            assistant = next(m for m in history if m.get("tool_calls"))
+            call = assistant["tool_calls"][0]
+            assert call["id"] == "call_wire_9"
+            assert call["type"] == "function"
+            assert call["function"]["name"] == "echo"
+            tool_message = next(m for m in history if m.get("role") == "tool")
+            assert tool_message["tool_call_id"] == "call_wire_9"
+        finally:
+            await agent.stop()
+            await agent.shutdown()
+            await runtime.close()
+
+    @pytest.mark.asyncio
+    async def test_requests_without_ids_get_generated_ones(self):
+        from micro_agent.core import AgentRequest, DefaultMicroAgent
+        from micro_agent.definition import load_definition_from_dict
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        class NoIdProvider(FakeModelProvider):
+            async def generate(self, config, messages, tools=None):
+                if len(self.invocations) >= 1:
+                    self._config.tool_requests = []
+                else:
+                    self._config.tool_requests = [{"name": "echo", "arguments": {"message": "hi"}}]
+                return await super().generate(config, messages, tools=tools)
+
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "noid-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test."},
+                    "dependencies": {
+                        "model": {"ref": "fake-model", "provider": "fake"},
+                        "tools": [{"name": "echo", "source": "native"}],
+                    },
+                },
+            }
+        )
+        provider = NoIdProvider(FakeModelConfig(response="done"))
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = DefaultMicroAgent(definition, runtime)
+        try:
+            await agent.initialize()
+            await agent.start()
+            response = await agent.invoke(AgentRequest(input={}))
+            tool_result = response.output["tool_results"][0]
+            assert tool_result["tool_call_id"]
+            history = provider.invocations[1]["messages"]
+            tool_message = next(m for m in history if m.get("role") == "tool")
+            assert tool_message["tool_call_id"] == tool_result["tool_call_id"]
+            assert tool_result["tool_call_id"].startswith("call_")
+        finally:
+            await agent.stop()
+            await agent.shutdown()
+            await runtime.close()
+
+    @pytest.mark.asyncio
+    async def test_schema_invalid_arguments_are_rejected_before_execution(self):
+        from micro_agent.core import AgentRequest, DefaultMicroAgent
+        from micro_agent.definition import load_definition_from_dict
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from micro_agent.tools import EchoTool
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        class InvalidArgsProvider(FakeModelProvider):
+            async def generate(self, config, messages, tools=None):
+                if len(self.invocations) >= 1:
+                    self._config.tool_requests = []
+                else:
+                    self._config.tool_requests = [{"name": "echo", "arguments": {"wrong": 1}}]
+                return await super().generate(config, messages, tools=tools)
+
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "val-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test."},
+                    "dependencies": {
+                        "model": {"ref": "fake-model", "provider": "fake"},
+                        "tools": [{"name": "echo", "source": "native"}],
+                    },
+                },
+            }
+        )
+        executed: list[int] = []
+
+        class SpyEchoTool(EchoTool):
+            async def execute(self, arguments):
+                executed.append(1)
+                return await super().execute(arguments)
+
+        provider = InvalidArgsProvider(FakeModelConfig(response="done"))
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(model_provider=provider, tool_registry={"echo": SpyEchoTool()})
+        )
+        agent = DefaultMicroAgent(definition, runtime)
+        try:
+            await agent.initialize()
+            await agent.start()
+            response = await agent.invoke(AgentRequest(input={}))
+            tool_result = response.output["tool_results"][0]
+            assert tool_result["error"].startswith("invalid tool arguments")
+            assert "message" in tool_result["error"]
+            assert executed == []
+        finally:
+            await agent.stop()
+            await agent.shutdown()
+            await runtime.close()
+
+    @pytest.mark.asyncio
+    async def test_provider_without_tool_use_fails_startup_when_tools_declared(self):
+        from micro_agent.models import (
+            FakeModelProvider,
+            ProviderCapabilities,
+        )
+
+        class NoToolUseProvider(FakeModelProvider):
+            def capabilities(self) -> ProviderCapabilities:
+                return ProviderCapabilities(tool_use=False)

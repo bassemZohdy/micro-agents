@@ -6,6 +6,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Corrected the model tool-call protocol: provider tool-call IDs are
+  preserved end-to-end, the assistant `tool_calls` payload stays in the
+  conversation history (with generated ids for requests that lack one), and
+  tool results carry the required `tool_call_id`. Tool requests are
+  validated against the declared JSON Schema (required properties, basic
+  types) and rejected back to the model without executing the tool. The
+  OpenAI-compatible provider supports explicit proxy and TLS-verification
+  configuration plus injectable HTTP clients, and providers now report
+  `ProviderCapabilities` — declaring tools against a provider without tool
+  use fails at startup.
 - Added the official MCP SDK wire client behind the existing `McpClient`
   SPI: the executable bootstrap now constructs real SDK-backed connections
   for declared MCP servers against the stable `2025-11-25` specification

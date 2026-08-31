@@ -261,6 +261,15 @@ class AdkRuntime(AgentRuntime):
                 if not source_available:
                     raise RuntimeError(f"knowledge source '{source.ref}' is not available")
 
+        # Capability negotiation: declaring tools against a provider that
+        # cannot call them must fail at startup, not silently drop them.
+        declared_tools = definition.spec.dependencies.tools
+        if declared_tools and not self._model_provider.capabilities().tool_use:
+            raise RuntimeError(
+                "model provider does not support tool use; "
+                f"{len(declared_tools)} declared tools cannot be offered"
+            )
+
         # Deterministic platform policy: denied MCP servers, skills, or models
         # fail startup instead of surfacing as per-call denials later.
         if self._policy_evaluator is not None:
@@ -648,7 +657,26 @@ class AdkRuntime(AgentRuntime):
             usage = {k: usage.get(k, 0) + v for k, v in response.usage.items()}
             self._telemetry.record("model_tokens_total", sum(response.usage.values()), labels)
 
-            messages.append({"role": "assistant", "content": response.content})
+            assistant_message: dict[str, Any] = {"role": "assistant", "content": response.content}
+            if response.tool_requests:
+                # The assistant tool_calls payload must stay in the history —
+                # providers require it to pair the following tool results.
+                assistant_message["tool_calls"] = [
+                    {
+                        "id": str(request.get("id") or _new_call_id()),
+                        "type": "function",
+                        "function": {
+                            "name": str(request.get("name", "")),
+                            "arguments": json.dumps(request.get("arguments") or {}, default=str),
+                        },
+                    }
+                    for request in response.tool_requests
+                ]
+                for call, tool_request in zip(
+                    assistant_message["tool_calls"], response.tool_requests, strict=True
+                ):
+                    tool_request["id"] = call["id"]
+            messages.append(assistant_message)
 
             if not response.tool_requests:
                 break
@@ -690,6 +718,7 @@ class AdkRuntime(AgentRuntime):
                 messages.append(
                     {
                         "role": "tool",
+                        "tool_call_id": result.get("tool_call_id"),
                         "name": result["tool"],
                         "content": json.dumps(result["error"] or result["output"], default=str),
                     }
@@ -827,13 +856,29 @@ class AdkRuntime(AgentRuntime):
         results: list[dict[str, Any]] = []
         for tool_request in tool_requests:
             tool_name = tool_request.get("name", "")
+            tool_call_id = tool_request.get("id")
             tool = tools.get(tool_name)
             if tool is None:
                 results.append(
                     {
                         "tool": tool_name,
+                        "tool_call_id": tool_call_id,
                         "output": None,
                         "error": f"unknown tool: {tool_name}",
+                        "latency_ms": 0.0,
+                    }
+                )
+                continue
+
+            arguments = tool_request.get("arguments", {})
+            validation_error = _validate_tool_arguments(tool, arguments)
+            if validation_error is not None:
+                results.append(
+                    {
+                        "tool": tool_name,
+                        "tool_call_id": tool_call_id,
+                        "output": None,
+                        "error": f"invalid tool arguments: {validation_error}",
                         "latency_ms": 0.0,
                     }
                 )
@@ -848,6 +893,7 @@ class AdkRuntime(AgentRuntime):
                     results.append(
                         {
                             "tool": tool_name,
+                            "tool_call_id": tool_call_id,
                             "output": None,
                             "error": f"denied by policy: {tool_decision.reason}",
                             "latency_ms": 0.0,
@@ -869,6 +915,7 @@ class AdkRuntime(AgentRuntime):
                     results.append(
                         {
                             "tool": tool_name,
+                            "tool_call_id": tool_call_id,
                             "output": None,
                             "error": (
                                 f"denied by side-effect policy: {side_effect_decision.reason}"
@@ -880,7 +927,6 @@ class AdkRuntime(AgentRuntime):
                     continue
 
             # Idempotency/deduplication for side-effect operations.
-            arguments = tool_request.get("arguments", {})
             registry = self._config.operation_registry
             operation = None
             if registry is not None:
@@ -890,6 +936,7 @@ class AdkRuntime(AgentRuntime):
                     results.append(
                         {
                             "tool": tool_name,
+                            "tool_call_id": tool_call_id,
                             "output": prior.output if prior else None,
                             "error": None,
                             "latency_ms": 0.0,
@@ -945,12 +992,50 @@ class AdkRuntime(AgentRuntime):
             results.append(
                 {
                     "tool": tool_name,
+                    "tool_call_id": tool_call_id,
                     "output": output,
                     "error": error,
                     "latency_ms": tool_latency,
                 }
             )
         return results
+
+
+_ARGUMENT_TYPE_CHECKS = {
+    "string": lambda value: isinstance(value, str),
+    "integer": lambda value: isinstance(value, int) and not isinstance(value, bool),
+    "number": lambda value: isinstance(value, (int, float)) and not isinstance(value, bool),
+    "boolean": lambda value: isinstance(value, bool),
+    "array": lambda value: isinstance(value, list),
+    "object": lambda value: isinstance(value, dict),
+    "null": lambda value: value is None,
+}
+
+
+def _new_call_id() -> str:
+    """A provider-shaped call id for requests that arrive without one."""
+    return f"call_{uuid4().hex[:24]}"
+
+
+def _validate_tool_arguments(tool: Tool, arguments: Any) -> str | None:
+    """Validate a tool request against the declared JSON Schema contract.
+
+    Checks the argument envelope, required properties, and basic property
+    types; detailed schema validation stays with the tool implementation.
+    """
+    if not isinstance(arguments, dict):
+        return "arguments must be a JSON object"
+    schema = tool.input_schema.parameters or {}
+    for name in schema.get("required") or []:
+        if name not in arguments:
+            return f"missing required argument '{name}'"
+    properties = schema.get("properties") or {}
+    for name, value in arguments.items():
+        expected = (properties.get(name) or {}).get("type")
+        check = _ARGUMENT_TYPE_CHECKS.get(str(expected))
+        if check is not None and not check(value):
+            return f"argument '{name}' must be of type {expected}"
+    return None
 
 
 def _new_operation(tool_name: str, arguments: dict[str, Any]) -> Operation:
