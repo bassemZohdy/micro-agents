@@ -209,7 +209,11 @@ Implemented:
 Gaps:
 
 - the Google ADK adapter still converts `approval_required` into a denial;
-  its continuation should map onto ADK's native tool confirmation
+  mapping continuation onto ADK's native tool confirmation was probed and is
+  non-trivial: the pinned ADK marks the feature experimental, its runner
+  continues after a tool requests confirmation (only the tool is gated), and
+  a synthetic confirmation function response does not re-execute the original
+  tool without deeper integration into the experimental protocol
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; propagation currently makes the verified principal
   observable to operations, and per-protocol delegation arrives with the
