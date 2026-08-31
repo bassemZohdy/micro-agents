@@ -212,7 +212,7 @@
     },
     "McpServerRef": {
       "additionalProperties": false,
-      "description": "Reference to an MCP server.",
+      "description": "Reference to an MCP server.\n\nHTTP-based transports (``streamable-http``, legacy ``sse``) are modeled by\nan endpoint URL; the ``stdio`` transport is modeled separately by a local\ncommand and its arguments, never an endpoint.",
       "properties": {
         "ref": {
           "description": "MCP server reference identifier.",
@@ -248,6 +248,30 @@
           "default": null,
           "description": "MCP server endpoint URL.",
           "title": "Endpoint"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Executable command for the stdio transport.",
+          "title": "Command"
+        },
+        "args": {
+          "description": "Arguments for the stdio command.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Args",
+          "type": "array"
         },
         "credential_ref": {
           "anyOf": [

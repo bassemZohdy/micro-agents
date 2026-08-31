@@ -189,7 +189,12 @@ class ToolDefinition(BaseModel, extra="forbid"):
 
 
 class McpServerRef(BaseModel, extra="forbid"):
-    """Reference to an MCP server."""
+    """Reference to an MCP server.
+
+    HTTP-based transports (``streamable-http``, legacy ``sse``) are modeled by
+    an endpoint URL; the ``stdio`` transport is modeled separately by a local
+    command and its arguments, never an endpoint.
+    """
 
     ref: str = Field(
         ...,
@@ -204,6 +209,17 @@ class McpServerRef(BaseModel, extra="forbid"):
         description="Transport type (stdio, sse, streamable-http).",
     )
     endpoint: str | None = Field(None, description="MCP server endpoint URL.")
+    command: str | None = Field(
+        None,
+        min_length=1,
+        max_length=256,
+        description="Executable command for the stdio transport.",
+    )
+    args: list[str] = Field(
+        default_factory=list,
+        max_length=32,
+        description="Arguments for the stdio command.",
+    )
     credential_ref: str | None = Field(None, description="Reference to external credential.")
     allowed_capabilities: list[str] = Field(
         default_factory=list, description="Allowed MCP capabilities."
@@ -217,12 +233,27 @@ class McpServerRef(BaseModel, extra="forbid"):
             return _validate_url(value, "MCP endpoint")
         return value
 
+    @field_validator("command")
+    @classmethod
+    def validate_command(cls, value: str | None) -> str | None:
+        if value is not None and (value != value.strip() or not value):
+            raise ValueError("MCP stdio command must not be empty or padded")
+        return value
+
     @model_validator(mode="after")
     def validate_transport_binding(self) -> McpServerRef:
-        if self.transport in {"sse", "streamable-http"} and self.endpoint is None:
-            raise ValueError(f"MCP endpoint is required for {self.transport} transport")
-        if self.transport == "stdio" and self.endpoint is not None:
-            raise ValueError("MCP endpoint must be omitted for stdio transport")
+        if self.transport in {"sse", "streamable-http"}:
+            if self.endpoint is None:
+                raise ValueError(f"MCP endpoint is required for {self.transport} transport")
+            if self.command is not None or self.args:
+                raise ValueError(f"MCP command/args must be omitted for {self.transport} transport")
+        if self.transport == "stdio":
+            if self.endpoint is not None:
+                raise ValueError("MCP endpoint must be omitted for stdio transport")
+            if self.command is None:
+                raise ValueError("MCP command is required for stdio transport")
+        if self.transport is None and (self.command is not None or self.args):
+            raise ValueError("MCP command/args require an explicit 'stdio' transport")
         return self
 
     @field_validator("credential_ref")

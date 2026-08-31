@@ -119,17 +119,21 @@ non-streaming task without project-specific adapters.
 
 ### P1.2 MCP stable-wire client
 
-- [ ] Integrate the official MCP Python SDK against stable specification
-      `2025-11-25`.
-- [ ] Support standard stdio and Streamable HTTP configuration; model stdio
-      command/arguments separately from HTTP endpoints.
-- [ ] Treat legacy SSE compatibility explicitly rather than as a peer stable
-      transport.
-- [ ] Implement initialization, version/capability negotiation, cancellation,
-      timeouts, reconnect behavior, notifications, and graceful close.
-- [ ] Apply allowlists, TLS, SSRF defenses, redirect policy, credential
+- [x] Integrate the official MCP Python SDK against stable specification
+      `2025-11-25` (`mcp` 1.26, optional extra) behind the existing
+      `McpClient` SPI, selected by the executable bootstrap.
+- [x] Support standard stdio and Streamable HTTP configuration; stdio models
+      command/arguments separately from HTTP endpoints in the definition.
+- [x] Treat legacy SSE compatibility explicitly rather than as a peer stable
+      transport (supported for migration, documented as legacy).
+- [x] Implement initialization, version/capability negotiation, per-call and
+      connect timeouts, and graceful close through the SDK session;
+      notifications are consumed by the SDK session.
+- [x] Apply allowlists, TLS, SSRF defenses, redirect policy, credential
       injection, response limits, and redaction to the real client.
-- [ ] Add official-SDK interoperability tests with a real MCP server.
+- [x] Add official-SDK interoperability tests with a real MCP server over
+      stdio and Streamable HTTP.
+- [ ] Add automatic reconnect behavior for dropped server connections.
 
 Acceptance: a YAML-only MCP declaration discovers and invokes a real SDK-backed
 server through the executable bootstrap.

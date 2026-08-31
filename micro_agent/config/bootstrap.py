@@ -389,18 +389,24 @@ def _build_mcp_manager(
 ) -> McpConnectionManager | None:
     """Construct the MCP client for declared servers; an injected manager wins.
 
-    The constructed manager applies the built-in MCP security policy and
+    The constructed manager applies the built-in MCP security policy,
     resolves declared MCP credentials through the configured credential
-    provider. It has no wire-protocol client factory, so connecting fails at
-    startup until a deployment supplies one (the official SDK integration is
-    tracked separately). Failing non-ready is deliberate: silently skipping
-    declared MCP servers would understate the agent's real capabilities.
+    provider, and uses the official MCP SDK wire client when the optional
+    ``mcp`` extra is installed; without it, connections fail at startup with
+    a clear installation message. Failing non-ready is deliberate: silently
+    skipping declared MCP servers would understate the agent's real
+    capabilities.
     """
     if not definition.spec.dependencies.mcp_servers:
         return None
     if injected is not None:
         return injected
-    return McpConnectionManager(credential_resolver=credential_provider.resolve)
+    from micro_agent.mcp.sdk_client import sdk_available, sdk_client_factory
+
+    factory = sdk_client_factory() if sdk_available() else None
+    return McpConnectionManager(
+        client_factory=factory, credential_resolver=credential_provider.resolve
+    )
 
 
 def _build_knowledge_provider(

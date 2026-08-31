@@ -6,6 +6,20 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added the official MCP SDK wire client behind the existing `McpClient`
+  SPI: the executable bootstrap now constructs real SDK-backed connections
+  for declared MCP servers against the stable `2025-11-25` specification
+  (optional `mcp` extra; without it, startup fails with a clear install
+  message). Streamable HTTP and stdio are the standard transports — stdio
+  now models a local `command` and `args` in the definition instead of an
+  endpoint — and SSE is supported explicitly as a legacy compatibility
+  transport. Connections negotiate version/capabilities at initialization,
+  bound per-call and connect timeouts, inject credentials at connect time
+  (Authorization header for HTTP, credential-named environment variable for
+  stdio) without storing them on config objects, and close gracefully. A
+  YAML-only MCP declaration now discovers and invokes a real MCP server
+  through the executable bootstrap, proven by interop tests over stdio and
+  Streamable HTTP with FastMCP servers.
 - Added verified identity propagation: the runtime binds caller and user
   identity into an invocation-scoped context (contextvar-based) so model,
   tool, and MCP operations observe the verified principal without SPI

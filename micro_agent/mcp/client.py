@@ -55,11 +55,20 @@ class McpSecurityPolicy:
     max_response_bytes: int = 1_048_576
 
     def validate(self, config: McpConfig) -> None:
-        """Validate a server config; raises McpSecurityError on violation."""
+        """Validate a server config; raises McpSecurityError on violation.
+
+        stdio servers are local commands validated by the command presence;
+        HTTP-based servers are validated by endpoint scheme (TLS required
+        outside localhost) and the optional origin allowlist.
+        """
         if config.transport is not None and config.transport not in _SUPPORTED_TRANSPORTS:
             raise McpSecurityError(
                 f"mcp '{config.ref}': unsupported transport '{config.transport}'"
             )
+        if config.transport == "stdio" or (config.transport is None and config.endpoint is None):
+            if not config.command:
+                raise McpSecurityError(f"mcp '{config.ref}': stdio command is required")
+            return
         if not config.endpoint:
             raise McpSecurityError(f"mcp '{config.ref}': endpoint is required")
         parts = urlsplit(config.endpoint)
@@ -213,6 +222,8 @@ def config_from_definition(ref: McpServerRef, credential: str | None = None) -> 
         ref=ref.ref,
         transport=ref.transport,
         endpoint=ref.endpoint,
+        command=ref.command,
+        args=list(ref.args),
         credential_ref=ref.credential_ref,
         allowed_capabilities=list(ref.allowed_capabilities),
         timeout_seconds=ref.timeout_seconds,
@@ -258,9 +269,9 @@ class McpConnectionManager:
     def _default_client(self, config: McpConfig) -> McpClient:
         if self._client_factory is None:
             raise McpSecurityError(
-                "no MCP client factory configured; supply one that speaks the "
-                "MCP wire protocol (e.g. the official SDK) for server "
-                f"'{config.ref}'"
+                "no MCP client factory configured; install the official SDK "
+                "extra ('micro-agents[mcp]') or supply a client factory that "
+                f"speaks the MCP wire protocol for server '{config.ref}'"
             )
         return self._client_factory(config)
 

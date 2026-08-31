@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 458 collected | 389 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, and propagation tests); the remaining 69 run in the integration/e2e jobs |
+| Tests | 466 collected | 397 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, propagation, and MCP SDK interop tests); the remaining 69 run in the integration/e2e jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -102,6 +102,9 @@ Implemented:
   adapter through `MICRO_AGENT_RUNTIME`; ADK declarations that still cannot
   be mapped (external session state, model credential references) fail fast
   rather than being silently ignored
+- declared MCP servers connect through the official SDK wire client at
+  startup when the `mcp` extra is installed; without it, startup fails with
+  an installation message instead of silently ignoring the declarations
 
 Current custom-runtime capability matrix:
 
@@ -148,14 +151,20 @@ Implemented:
 - discovered tool adapter and manager health state
 - declared credentials resolve through the configured credential provider at
   connect time and are passed separately from config objects
+- official MCP SDK wire client (stable `2025-11-25`, optional `mcp` extra)
+  selected by the bootstrap: initialization and version/capability
+  negotiation, tool/resource/prompt discovery, tool invocation with per-call
+  timeouts, graceful close; stdio models local command/args, Streamable HTTP
+  is the standard transport, SSE is legacy compatibility only; interop tests
+  run real FastMCP servers over stdio and Streamable HTTP
 
 Gaps:
 
-- no MCP wire-protocol client or SDK dependency
-- no version/capability negotiation or real transport lifecycle
-- stdio configuration cannot express command/arguments and is incorrectly
-  subjected to an HTTP endpoint requirement
-- tests prove fake-client wiring, not MCP interoperability
+- no automatic reconnect for dropped server connections; reconnection
+  currently requires a runtime restart
+- notifications are consumed by the SDK session but not surfaced as events
+- tests exercise loopback HTTP and local stdio servers, not remote
+  production deployments
 
 ### A2A
 

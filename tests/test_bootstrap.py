@@ -401,6 +401,45 @@ def test_declared_mcp_servers_construct_connection_manager(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mcp_manager_without_wire_client_fails_startup_non_ready(monkeypatch):
+    from micro_agent.mcp import McpConnectionManager
+
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "mcp_servers": [
+                        {
+                            "ref": "profile-services",
+                            "transport": "streamable-http",
+                            "endpoint": "https://mcp.profile.example.test",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+    # An injected factory-less manager isolates the no-wire-client path from
+    # the installed SDK; a deployment that removes the mcp extra gets this
+    # same clear startup failure from the bootstrap-constructed manager.
+    bootstrap = build_runtime(definition, mcp_manager=McpConnectionManager())
+    agent = DefaultMicroAgent(definition, bootstrap.runtime)
+    try:
+        await agent.initialize()
+        with pytest.raises(Exception, match="MCP client factory"):
+            await agent.start()
+    finally:
+        await agent.shutdown()
+        await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_constructs_sdk_backed_mcp_manager():
+
     definition = load_definition_from_dict(
         {
             "apiVersion": "microagents.io/v1alpha1",
@@ -422,13 +461,16 @@ async def test_mcp_manager_without_wire_client_fails_startup_non_ready(monkeypat
         }
     )
     bootstrap = build_runtime(definition)
-    agent = DefaultMicroAgent(definition, bootstrap.runtime)
     try:
+        manager = bootstrap.runtime._config.mcp_manager
+        assert manager is not None
+        # The manager connects real SDK clients; the endpoint above is a
+        # placeholder, so startup must still fail non-ready, not hang.
+        agent = DefaultMicroAgent(definition, bootstrap.runtime)
         await agent.initialize()
-        with pytest.raises(Exception, match="MCP client factory"):
+        with pytest.raises(Exception):  # noqa: B017 - unreachable server
             await agent.start()
     finally:
-        await agent.shutdown()
         await bootstrap.runtime.close()
 
 

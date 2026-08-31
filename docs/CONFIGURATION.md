@@ -125,6 +125,37 @@ execute; hard policy denials still apply) or `deny` (the model receives the
 denial and can respond). Continuations expire after five minutes of
 inactivity; unknown or expired ids fail with a stable 404.
 
+## MCP servers
+
+Declared MCP servers connect through the official MCP SDK (stable
+`2025-11-25`) when the optional `mcp` extra is installed
+(`pip install 'micro-agents[mcp]'`); without it, startup fails with an
+installation message rather than ignoring the declarations. Streamable HTTP
+and stdio are the standard transports; `sse` exists for legacy migration
+only.
+
+```yaml
+spec:
+  dependencies:
+    mcp_servers:
+      - ref: profile-services
+        transport: streamable-http
+        endpoint: https://mcp.internal.example.com
+        credential_ref: MCP_TOKEN
+        timeout_seconds: 15
+      - ref: local-tools
+        transport: stdio
+        command: python
+        args: ["-m", "tools.mcp_server"]
+```
+
+stdio servers are modeled by a local `command` and `args` (never an
+endpoint); HTTP-based servers require an https endpoint unless they are on
+loopback. Declared `credential_ref` values resolve through the configured
+credential provider at connect time — an Authorization header for HTTP
+servers, and an environment variable named after the reference for stdio
+child processes — and are never stored on config objects or logs.
+
 ## Workload identity
 
 The runtime resolves its own workload identity once per process for audit

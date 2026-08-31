@@ -16,11 +16,18 @@ from typing import Any
 
 @dataclass
 class McpConfig:
-    """MCP server configuration from definition."""
+    """MCP server configuration from definition.
+
+    HTTP-based transports carry an ``endpoint``; the ``stdio`` transport
+    carries a local ``command`` and ``args`` instead. Credentials never live
+    on the config — they resolve separately at connect time.
+    """
 
     ref: str
     transport: str | None = None
     endpoint: str | None = None
+    command: str | None = None
+    args: list[str] = field(default_factory=list)
     credential_ref: str | None = None
     allowed_capabilities: list[str] = field(default_factory=list)
     timeout_seconds: int | None = None
