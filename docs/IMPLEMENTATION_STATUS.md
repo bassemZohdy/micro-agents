@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 412 collected | 398 default tests plus fourteen optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 435 collected | 370 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication tests); the remaining 65 run in the integration/e2e jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -179,6 +179,14 @@ Gaps:
 Implemented:
 
 - separate agent/caller/user/workload identity types
+- transport authentication middleware behind an `Authenticator` SPI selected
+  through `MICRO_AGENT_AUTH`; OIDC/OAuth2 Bearer JWT validation implemented
+  first (JWKS signatures, issuer/audience/expiry, standard-claim mapping to
+  caller and user/tenant identity), mapped to the stable 401 contract, with
+  health/discovery routes public and fail-fast app creation when the
+  definition requires caller identity without an authenticator
+- verified identity travels on `AgentRequest`; caller-supplied request
+  metadata is never used as identity, enforced by a source-level guard test
 - programmatically injected allow/deny evaluator
 - in-memory operation registry
 - recursive log-key/known-value redaction
@@ -187,14 +195,11 @@ Implemented:
   through the configured credential provider before runtime creation
 - skill and model-restriction enforcement alongside tool and MCP policy;
   denied declared skills, models, or MCP servers fail startup
-- caller-supplied request metadata is never used as identity; a source-level
-  guard test enforces the boundary
 
 Gaps:
 
-- no HTTP authentication or verified caller context; identity types exist but
-  a transport authenticator must populate them before any caller identity is
-  verified
+- verified identity is not yet propagated through model, tool, and MCP
+  operation signatures, and workload identity is not yet populated
 - generic `PolicyRule` conditions are not evaluated
 - approval-required behavior becomes denial with no continuation
 - idempotency storage is process-local and non-atomic
@@ -230,15 +235,17 @@ Implemented:
 - request/definition deadline exhaustion mapped to HTTP 504 with a stable
   `deadline_exceeded` code
 - authorization, dependency, and unexpected runtime failures mapped to stable
-  HTTP 403/503/500 contracts; authentication failures have a reserved 401
-  mapping for a future middleware integration
+  HTTP 403/503/500 contracts
+- authentication middleware: unauthenticated calls to `/v1/invoke` receive
+  the stable 401 `authentication_required` contract with `WWW-Authenticate:
+  Bearer` before the agent is reached; health and discovery routes stay
+  public
 - configurable `Content-Length` request-size guard (1 MiB default)
 - structured logger, in-memory metrics, and in-memory span tree
 
 Gaps:
 
-- no authentication middleware or streaming; the stable error taxonomy still
-  requires a verified caller integration for 401 responses
+- no response streaming
 - telemetry is not OpenTelemetry and does not propagate standard trace context
 
 ### Packaging, release, and deployment

@@ -26,6 +26,7 @@ from micro_agent.definition import (
 from micro_agent.interoperability import create_app, serialize_response
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
+from micro_agent.security import AuthenticatedIdentity, Authenticator, CallerIdentity
 from runtimes.adk import AdkRuntime
 
 
@@ -375,6 +376,101 @@ class TestDefaultMicroAgent:
         await first
         await agent.stop()
         await agent.shutdown()
+
+
+class _StubAuthenticator(Authenticator):
+    """Authenticator double: fixed identity or forced failure."""
+
+    def __init__(
+        self,
+        identity: AuthenticatedIdentity | None = None,
+        *,
+        fail: bool = False,
+    ) -> None:
+        self._identity = identity
+        self._fail = fail
+        self.calls = 0
+
+    async def authenticate(self, headers):
+        self.calls += 1
+        if self._fail:
+            raise AuthenticationError("invalid credentials")
+        return self._identity
+
+
+class TestHTTPAuthentication:
+    """Verified caller identity at the transport boundary."""
+
+    @pytest.mark.asyncio
+    async def test_invoke_without_credentials_returns_stable_401(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, authenticator=_StubAuthenticator(fail=True))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {"action": "test"}})
+            assert resp.status_code == 401
+            assert resp.json()["code"] == "authentication_required"
+            assert resp.headers["www-authenticate"] == "Bearer"
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_verified_identity_reaches_the_invocation(self, agent):
+        identity = AuthenticatedIdentity(
+            caller=CallerIdentity(caller_id="caller-9", caller_type="service")
+        )
+        captured: list[AgentRequest] = []
+        original_invoke = agent.invoke
+
+        async def spy_invoke(request: AgentRequest) -> AgentResponse:
+            captured.append(request)
+            return await original_invoke(request)
+
+        agent.invoke = spy_invoke  # type: ignore[method-assign]
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, authenticator=_StubAuthenticator(identity))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {"action": "test"}})
+            assert resp.status_code == 200
+            assert len(captured) == 1
+            assert captured[0].caller_identity is not None
+            assert captured[0].caller_identity.caller_id == "caller-9"
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_health_and_discovery_routes_stay_public(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, authenticator=_StubAuthenticator(fail=True))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            live = await client.get("/health/live")
+            assert live.status_code == 200
+            card = await client.get("/.well-known/agent.json")
+            assert card.status_code == 200
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_unauthenticated_access_allowed_without_authenticator(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, authenticator=None)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {"action": "test"}})
+            assert resp.status_code == 200
+        await agent.stop()
+        await agent.shutdown()
+
+    def test_identity_requirement_without_authenticator_fails_app_creation(self, agent):
+        agent.definition.spec.security.identity_requirements["require_caller_identity"] = True
+        with pytest.raises(RuntimeError, match="require_caller_identity"):
+            create_app(agent, authenticator=None)
 
 
 class TestHTTPServer:

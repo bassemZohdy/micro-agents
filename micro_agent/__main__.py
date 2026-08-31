@@ -12,7 +12,7 @@ from pathlib import Path
 
 import uvicorn
 
-from micro_agent.config import build_runtime
+from micro_agent.config import build_authenticator, build_runtime
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_file
 from micro_agent.interoperability import create_app
@@ -56,7 +56,12 @@ async def run(args: argparse.Namespace) -> None:
     for name, probe in runtime.health_probes().items():
         health_checker.add_dependency(name, probe=probe)
 
-    app = create_app(agent, health_checker, telemetry=telemetry)
+    app = create_app(
+        agent,
+        health_checker,
+        telemetry=telemetry,
+        authenticator=build_authenticator(bootstrap.resolved),
+    )
 
     config = uvicorn.Config(
         app,

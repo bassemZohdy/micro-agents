@@ -66,8 +66,14 @@ shutdown either drains within its deadline or cancels remaining work safely.
 
 ### P0.4 Enforce transport security and policy references
 
-- [ ] Add authentication middleware and validated caller/client, user/tenant,
-      and workload identity propagation.
+- [x] Add authentication middleware with validated caller and user/tenant
+      identity: an `Authenticator` SPI configured through `MICRO_AGENT_AUTH`
+      (OIDC/OAuth2 Bearer JWT implemented first as the dominant scheme),
+      stable 401 responses, public health/discovery routes, and fail-fast
+      startup when the definition requires caller identity without an
+      authenticator.
+- [ ] Propagate verified caller identity through model, tool, and MCP
+      operations and support workload identity.
 - [x] Resolve `security.policy_refs`, `credential_refs`, model credentials,
       and MCP credentials through configured providers; unresolvable
       references and unresolvable policy declarations fail before runtime
@@ -163,7 +169,7 @@ state through an external service under concurrent load.
 - [x] Map definition-contract validation errors to a stable HTTP 422 response
       contract.
 - [x] Map concurrency overload to HTTP 429 with retry guidance.
-- [ ] Add authentication middleware and map authentication failures to the
+- [x] Add authentication middleware and map authentication failures to the
       stable 401 response contract.
 - [x] Map authorization, timeout, dependency, and internal errors to stable
       response contracts without leaking exception details.

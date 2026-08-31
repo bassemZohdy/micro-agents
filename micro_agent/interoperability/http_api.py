@@ -29,6 +29,7 @@ from micro_agent.interoperability.a2a import (
     agent_card_from_definition,
 )
 from micro_agent.observability import HealthChecker, Telemetry
+from micro_agent.security.auth import AuthenticatedIdentity, Authenticator
 
 # ---------------------------------------------------------------------------
 # API Models (Pydantic for FastAPI)
@@ -136,6 +137,10 @@ ROUTES = {
 
 DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 
+# Routes that require a verified caller identity when an authenticator is
+# configured. Health probes and the A2A discovery card stay public by design.
+AUTHENTICATED_PATHS = frozenset({"/v1/invoke"})
+
 
 def serialize_response(data: Any) -> str:
     """Serialize a response to JSON, handling nested dataclasses."""
@@ -157,10 +162,25 @@ def create_app(
     telemetry: Telemetry | None = None,
     base_url: str | None = None,
     max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
+    authenticator: Authenticator | None = None,
 ) -> FastAPI:
-    """Create a FastAPI application for a Micro-Agent."""
+    """Create a FastAPI application for a Micro-Agent.
+
+    ``authenticator`` verifies caller credentials on authenticated routes;
+    when the definition demands caller identity but none is configured, app
+    creation fails instead of silently serving unverified callers.
+    """
     if max_request_bytes < 1:
         raise ValueError("max_request_bytes must be greater than zero")
+
+    identity_requirements = agent.definition.spec.security.identity_requirements
+    if identity_requirements.get("require_caller_identity") and authenticator is None:
+        raise RuntimeError(
+            "definition requires caller identity "
+            "(security.identity_requirements.require_caller_identity) but no "
+            "authenticator is configured; set MICRO_AGENT_AUTH=oidc with "
+            "MICRO_AGENT_AUTH_ISSUER and MICRO_AGENT_AUTH_AUDIENCE"
+        )
 
     app = FastAPI(
         title=agent.definition.metadata.name,
@@ -175,6 +195,38 @@ def create_app(
     )
 
     agent_card = agent_card_from_definition(agent.definition, base_url=base_url)
+
+    @app.middleware("http")
+    async def authenticate_request(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Verify caller credentials before any authenticated route runs.
+
+        Verified identity is stored on the request state and attached to the
+        invocation; unauthenticated calls fail before the agent is reached.
+        """
+        if authenticator is None or request.url.path not in AUTHENTICATED_PATHS:
+            return await call_next(request)
+        try:
+            identity: AuthenticatedIdentity = await authenticator.authenticate(request.headers)
+        except AuthenticationError:
+            telemetry.increment("http_auth_failures_total", {"route": request.url.path})
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"WWW-Authenticate": "Bearer"},
+                content={
+                    "code": "authentication_required",
+                    "message": "Authentication required",
+                },
+            )
+        request.state.identity = identity
+        telemetry.logger.info(
+            "caller authenticated",
+            route=request.url.path,
+            caller_id=identity.caller.caller_id,
+            caller_type=identity.caller.caller_type,
+        )
+        return await call_next(request)
 
     @app.middleware("http")
     async def enforce_request_size(
@@ -212,13 +264,16 @@ def create_app(
         return asdict(agent_card)
 
     @app.post("/v1/invoke", response_model=InvokeResponseModel)
-    async def invoke(request: InvokeRequestModel) -> InvokeResponseModel:
+    async def invoke(request: InvokeRequestModel, http_request: Request) -> InvokeResponseModel:
         telemetry.increment("http_requests_total", {"route": "/v1/invoke", "method": "POST"})
+        identity: AuthenticatedIdentity | None = getattr(http_request.state, "identity", None)
         agent_request = AgentRequest(
             input=request.input,
             session_id=request.session_id,
             caller_metadata=request.caller_metadata,
             timeout_seconds=request.timeout_seconds,
+            caller_identity=identity.caller if identity else None,
+            user_context=identity.user if identity else None,
         )
         if request.request_id:
             agent_request.request_id = request.request_id
@@ -226,6 +281,7 @@ def create_app(
             "invoke request",
             request_id=agent_request.request_id,
             session_id=request.session_id,
+            authenticated=identity is not None,
         )
         try:
             response = await agent.invoke(agent_request)

@@ -34,6 +34,9 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
     log_level: str | None = None
+    auth: str | None = None
+    auth_issuer: str | None = None
+    auth_audience: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -53,6 +56,9 @@ class ResolvedConfig:
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
     log_level: str = "INFO"
+    auth: str | None = None
+    auth_issuer: str | None = None
+    auth_audience: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -125,6 +131,12 @@ def resolve_config(
             config.session_endpoint = env_config.session_endpoint
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
+        if env_config.auth:
+            config.auth = env_config.auth
+        if env_config.auth_issuer:
+            config.auth_issuer = env_config.auth_issuer
+        if env_config.auth_audience:
+            config.auth_audience = env_config.auth_audience
         config.extra.update(env_config.extra)
 
     # Layer 3b: Environment variable overrides
@@ -159,6 +171,18 @@ def resolve_config(
     env_session_endpoint = _read_env("session_endpoint")
     if env_session_endpoint:
         config.session_endpoint = env_session_endpoint
+
+    env_auth = _read_env("auth")
+    if env_auth:
+        config.auth = env_auth
+
+    env_auth_issuer = _read_env("auth_issuer")
+    if env_auth_issuer:
+        config.auth_issuer = env_auth_issuer
+
+    env_auth_audience = _read_env("auth_audience")
+    if env_auth_audience:
+        config.auth_audience = env_auth_audience
 
     # Layer 4: Secret bindings
     if env_config and env_config.model_api_key_ref:
@@ -202,5 +226,32 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                 path="log_level",
             )
         )
+
+    auth_mode = (config.auth or "").strip().lower()
+    if auth_mode not in ("", "none", "oidc"):
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message=f"Invalid auth mode: {config.auth}. Supported: none, oidc",
+                path="auth",
+            )
+        )
+    if auth_mode == "oidc":
+        if not config.auth_issuer:
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error",
+                    message="MICRO_AGENT_AUTH=oidc requires MICRO_AGENT_AUTH_ISSUER",
+                    path="auth_issuer",
+                )
+            )
+        if not config.auth_audience:
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error",
+                    message="MICRO_AGENT_AUTH=oidc requires MICRO_AGENT_AUTH_AUDIENCE",
+                    path="auth_audience",
+                )
+            )
 
     return diagnostics

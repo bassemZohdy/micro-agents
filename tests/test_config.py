@@ -87,6 +87,32 @@ class TestValidateConfig:
         diagnostics = validate_config(config)
         assert any(d.level == "error" for d in diagnostics)
 
+    def test_valid_auth_modes_pass(self):
+        assert not any(d.level == "error" for d in validate_config(ResolvedConfig(auth="none")))
+        oidc = validate_config(
+            ResolvedConfig(auth="oidc", auth_issuer="https://idp", auth_audience="api")
+        )
+        assert not any(d.level == "error" for d in oidc)
+
+    def test_unknown_auth_mode_errors(self):
+        diagnostics = validate_config(ResolvedConfig(auth="saml"))
+        assert any(d.level == "error" and "auth" in d.path for d in diagnostics)
+
+    def test_oidc_requires_issuer_and_audience(self):
+        missing_issuer = validate_config(ResolvedConfig(auth="oidc", auth_audience="api"))
+        assert any("ISSUER" in d.message for d in missing_issuer)
+        missing_audience = validate_config(ResolvedConfig(auth="oidc", auth_issuer="https://i"))
+        assert any("AUDIENCE" in d.message for d in missing_audience)
+
+    def test_environment_auth_overrides(self, monkeypatch):
+        monkeypatch.setenv("MICRO_AGENT_AUTH", "oidc")
+        monkeypatch.setenv("MICRO_AGENT_AUTH_ISSUER", "https://idp.example.test")
+        monkeypatch.setenv("MICRO_AGENT_AUTH_AUDIENCE", "micro-agent-api")
+        config = resolve_config()
+        assert config.auth == "oidc"
+        assert config.auth_issuer == "https://idp.example.test"
+        assert config.auth_audience == "micro-agent-api"
+
 
 class TestSecretRef:
     """Test secret reference model."""

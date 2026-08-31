@@ -1,6 +1,11 @@
 """Micro-Agent Configuration Framework."""
 
-from micro_agent.config.bootstrap import BootstrapError, RuntimeBootstrap, build_runtime
+from micro_agent.config.bootstrap import (
+    BootstrapError,
+    RuntimeBootstrap,
+    build_authenticator,
+    build_runtime,
+)
 from micro_agent.config.config import (
     ConfigDiagnostic,
     EnvironmentConfig,
@@ -11,13 +16,14 @@ from micro_agent.config.config import (
 )
 
 __all__ = [
+    "BootstrapError",
     "ConfigDiagnostic",
     "EnvironmentConfig",
     "ResolvedConfig",
+    "RuntimeBootstrap",
     "SecretRef",
+    "build_authenticator",
+    "build_runtime",
     "resolve_config",
     "validate_config",
-    "BootstrapError",
-    "RuntimeBootstrap",
-    "build_runtime",
 ]

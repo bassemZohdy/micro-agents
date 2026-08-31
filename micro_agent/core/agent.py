@@ -8,8 +8,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    # Runtime-safe: annotations are lazy, and security.identity imports
+    # AgentIdentity from this module, so a runtime import would cycle.
+    from micro_agent.security.identity import CallerIdentity, UserContext
 
 # ---------------------------------------------------------------------------
 # Agent Identity
@@ -49,13 +54,19 @@ class AgentCapabilities:
 
 @dataclass
 class AgentRequest:
-    """An invocation request to a Micro-Agent."""
+    """An invocation request to a Micro-Agent.
+
+    ``caller_identity``/``user_context`` are set only from a configured
+    transport Authenticator — never from caller-supplied request metadata.
+    """
 
     input: dict[str, Any] = field(default_factory=dict)
     request_id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str | None = None
     caller_metadata: dict[str, Any] = field(default_factory=dict)
     timeout_seconds: float | None = None
+    caller_identity: CallerIdentity | None = None
+    user_context: UserContext | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid caller-provided deadlines before runtime work starts."""

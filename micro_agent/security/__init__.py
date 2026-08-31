@@ -4,6 +4,11 @@ Bounded autonomy: policies are enforced deterministically outside prompt
 instructions; prompt injection cannot override platform policy.
 """
 
+from micro_agent.security.auth import (
+    AuthenticatedIdentity,
+    Authenticator,
+    OidcJwtAuthenticator,
+)
 from micro_agent.security.context import build_security_context, resolve_credential
 from micro_agent.security.credentials import (
     CredentialProvider,
@@ -32,11 +37,14 @@ from micro_agent.security.side_effects import (
 )
 
 __all__ = [
+    "AuthenticatedIdentity",
+    "Authenticator",
     "AgentIdentity",
     "AgentPolicy",
     "CallerIdentity",
     "CredentialProvider",
     "EnvironmentCredentialProvider",
+    "OidcJwtAuthenticator",
     "Operation",
     "OperationRegistry",
     "OperationResult",

@@ -6,6 +6,18 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added transport authentication with verified identity: an `Authenticator`
+  SPI selected through external configuration (`MICRO_AGENT_AUTH=oidc` with
+  `MICRO_AGENT_AUTH_ISSUER`/`MICRO_AGENT_AUTH_AUDIENCE`), with OIDC/OAuth2
+  Bearer JWT validation implemented first as the dominant scheme — asymmetric
+  signatures via JWKS, issuer/audience/expiry enforcement, and standard-claim
+  mapping onto caller and user/tenant identity. Unauthenticated calls to
+  `/v1/invoke` fail with the stable 401 contract before the agent is
+  reached; health probes and the discovery card stay public; app creation
+  fails fast when the definition requires caller identity but no
+  authenticator is configured. Verified identity travels on `AgentRequest`
+  (`caller_identity`, `user_context`). PyJWT joins the new optional `auth`
+  extra.
 - Added deployment-selectable runtime bootstrap via `MICRO_AGENT_RUNTIME`,
   including explicit Google ADK selection and fail-fast validation for ADK
   service declarations that are not mapped yet.

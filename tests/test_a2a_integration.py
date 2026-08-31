@@ -104,9 +104,25 @@ class TestAgentCardEndpoint:
     """The well-known agent-card endpoint serves the card."""
 
     def _app(self):
+        from micro_agent.security import (
+            AuthenticatedIdentity,
+            Authenticator,
+            CallerIdentity,
+        )
+
+        class _StubAuthenticator(Authenticator):
+            async def authenticate(self, headers):
+                return AuthenticatedIdentity(caller=CallerIdentity(caller_id="caller-1"))
+
         definition = _definition()
         agent = DefaultMicroAgent(definition, AdkRuntime())
-        return create_app(agent, base_url="https://agent.example.com")
+        # The definition demands caller identity, so the app must be created
+        # with an authenticator configured.
+        return create_app(
+            agent,
+            base_url="https://agent.example.com",
+            authenticator=_StubAuthenticator(),
+        )
 
     @pytest.mark.asyncio
     async def test_endpoint_serves_card(self):

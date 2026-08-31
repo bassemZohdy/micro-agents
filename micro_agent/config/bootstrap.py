@@ -51,6 +51,7 @@ from micro_agent.models import (
 from micro_agent.observability import Telemetry
 from micro_agent.runtime import AgentRuntime
 from micro_agent.security import AgentPolicy, CredentialProvider, EnvironmentCredentialProvider
+from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
 from micro_agent.session import InMemorySessionProvider, SessionProvider, SqliteSessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -507,4 +508,25 @@ def _build_model_provider(
     )
 
 
-__all__ = ["BootstrapError", "RuntimeBootstrap", "build_runtime"]
+def build_authenticator(config: ResolvedConfig) -> Authenticator | None:
+    """Build the transport authenticator from resolved configuration.
+
+    ``MICRO_AGENT_AUTH`` selects the implementation; ``oidc`` (the dominant
+    scheme) validates OIDC/OAuth2 Bearer JWTs against the configured issuer
+    and audience. Unauthenticated access remains the development default
+    until an authenticator is configured.
+    """
+    auth_mode = (config.auth or "").strip().lower()
+    if auth_mode in ("", "none"):
+        return None
+    if auth_mode == "oidc":
+        if not config.auth_issuer or not config.auth_audience:
+            raise BootstrapError(
+                "MICRO_AGENT_AUTH=oidc requires MICRO_AGENT_AUTH_ISSUER and "
+                "MICRO_AGENT_AUTH_AUDIENCE"
+            )
+        return OidcJwtAuthenticator(issuer=config.auth_issuer, audience=config.auth_audience)
+    raise BootstrapError(f"Unsupported auth mode '{config.auth}'. Supported modes: none, oidc")
+
+
+__all__ = ["BootstrapError", "RuntimeBootstrap", "build_authenticator", "build_runtime"]

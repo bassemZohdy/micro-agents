@@ -69,6 +69,35 @@ policy level: through an injected `AgentPolicy` or a configured policy
 resolver callable. Unresolved policy references fail startup rather than
 silently running without the declared policy.
 
+## Transport authentication
+
+Inbound authentication is selected through external configuration, behind an
+`Authenticator` SPI. OIDC/OAuth2 Bearer JWT validation is implemented first
+as the dominant scheme; the default `none` mode leaves `/v1/invoke`
+unauthenticated for development.
+
+| Variable | Meaning |
+|---|---|
+| `MICRO_AGENT_AUTH` | `none` (default) or `oidc` |
+| `MICRO_AGENT_AUTH_ISSUER` | OIDC issuer URL (required for `oidc`); JWKS is discovered from the issuer |
+| `MICRO_AGENT_AUTH_AUDIENCE` | Expected `aud` claim (required for `oidc`) |
+
+Behavior when `oidc` is configured:
+
+- `/v1/invoke` requires `Authorization: Bearer <JWT>`; tokens are verified
+  for asymmetric signature (JWKS), issuer, audience, and expiry, and must
+  carry `sub`. Standard claims map to verified caller and user/tenant
+  identity (`sub`, `preferred_username`, `tid`/`tenant_id`, `roles`,
+  `client_id` for service callers).
+- Unauthenticated calls fail with the stable 401 `authentication_required`
+  contract before the agent is reached.
+- Health probes and the A2A discovery card remain public by design.
+- A definition declaring `security.identity_requirements.require_caller_identity`
+  fails app creation if no authenticator is configured.
+
+Verification requires the optional `auth` extra (`PyJWT`): install with
+`pip install 'micro-agents[auth]'`.
+
 Production requirements:
 
 - inject values from environment, Kubernetes Secret, Vault, or another
