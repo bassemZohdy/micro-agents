@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 448 collected | 379 selected by the default test job (including the fourteen optional Google ADK adapter tests, authentication, and audit tests); the remaining 69 run in the integration/e2e jobs |
+| Tests | 458 collected | 389 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, and propagation tests); the remaining 69 run in the integration/e2e jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -193,6 +193,10 @@ Implemented:
 - durable, redacted audit events through an `AuditSink` SPI (stdout JSONL
   default, optional file sink) covering policy denials, approval decisions,
   and authentication failures
+- verified identity propagates through model, tool, and MCP operations via
+  an invocation-scoped context binding; workload identity resolves from
+  environment overrides, the Kubernetes service-account mount, or the
+  hostname
 - programmatically injected allow/deny evaluator
 - in-memory operation registry
 - recursive log-key/known-value redaction
@@ -204,10 +208,12 @@ Implemented:
 
 Gaps:
 
-- verified identity is not yet propagated through model, tool, and MCP
-  operation signatures, and workload identity is not yet populated
 - the Google ADK adapter still converts `approval_required` into a denial;
   its continuation should map onto ADK's native tool confirmation
+- downstream delegation (for example token exchange toward MCP servers) is
+  not implemented; propagation currently makes the verified principal
+  observable to operations, and per-protocol delegation arrives with the
+  official MCP/A2A integrations
 - generic `PolicyRule` conditions are not evaluated
 - the audit sink persists to the platform log pipeline or a local file;
   database-backed audit arrives with production state providers

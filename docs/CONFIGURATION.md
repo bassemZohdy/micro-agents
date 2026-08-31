@@ -125,6 +125,22 @@ execute; hard policy denials still apply) or `deny` (the model receives the
 denial and can respond). Continuations expire after five minutes of
 inactivity; unknown or expired ids fail with a stable 404.
 
+## Workload identity
+
+The runtime resolves its own workload identity once per process for audit
+attribution and invocation context:
+
+| Variable | Meaning |
+|---|---|
+| `MICRO_AGENT_WORKLOAD_ID` | Explicit workload identifier (overrides discovery) |
+| `MICRO_AGENT_WORKLOAD_NAMESPACE` | Explicit namespace (overrides discovery) |
+| `MICRO_AGENT_SERVICE_ACCOUNT` | Service-account name |
+
+Without overrides, the Kubernetes service-account namespace mount
+(`/var/run/secrets/kubernetes.io/serviceaccount/namespace`) supplies the
+namespace and the pod hostname the workload id; outside Kubernetes the
+hostname is used with the `default` namespace.
+
 Production requirements:
 
 - inject values from environment, Kubernetes Secret, Vault, or another

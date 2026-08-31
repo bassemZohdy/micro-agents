@@ -6,6 +6,13 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added verified identity propagation: the runtime binds caller and user
+  identity into an invocation-scoped context (contextvar-based) so model,
+  tool, and MCP operations observe the verified principal without SPI
+  signature changes, and resets it when the invocation ends or fails.
+  Workload identity resolves per process from `MICRO_AGENT_WORKLOAD_ID`,
+  `MICRO_AGENT_WORKLOAD_NAMESPACE`, and `MICRO_AGENT_SERVICE_ACCOUNT`, then
+  the Kubernetes service-account namespace mount, then the hostname.
 - Added approval/confirmation continuation in the built-in runtime: when a
   policy requires approval for a side-effect operation, the invocation now
   pauses instead of permanently denying — the pending tool requests and

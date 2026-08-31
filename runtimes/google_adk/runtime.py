@@ -46,7 +46,15 @@ from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.models import ModelConfig, ModelProvider
 from micro_agent.observability import AuditSink, Telemetry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
-from micro_agent.security import AgentPolicy, PolicyEvaluator
+from micro_agent.security import (
+    AgentPolicy,
+    InvocationIdentity,
+    PolicyEvaluator,
+    get_invocation_identity,
+    reset_invocation_identity,
+    resolve_workload_identity,
+    set_invocation_identity,
+)
 from micro_agent.tools import Tool, builtin_tool_registry
 
 
@@ -101,6 +109,7 @@ class GoogleAdkRuntime(AgentRuntime):
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )
+        self._workload_identity = resolve_workload_identity()
         self._knowledge_refs: list[KnowledgeSource] = []
 
     def capabilities(self) -> RuntimeCapabilities:
@@ -371,6 +380,20 @@ class GoogleAdkRuntime(AgentRuntime):
         return probes
 
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+        """Invoke ADK's runner with the verified identity bound."""
+        token = set_invocation_identity(
+            InvocationIdentity(
+                caller=request.caller_identity,
+                user=request.user_context,
+                workload=self._workload_identity,
+            )
+        )
+        try:
+            return await self._invoke(agent, request)
+        finally:
+            reset_invocation_identity(token)
+
+    async def _invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
         """Invoke ADK's runner and translate the terminal model event."""
         if agent._internal is None:
             raise RuntimeError("runtime agent has been shut down")
@@ -382,6 +405,7 @@ class GoogleAdkRuntime(AgentRuntime):
         session_id = request.session_id or str(uuid4())
         trace_id = request.request_id or str(uuid4())
         labels = {"agent": definition.metadata.name}
+        bound_identity = get_invocation_identity()
         span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
@@ -389,6 +413,11 @@ class GoogleAdkRuntime(AgentRuntime):
                 "agent": definition.metadata.name,
                 "runtime": "google-adk",
                 "session_id": request.session_id,
+                "caller_id": (
+                    bound_identity.caller.caller_id
+                    if bound_identity is not None and bound_identity.caller is not None
+                    else None
+                ),
             },
         )
         start_time = time.monotonic()

@@ -34,6 +34,14 @@ from micro_agent.security.policy import (
     PolicyEvaluator,
     PolicyRule,
 )
+from micro_agent.security.propagation import (
+    InvocationIdentity,
+    get_invocation_identity,
+    invocation_identity,
+    reset_invocation_identity,
+    resolve_workload_identity,
+    set_invocation_identity,
+)
 from micro_agent.security.side_effects import (
     Operation,
     OperationRegistry,
@@ -52,6 +60,7 @@ __all__ = [
     "EnvironmentCredentialProvider",
     "InMemoryApprovalStore",
     "OidcJwtAuthenticator",
+    "InvocationIdentity",
     "Operation",
     "OperationRegistry",
     "OperationResult",
@@ -66,5 +75,10 @@ __all__ = [
     "StaticCredentialProvider",
     "UserContext",
     "build_security_context",
+    "get_invocation_identity",
+    "invocation_identity",
+    "reset_invocation_identity",
     "resolve_credential",
+    "resolve_workload_identity",
+    "set_invocation_identity",
 ]

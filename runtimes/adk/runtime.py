@@ -40,12 +40,17 @@ from micro_agent.security import (
     AgentPolicy,
     ApprovalStore,
     InMemoryApprovalStore,
+    InvocationIdentity,
     Operation,
     OperationRegistry,
     OperationResult,
     PendingApproval,
     PolicyEvaluator,
     build_security_context,
+    get_invocation_identity,
+    reset_invocation_identity,
+    resolve_workload_identity,
+    set_invocation_identity,
 )
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry
@@ -150,6 +155,7 @@ class AdkRuntime(AgentRuntime):
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )
         self._approval_store = self._config.approval_store or InMemoryApprovalStore()
+        self._workload_identity = resolve_workload_identity()
         self._knowledge_refs: list[KnowledgeSource] = []
         self._started = False
 
@@ -376,6 +382,20 @@ class AdkRuntime(AgentRuntime):
     # ------------------------------------------------------------------
 
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+        """Invoke with the verified identity bound for every downstream operation."""
+        token = set_invocation_identity(
+            InvocationIdentity(
+                caller=request.caller_identity,
+                user=request.user_context,
+                workload=self._workload_identity,
+            )
+        )
+        try:
+            return await self._invoke(agent, request)
+        finally:
+            reset_invocation_identity(token)
+
+    async def _invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
         definition: MicroAgentDefinition = agent._internal["definition"]
         semantics = definition.spec.runtime
         trace_id = request.request_id or str(uuid4())
@@ -493,12 +513,18 @@ class AdkRuntime(AgentRuntime):
             resume.input_payload if resume is not None else request.input
         )
 
+        bound_identity = get_invocation_identity()
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
             attributes={
                 "agent": definition.metadata.name,
                 "session_id": session_id,
+                "caller_id": (
+                    bound_identity.caller.caller_id
+                    if bound_identity is not None and bound_identity.caller is not None
+                    else None
+                ),
             },
         )
 

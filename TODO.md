@@ -72,8 +72,11 @@ shutdown either drains within its deadline or cancels remaining work safely.
       stable 401 responses, public health/discovery routes, and fail-fast
       startup when the definition requires caller identity without an
       authenticator.
-- [ ] Propagate verified caller identity through model, tool, and MCP
-      operations and support workload identity.
+- [x] Propagate verified caller identity through model, tool, and MCP
+      operations: the runtime binds caller/user identity into an invocation
+      context (contextvar-based, the same mechanism future OpenTelemetry
+      trace propagation uses) and workload identity resolves from
+      environment overrides and the Kubernetes service-account mount.
 - [x] Resolve `security.policy_refs`, `credential_refs`, model credentials,
       and MCP credentials through configured providers; unresolvable
       references and unresolvable policy declarations fail before runtime
