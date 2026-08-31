@@ -84,3 +84,65 @@ class TestSecurityContext:
         user = UserContext(user_id="user-999")
         ctx = SecurityContext(agent_identity=agent_id, user_context=user)
         assert ctx.agent_identity.agent_id != ctx.user_context.user_id
+
+
+class TestCallerMetadataIsNotIdentity:
+    """Caller-supplied metadata is never treated as identity.
+
+    Identity must come from a configured transport authenticator (open work);
+    request metadata is untrusted data, not a principal.
+    """
+
+    def test_no_production_module_derives_identity_from_caller_metadata(self):
+        from pathlib import Path
+
+        root = Path(__file__).parent.parent
+        offenders: list[str] = []
+        identity_markers = ("CallerIdentity(", "UserContext(", "RuntimeIdentity(")
+        for package in ("micro_agent", "runtimes"):
+            for path in (root / package).rglob("*.py"):
+                text = path.read_text(encoding="utf-8")
+                if "caller_metadata" in text and any(marker in text for marker in identity_markers):
+                    offenders.append(str(path))
+        assert offenders == []
+
+    @pytest.mark.asyncio
+    async def test_spoofed_caller_metadata_does_not_populate_security_context(self):
+        from micro_agent.core import AgentRequest
+        from micro_agent.definition import load_definition_from_dict
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "identity-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test agent."},
+                    "dependencies": {"model": {"ref": "fake-model"}},
+                    "security": {"identity_requirements": {"require_caller_identity": True}},
+                },
+            }
+        )
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(model_provider=FakeModelProvider(FakeModelConfig(response="ok")))
+        )
+        agent = await runtime.create(definition)
+        request = AgentRequest(
+            input={},
+            caller_metadata={
+                "user_id": "attacker",
+                "tenant_id": "tenant-1",
+                "roles": ["admin"],
+                "caller_id": "forged-service",
+            },
+        )
+        context = agent._internal["security_context"]
+        assert context.caller_identity is None
+        assert context.user_context is None
+        assert context.runtime_identity is None
+        # Identity requirements remain a declaration; they never validate
+        # request-supplied metadata.
+        assert definition.spec.security.identity_requirements == {"require_caller_identity": True}
+        assert request.caller_metadata["user_id"] == "attacker"

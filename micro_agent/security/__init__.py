@@ -5,6 +5,11 @@ instructions; prompt injection cannot override platform policy.
 """
 
 from micro_agent.security.context import build_security_context, resolve_credential
+from micro_agent.security.credentials import (
+    CredentialProvider,
+    EnvironmentCredentialProvider,
+    StaticCredentialProvider,
+)
 from micro_agent.security.identity import (
     AgentIdentity,
     CallerIdentity,
@@ -30,6 +35,8 @@ __all__ = [
     "AgentIdentity",
     "AgentPolicy",
     "CallerIdentity",
+    "CredentialProvider",
+    "EnvironmentCredentialProvider",
     "Operation",
     "OperationRegistry",
     "OperationResult",
@@ -40,6 +47,7 @@ __all__ = [
     "RetryClassification",
     "RuntimeIdentity",
     "SecurityContext",
+    "StaticCredentialProvider",
     "UserContext",
     "build_security_context",
     "resolve_credential",

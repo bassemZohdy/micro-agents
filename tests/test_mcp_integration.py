@@ -10,7 +10,13 @@ from micro_agent.mcp import (
     McpSecurityError,
     McpSecurityPolicy,
 )
-from micro_agent.mcp.mcp import McpConfig, McpPrompt, McpResource, McpTool
+from micro_agent.mcp.mcp import (
+    McpConfig,
+    McpConnectionState,
+    McpPrompt,
+    McpResource,
+    McpTool,
+)
 from micro_agent.models import FakeModelConfig, FakeModelProvider
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
@@ -225,3 +231,74 @@ class TestMcpByConfiguration:
         assert response.metadata["tools_called"] == ["residency-services:check_status"]
         assert response.output["tool_results"][0]["output"]["status"] == "submitted"
         await runtime.close()
+
+
+class TestMcpCredentialResolution:
+    """Declared MCP credentials resolve through the configured provider."""
+
+    def _credential_definition(self) -> object:
+        return load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "mcp-cred-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Use the MCP tools."},
+                    "dependencies": {
+                        "model": {"ref": "fake-model"},
+                        "mcp_servers": [
+                            {
+                                "ref": "residency-services",
+                                "transport": "streamable-http",
+                                "endpoint": "https://mcp.example.com",
+                                "credential_ref": "residency-api-key",
+                            }
+                        ],
+                    },
+                },
+            }
+        )
+
+    @pytest.mark.asyncio
+    async def test_credential_resolved_at_connect_and_not_stored_on_config(self):
+        seen: dict[str, object] = {}
+
+        def factory(config):
+            async def connect(config, credential=None):
+                seen["credential"] = credential
+                seen["config_ref"] = config.ref
+                seen["config_credential_ref"] = config.credential_ref
+                client._state = McpConnectionState.CONNECTED
+
+            client = _fake_client()
+            client.connect = connect  # type: ignore[method-assign]
+            return client
+
+        manager = McpConnectionManager(
+            client_factory=factory,
+            credential_resolver=lambda ref: {"residency-api-key": "key-value"}.get(ref),
+        )
+        await manager.connect_server(self._credential_definition().spec.dependencies.mcp_servers[0])
+        assert seen["credential"] == "key-value"
+        # The credential value never lands on the config object.
+        assert seen["config_credential_ref"] == "residency-api-key"
+        await manager.aclose()
+
+    @pytest.mark.asyncio
+    async def test_missing_resolver_fails_connection(self):
+        manager = McpConnectionManager(client_factory=lambda config: _fake_client())
+        with pytest.raises(McpSecurityError, match="credential provider"):
+            await manager.connect_server(
+                self._credential_definition().spec.dependencies.mcp_servers[0]
+            )
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_credential_fails_connection(self):
+        manager = McpConnectionManager(
+            client_factory=lambda config: _fake_client(),
+            credential_resolver=lambda ref: None,
+        )
+        with pytest.raises(McpSecurityError, match="not available"):
+            await manager.connect_server(
+                self._credential_definition().spec.dependencies.mcp_servers[0]
+            )

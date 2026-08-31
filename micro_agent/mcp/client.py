@@ -111,12 +111,14 @@ class FakeMcpClient(McpClient):
         self._connect_fails = connect_fails
         self._state = McpConnectionState.DISCONNECTED
         self._config: McpConfig | None = None
+        self._credential: str | None = None
 
-    async def connect(self, config: McpConfig) -> None:
+    async def connect(self, config: McpConfig, credential: str | None = None) -> None:
         if self._connect_fails:
             self._state = McpConnectionState.ERROR
             raise ConnectionError(f"cannot reach mcp server '{config.ref}'")
         self._config = config
+        self._credential = credential
         self._state = McpConnectionState.CONNECTED
 
     async def discover(self) -> McpDiscovery:
@@ -238,6 +240,21 @@ class McpConnectionManager:
         self._tools: dict[str, McpToolAdapter] = {}
         self._discovery: dict[str, McpDiscovery] = {}
 
+    def _resolve_credential(self, config: McpConfig) -> str | None:
+        """Resolve a declared credential reference through the provider."""
+        if not config.credential_ref:
+            return None
+        if self._credential_resolver is None:
+            raise McpSecurityError(
+                f"mcp '{config.ref}': credential_ref requires a configured credential provider"
+            )
+        credential = self._credential_resolver(config.credential_ref)
+        if credential is None:
+            raise McpSecurityError(
+                f"mcp '{config.ref}': credential '{config.credential_ref}' is not available"
+            )
+        return credential
+
     def _default_client(self, config: McpConfig) -> McpClient:
         if self._client_factory is None:
             raise McpSecurityError(
@@ -248,11 +265,16 @@ class McpConnectionManager:
         return self._client_factory(config)
 
     async def connect_server(self, ref: McpServerRef) -> None:
-        """Validate, connect to, and discover one configured MCP server."""
+        """Validate, connect to, and discover one configured MCP server.
+
+        Declared credentials are resolved through the configured credential
+        provider at connect time and are never stored on the config.
+        """
         config = config_from_definition(ref)
         self._security.validate(config)
+        credential = self._resolve_credential(config)
         client = self._default_client(config)
-        await client.connect(config)
+        await client.connect(config, credential)
         if client.state() != McpConnectionState.CONNECTED:
             raise ConnectionError(f"mcp '{ref.ref}' did not reach connected state")
         discovery = await client.discover()

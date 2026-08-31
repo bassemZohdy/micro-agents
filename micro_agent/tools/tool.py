@@ -133,3 +133,17 @@ class EchoTool(Tool):
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         message = arguments.get("message", "")
         return ToolResult(output={"echoed": message})
+
+
+# ---------------------------------------------------------------------------
+# Built-in native tool registry
+# ---------------------------------------------------------------------------
+
+
+def builtin_tool_registry() -> dict[str, Tool]:
+    """Fresh instances of the native tools shipped in this distribution.
+
+    Definition-declared tools are matched by name against this registry; MCP
+    tools are resolved separately through the MCP connection manager.
+    """
+    return {"echo": EchoTool()}

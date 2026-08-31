@@ -174,6 +174,55 @@ class TestToolPolicyEnforcement:
         with pytest.raises(PermissionError, match="denied by policy"):
             await runtime.start(agent)
 
+    @pytest.mark.asyncio
+    async def test_denied_skill_fails_startup(self):
+        policy = AgentPolicy(denied_skills=["submit-renewal"])
+        runtime = _echo_runtime(policy=policy)
+        definition = _definition(skills=[{"id": "submit-renewal", "name": "Submit Renewal"}])
+        agent = await runtime.create(definition)
+        with pytest.raises(PermissionError, match="submit-renewal"):
+            await runtime.start(agent)
+
+    @pytest.mark.asyncio
+    async def test_allowed_skill_passes_startup(self):
+        policy = AgentPolicy(allowed_skills=["check-status"])
+        runtime = _echo_runtime(policy=policy)
+        definition = _definition(skills=[{"id": "check-status", "name": "Check Status"}])
+        agent = await runtime.create(definition)
+        await runtime.start(agent)
+
+    @pytest.mark.asyncio
+    async def test_denied_model_fails_startup(self):
+        policy = AgentPolicy(model_restrictions={"denied_models": ["fake-model"]})
+        runtime = _echo_runtime(policy=policy)
+        agent = await runtime.create(_definition())
+        with pytest.raises(PermissionError, match="denied by policy"):
+            await runtime.start(agent)
+
+    @pytest.mark.asyncio
+    async def test_model_provider_not_in_allow_list_fails_startup(self):
+        policy = AgentPolicy(model_restrictions={"allowed_providers": ["anthropic"]})
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "policy-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test agent."},
+                    "dependencies": {
+                        "model": {
+                            "ref": "fake-model",
+                            "provider": "openai-compatible",
+                        },
+                    },
+                },
+            }
+        )
+        runtime = _echo_runtime(policy=policy)
+        agent = await runtime.create(definition)
+        with pytest.raises(PermissionError, match="openai-compatible"):
+            await runtime.start(agent)
+
 
 class TestOperationRegistry:
     """Idempotency/deduplication applied to tool side effects."""

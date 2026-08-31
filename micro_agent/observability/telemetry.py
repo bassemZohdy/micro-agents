@@ -67,6 +67,14 @@ class StructuredLogger:
         """Set persistent context for all log entries."""
         self._context.update(kwargs)
 
+    def set_level(self, level: str) -> None:
+        """Set the minimum severity for emitted log entries.
+
+        Unknown levels fall back to ``INFO``; configuration validation rejects
+        invalid levels before this is called from the bootstrap.
+        """
+        self._logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+
     def register_secret(self, value: str) -> None:
         """Register a secret value to be redacted from all log entries."""
         if value:

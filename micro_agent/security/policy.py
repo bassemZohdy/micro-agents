@@ -113,6 +113,49 @@ class PolicyEvaluator:
             )
         return PolicyDecision(allowed=True)
 
+    def evaluate_model(
+        self,
+        model_ref: str,
+        model_id: str | None = None,
+        provider: str | None = None,
+    ) -> PolicyDecision:
+        """Evaluate model restrictions for a declared model.
+
+        ``model_restrictions`` supports ``allowed_models``/``denied_models``
+        (matched against the model reference and the provider model ID) and
+        ``allowed_providers``/``denied_providers`` (matched against the
+        provider name). An empty restrictions mapping allows everything.
+        """
+        restrictions = self._policy.model_restrictions
+        candidates = {value for value in (model_ref, model_id) if value}
+
+        denied_models = set(restrictions.get("denied_models") or [])
+        if candidates & denied_models:
+            return PolicyDecision(
+                allowed=False,
+                reason="Model is denied by policy",
+            )
+        allowed_models = set(restrictions.get("allowed_models") or [])
+        if allowed_models and not candidates & allowed_models:
+            return PolicyDecision(
+                allowed=False,
+                reason="Model is not in the policy-allowed model set",
+            )
+
+        if provider:
+            if provider in set(restrictions.get("denied_providers") or []):
+                return PolicyDecision(
+                    allowed=False,
+                    reason=f"Model provider '{provider}' is denied by policy",
+                )
+            allowed_providers = set(restrictions.get("allowed_providers") or [])
+            if allowed_providers and provider not in allowed_providers:
+                return PolicyDecision(
+                    allowed=False,
+                    reason=f"Model provider '{provider}' is not in the policy-allowed set",
+                )
+        return PolicyDecision(allowed=True)
+
     def evaluate_side_effect(self, operation: str) -> PolicyDecision:
         """Evaluate whether a side-effect operation is allowed."""
         if self._policy.side_effect_policy == "deny":

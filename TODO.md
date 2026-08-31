@@ -26,8 +26,8 @@ the relevant P1 acceptance tests are green.
       constructs without leaking ADK types through the SPI.
 - [x] Add ADK lifecycle, invocation, tool-call, session, and failure tests.
 - [x] Select the Google ADK adapter from executable deployment configuration.
-- [ ] Map MCP, memory, policy, and OpenTelemetry services into the selected
-      adapter; unsupported declarations must continue to fail fast.
+- [x] Map MCP, memory, policy, and OpenTelemetry services into the selected
+      adapter; unsupported declarations continue to fail fast.
 - [x] Publish a runtime capability matrix and reject unsupported required
       capabilities at startup.
 
@@ -36,15 +36,21 @@ definition remains runtime-neutral.
 
 ### P0.2 Build the production bootstrap/runtime factory
 
-- [ ] Construct tool registry, MCP client, knowledge, policy, telemetry, and
-      non-environment credential providers from configuration.
+- [x] Construct the built-in tool registry, MCP connection manager, telemetry
+      (configured log level), and injected policy from configuration; declared
+      tools are validated against the constructed registry before runtime
+      creation.
 - [x] Construct the built-in memory and in-memory/SQLite session providers
       from definition and endpoint bindings; reject unsupported external state
       bindings before runtime creation.
 - [x] Probe the configured model, state providers, and declared MCP servers
       before marking the agent ready; startup failures remain non-ready.
-- [ ] Validate tool registry, knowledge, policy, telemetry, and credential
-      providers once those integrations are constructed.
+- [x] Construct knowledge and non-environment credential providers from
+      configuration; every declared credential reference must resolve before
+      runtime creation, and declared knowledge sources are health-checked at
+      startup.
+- [x] Validate knowledge and credential providers once those integrations are
+      constructed.
 - [x] Remove or wire every currently dead `MICRO_AGENT_*` variable.
 
 Acceptance: the same image starts in explicit fake mode and in a real
@@ -62,10 +68,13 @@ shutdown either drains within its deadline or cancels remaining work safely.
 
 - [ ] Add authentication middleware and validated caller/client, user/tenant,
       and workload identity propagation.
-- [ ] Resolve `security.policy_refs`, `credential_refs`, model credentials,
-      and MCP credentials through configured providers.
-- [ ] Stop treating caller-supplied metadata as identity.
-- [ ] Evaluate skills and model restrictions as well as tools and MCP servers.
+- [x] Resolve `security.policy_refs`, `credential_refs`, model credentials,
+      and MCP credentials through configured providers; unresolvable
+      references and unresolvable policy declarations fail before runtime
+      creation.
+- [x] Stop treating caller-supplied metadata as identity; a source-level
+      guard keeps request metadata out of identity construction.
+- [x] Evaluate skills and model restrictions as well as tools and MCP servers.
 - [ ] Implement approval/confirmation continuation instead of converting
       `approval_required` into a permanent denial.
 - [ ] Make policy decisions and audit events durable and redacted.

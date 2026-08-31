@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last audited: 2026-08-30  
+Last audited: 2026-08-31  
 Documentation-audit baseline: `87d1779eb54878ac73cea7730694d25b83400882`
 Cleanup verification baseline: `bd077fa005c2c5b5d12f9020b57d36121f09fa4d`
 
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 369 collected | 365 default tests plus four optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
+| Tests | 412 collected | 398 default tests plus fourteen optional Google ADK adapter tests; marker groups overlap because E2E tests are also integration-selected |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -44,7 +44,9 @@ Implemented:
 Gaps:
 
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
-  built-in memory and SQLite/in-memory session bindings are now constructed;
+  built-in memory and SQLite/in-memory session bindings, the built-in tool
+  registry, the MCP connection manager, the knowledge provider, the
+  credential provider, and telemetry are constructed from configuration;
   external state providers remain unsupported and fail fast
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
@@ -72,12 +74,34 @@ Implemented:
   before the runtime marks an agent ready; failures leave the agent non-ready
 - declared input/output contracts are enforced at the core invocation boundary
 - optional `runtimes/google_adk` adapter constructs Google ADK `LlmAgent`,
-  `Runner`, and session objects while keeping them behind the runtime SPI
+  `Runner`, session, and memory-service objects while keeping them behind the
+  runtime SPI
 - ADK adapter bridges the existing model-provider contract, native tools,
   session lifecycle, invocation deadlines, and terminal responses
+- ADK adapter maps the declared memory dependency onto an ADK
+  `BaseMemoryService` bridge over the Micro-Agent memory provider (including
+  auto-store and search), wires telemetry spans/metrics/logs around the
+  runner, enforces injected policy deterministically around every tool
+  execution and declared MCP server, and exposes MCP-discovered tools as ADK
+  tools through the injected MCP manager
+- declared knowledge sources are health-checked at startup in both runtimes
+  against the configured knowledge provider and exposed as a `knowledge`
+  health probe
+- declared policy references resolve through an injected policy or a
+  configured policy resolver; unresolvable references fail before runtime
+  creation
+- policy enforcement covers skills and model restrictions (allow/deny model
+  and provider sets) in addition to tools and MCP servers; denied declared
+  skills, models, or MCP servers fail startup
+- every declared credential reference (model, MCP server, security) must
+  resolve through the configured credential provider before runtime creation;
+  MCP connections resolve declared credentials at connect time
+- caller-supplied request metadata is never used to construct caller, user,
+  or workload identity; a source-level guard test enforces this boundary
 - executable bootstrap selects the custom loop by default or the Google ADK
-  adapter through `MICRO_AGENT_RUNTIME`; unsupported ADK service declarations
-  fail fast rather than being silently ignored
+  adapter through `MICRO_AGENT_RUNTIME`; ADK declarations that still cannot
+  be mapped (external session state, model credential references) fail fast
+  rather than being silently ignored
 
 Current custom-runtime capability matrix:
 
@@ -92,8 +116,9 @@ Current custom-runtime capability matrix:
 
 Gaps:
 
-- the ADK adapter does not yet map MCP, memory, policy, or OpenTelemetry
-  services into ADK-native services
+- policy references cannot yet resolve from external policy *stores*; the
+  bootstrap accepts an injected policy or a policy resolver callable, and
+  fails fast when neither can satisfy a declared reference
 - retrying the complete invocation can replay side effects
 
 ### Models and tools
@@ -121,6 +146,8 @@ Implemented:
 - fake client and injectable connection manager
 - basic TLS/origin/transport/response-size checks
 - discovered tool adapter and manager health state
+- declared credentials resolve through the configured credential provider at
+  connect time and are passed separately from config objects
 
 Gaps:
 
@@ -128,7 +155,6 @@ Gaps:
 - no version/capability negotiation or real transport lifecycle
 - stdio configuration cannot express command/arguments and is incorrectly
   subjected to an HTTP endpoint requirement
-- credential resolver fields are not used to inject credentials
 - tests prove fake-client wiring, not MCP interoperability
 
 ### A2A
@@ -156,13 +182,20 @@ Implemented:
 - programmatically injected allow/deny evaluator
 - in-memory operation registry
 - recursive log-key/known-value redaction
+- declared policy references resolve through an injected policy or policy
+  resolver, and declared credential references (model, MCP, security) resolve
+  through the configured credential provider before runtime creation
+- skill and model-restriction enforcement alongside tool and MCP policy;
+  denied declared skills, models, or MCP servers fail startup
+- caller-supplied request metadata is never used as identity; a source-level
+  guard test enforces the boundary
 
 Gaps:
 
-- no HTTP authentication or verified caller context
-- definition policy/credential references are copied into context but not
-  resolved
-- skill rules, generic policy rules, and model restrictions are not enforced
+- no HTTP authentication or verified caller context; identity types exist but
+  a transport authenticator must populate them before any caller identity is
+  verified
+- generic `PolicyRule` conditions are not evaluated
 - approval-required behavior becomes denial with no continuation
 - idempotency storage is process-local and non-atomic
 
@@ -172,7 +205,8 @@ Implemented:
 
 - in-memory session and memory providers
 - SQLite session provider
-- in-memory keyword knowledge retriever
+- in-memory keyword knowledge retriever, constructed from declared knowledge
+  sources and health-checked at startup in both runtimes
 
 Gaps:
 

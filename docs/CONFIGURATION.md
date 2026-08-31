@@ -56,10 +56,18 @@ spec:
       - residency-api-key
 ```
 
-The current definition uses snake_case field names. A model
-`credential_ref` is resolved from that environment variable during bootstrap;
-startup fails if the reference is missing. Resolved values are never included
-in models, responses, logs, or exception text.
+A `credential_ref` is resolved through the configured credential provider
+during bootstrap: by default references name environment variables, and a
+deployment can inject a non-environment provider (for example
+`StaticCredentialProvider` with values pre-loaded from a mounted secret or a
+secret manager). Startup fails if any declared credential reference — model,
+MCP server, or security — cannot be resolved. Resolved values are never
+included in models, responses, logs, or exception text.
+
+Policy references (`security.policy_refs`) resolve the same way at the
+policy level: through an injected `AgentPolicy` or a configured policy
+resolver callable. Unresolved policy references fail startup rather than
+silently running without the declared policy.
 
 Production requirements:
 
@@ -82,11 +90,18 @@ export MICRO_AGENT_RUNTIME=google-adk
 ```
 
 The selector accepts `custom` (also `adk` or `reference`) and `google-adk`
-(also `google_adk`). The adapter currently supports the native Google model
-path and injected fake/OpenAI-compatible model providers. Definitions that
-declare Micro-Agent memory, sessions, MCP servers, or policy references fail
-fast under Google ADK until those services are mapped into ADK-native
-integrations; they are not silently ignored.
+(also `google_adk`). The adapter supports the native Google model path and
+injected fake/OpenAI-compatible model providers. Declared services map onto
+ADK-native constructs: memory bridges into an ADK memory service (auto-store
+and search included), injected policy is enforced around every tool execution
+and declared MCP server, declared MCP servers surface discovered tools as ADK
+tools, and telemetry spans/metrics/logs wrap the runner. Both runtimes
+construct knowledge and credential providers from configuration and validate
+declared knowledge sources and credential references; native tools outside
+the built-in registry also fail fast in both runtimes. Declarations that
+still cannot be mapped under Google ADK — external (SQLite or remote)
+session state and model credential references — fail fast; they are not
+silently ignored.
 
 ## Definition versus deployment configuration
 

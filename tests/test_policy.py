@@ -118,3 +118,40 @@ class TestPolicyEvaluator:
         decision = evaluator.evaluate_side_effect("payment")
         assert decision.allowed is False
         assert "approval" in decision.reason.lower()
+
+    def test_model_allowed_without_restrictions(self):
+        policy = AgentPolicy()
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("gpt-4o", "gpt-4o", "openai")
+        assert decision.allowed is True
+
+    def test_model_denied_by_deny_list(self):
+        policy = AgentPolicy(model_restrictions={"denied_models": ["gpt-4o"]})
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("reasoning-model", "gpt-4o", "openai")
+        assert decision.allowed is False
+
+    def test_model_denied_when_not_in_allow_list(self):
+        policy = AgentPolicy(model_restrictions={"allowed_models": ["claude-3"]})
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("reasoning-model", "gpt-4o", "openai")
+        assert decision.allowed is False
+
+    def test_model_allowed_by_ref_match_in_allow_list(self):
+        policy = AgentPolicy(model_restrictions={"allowed_models": ["reasoning-model"]})
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("reasoning-model", "gpt-4o", "openai")
+        assert decision.allowed is True
+
+    def test_model_provider_denied(self):
+        policy = AgentPolicy(model_restrictions={"denied_providers": ["anthropic"]})
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("reasoning-model", None, "anthropic")
+        assert decision.allowed is False
+        assert "anthropic" in decision.reason
+
+    def test_model_provider_not_in_allow_list(self):
+        policy = AgentPolicy(model_restrictions={"allowed_providers": ["openai"]})
+        evaluator = PolicyEvaluator(policy)
+        decision = evaluator.evaluate_model("reasoning-model", None, "anthropic")
+        assert decision.allowed is False

@@ -24,6 +24,7 @@ from micro_agent.core import (
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
 from micro_agent.health import DependencyProbe, HealthStatus
+from micro_agent.knowledge import KnowledgeRetriever, KnowledgeSource
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.models import (
@@ -43,7 +44,7 @@ from micro_agent.security import (
     build_security_context,
 )
 from micro_agent.session import SessionProvider
-from micro_agent.tools import EchoTool, Tool
+from micro_agent.tools import Tool, builtin_tool_registry
 
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 _MAX_SESSION_HISTORY_MESSAGES = 20
@@ -105,17 +106,13 @@ class AdkRuntimeConfig:
     session_provider: SessionProvider | None = None
     memory_provider: MemoryProvider | None = None
     memory_policy: MemoryPolicy | None = None
+    knowledge_provider: KnowledgeRetriever | None = None
     mcp_manager: McpConnectionManager | None = None
     policy: AgentPolicy | None = None
     operation_registry: OperationRegistry | None = None
     telemetry: Telemetry | None = None
+    tool_registry: dict[str, Tool] | None = None
     default_max_iterations: int = 5
-
-
-# Built-in native tool registry. Definition tools are matched by name.
-_BUILTIN_TOOLS: dict[str, type[Tool]] = {
-    "echo": EchoTool,
-}
 
 
 class AdkRuntime(AgentRuntime):
@@ -138,6 +135,7 @@ class AdkRuntime(AgentRuntime):
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )
+        self._knowledge_refs: list[KnowledgeSource] = []
         self._started = False
 
     # ------------------------------------------------------------------
@@ -176,6 +174,10 @@ class AdkRuntime(AgentRuntime):
             else None
         )
         skills = definition.spec.dependencies.skills
+        self._knowledge_refs = [
+            KnowledgeSource(ref=ref.ref, source_type=ref.source_type, version=ref.version)
+            for ref in definition.spec.dependencies.knowledge
+        ]
 
         self._telemetry.logger.set_context(
             agent_id=identity.agent_id,
@@ -226,10 +228,34 @@ class AdkRuntime(AgentRuntime):
             except Exception as exc:  # noqa: BLE001 — normalize startup failures
                 raise RuntimeError("memory provider failed its health check at startup") from exc
 
-        # Deterministic platform policy: denied MCP servers fail startup.
+        knowledge_provider = self._config.knowledge_provider
+        if knowledge_provider is not None:
+            for source in self._knowledge_refs:
+                try:
+                    source_available = await knowledge_provider.health_check(source)
+                except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                    raise RuntimeError(
+                        "knowledge provider failed its health check at startup"
+                    ) from exc
+                if not source_available:
+                    raise RuntimeError(f"knowledge source '{source.ref}' is not available")
+
+        # Deterministic platform policy: denied MCP servers, skills, or models
+        # fail startup instead of surfacing as per-call denials later.
         if self._policy_evaluator is not None:
             for server in definition.spec.dependencies.mcp_servers:
                 decision = self._policy_evaluator.evaluate_mcp(server.ref)
+                if not decision.allowed:
+                    raise PermissionError(decision.reason)
+            for skill in definition.spec.dependencies.skills:
+                decision = self._policy_evaluator.evaluate_skill(skill.id)
+                if not decision.allowed:
+                    raise PermissionError(decision.reason)
+            model_ref = definition.spec.dependencies.model
+            if model_ref is not None:
+                decision = self._policy_evaluator.evaluate_model(
+                    model_ref.ref, model_ref.model_id, model_ref.provider
+                )
                 if not decision.allowed:
                     raise PermissionError(decision.reason)
         mcp_manager = self._config.mcp_manager
@@ -274,7 +300,7 @@ class AdkRuntime(AgentRuntime):
         agent._internal = None
 
     async def close(self) -> None:
-        """Release runtime-level resources (model, state providers, and MCP)."""
+        """Release runtime-level resources (model, state, knowledge, and MCP)."""
         aclose = getattr(self._model_provider, "aclose", None)
         if aclose is not None:
             await aclose()
@@ -282,6 +308,10 @@ class AdkRuntime(AgentRuntime):
             provider_close = getattr(provider, "aclose", None)
             if provider_close is not None:
                 await provider_close()
+        if self._config.knowledge_provider is not None:
+            knowledge_close = getattr(self._config.knowledge_provider, "aclose", None)
+            if knowledge_close is not None:
+                await knowledge_close()
         if self._config.mcp_manager is not None:
             await self._config.mcp_manager.aclose()
 
@@ -299,6 +329,16 @@ class AdkRuntime(AgentRuntime):
             await self._config.memory_provider.list_entries()
             return True
 
+        knowledge_provider = self._config.knowledge_provider
+        knowledge_refs = list(self._knowledge_refs)
+
+        async def _knowledge_probe() -> HealthStatus | bool:
+            assert knowledge_provider is not None
+            for source in knowledge_refs:
+                if not await knowledge_provider.health_check(source):
+                    return False
+            return True
+
         async def _mcp_probe() -> HealthStatus | bool:
             assert self._config.mcp_manager is not None
             return await self._config.mcp_manager.health_probe()
@@ -307,6 +347,8 @@ class AdkRuntime(AgentRuntime):
             probes["session"] = _session_probe
         if self._config.memory_provider is not None:
             probes["memory"] = _memory_probe
+        if knowledge_provider is not None:
+            probes["knowledge"] = _knowledge_probe
         if self._config.mcp_manager is not None:
             probes["mcp"] = _mcp_probe
         return probes
@@ -555,15 +597,19 @@ class AdkRuntime(AgentRuntime):
         self._telemetry.logger.warning("tool denied by policy", tool=tool_name, reason=reason)
 
     def _resolve_tools(self, definition: MicroAgentDefinition) -> tuple[dict[str, Tool], list[str]]:
-        """Resolve definition-declared tools against the built-in registry."""
+        """Resolve definition-declared tools against the configured/built-in registry."""
+        registry = builtin_tool_registry()
+        registry.update(self._config.tool_registry or {})
         tools: dict[str, Tool] = {}
         unresolved: list[str] = []
         for tool_def in definition.spec.dependencies.tools:
-            tool_cls = _BUILTIN_TOOLS.get(tool_def.name)
-            if tool_cls is None:
+            if tool_def.name in tools:
+                continue
+            tool = registry.get(tool_def.name)
+            if tool is None:
                 unresolved.append(tool_def.name)
                 continue
-            tools[tool_def.name] = tool_cls()
+            tools[tool_def.name] = tool
         return tools, unresolved
 
     def _system_prompt(self, definition: MicroAgentDefinition, skills: list[Any]) -> str:

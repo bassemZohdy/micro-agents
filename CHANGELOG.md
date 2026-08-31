@@ -9,6 +9,38 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added deployment-selectable runtime bootstrap via `MICRO_AGENT_RUNTIME`,
   including explicit Google ADK selection and fail-fast validation for ADK
   service declarations that are not mapped yet.
+- Added credential providers: `CredentialProvider` with an environment
+  default and an injectable non-environment provider
+  (`StaticCredentialProvider` for pre-loaded secrets). Every declared
+  credential reference — model, MCP server, and security — must resolve
+  through the configured provider before runtime creation, and MCP
+  connections resolve declared credentials at connect time through the
+  manager, never storing them on config objects.
+- Added knowledge-provider construction: declared knowledge sources build the
+  built-in in-memory retriever (startup health check fails fast until a
+  deployment injects one with documents), validated in both runtimes with a
+  `knowledge` health probe.
+- Added policy-reference resolution: declared `security.policy_refs` resolve
+  through an injected policy or a configured policy resolver; unresolved
+  references fail before runtime creation in both runtimes.
+- Policy enforcement now covers skills and model restrictions (allow/deny
+  model sets and provider sets) in addition to tools and MCP servers; denied
+  declared skills, models, or MCP servers fail startup deterministically.
+- Added a source-level guard and behavioral tests proving caller-supplied
+  request metadata is never used to construct caller/user/workload identity.
+- The Google ADK adapter now maps declared services onto ADK-native
+  constructs: memory maps to an ADK `BaseMemoryService` bridge over the
+  Micro-Agent memory provider (auto-store and search included), injected
+  policy is enforced deterministically around every ADK tool execution and
+  declared MCP server, declared MCP servers connect at startup and surface
+  discovered tools as ADK tools, and telemetry records spans, metrics, and
+  structured logs around the runner.
+- The executable bootstrap now constructs the built-in tool registry, the MCP
+  connection manager for declared MCP servers, and telemetry with the
+  configured log level, validates declared tools against the constructed
+  registry (unresolvable native tools and MCP tools without servers fail
+  before runtime creation), and accepts an injected `AgentPolicy` or MCP
+  manager for deployments that own those integrations.
 - Added executable model bootstrap from definition and `MICRO_AGENT_*`
   bindings, including model ID, provider, endpoint, timeout, generation, and
   environment-backed credentials.

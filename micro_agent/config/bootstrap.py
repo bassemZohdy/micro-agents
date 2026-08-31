@@ -6,10 +6,26 @@ selection are explicit: an endpoint (or an OpenAI-compatible provider name)
 selects :class:`OpenAICompatProvider`; ``fake`` selects the deterministic test
 provider; ``MICRO_AGENT_RUNTIME=google-adk`` selects the optional Google ADK
 adapter; unsupported or incomplete configurations fail before service start.
+
+Constructed from configuration:
+
+- the built-in native tool registry for the definition's declared tools,
+- an MCP connection manager for declared MCP servers (a deployment may inject
+  a manager that owns a real wire-protocol client factory),
+- telemetry with the configured log level,
+- built-in memory and in-memory/SQLite session providers,
+- a knowledge provider for declared knowledge sources (injected, or the
+  built-in in-memory retriever whose startup health check fails fast until a
+  deployment supplies documents),
+- a credential provider (injected non-environment provider, or the built-in
+  environment provider); every declared credential reference must resolve,
+- the platform policy, from an injected policy or a policy resolver for the
+  declared policy references; unresolved policy references fail fast.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -22,6 +38,8 @@ from micro_agent.config.config import (
     validate_config,
 )
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.knowledge import InMemoryKnowledgeRetriever, KnowledgeRetriever
+from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import InMemoryMemoryProvider, MemoryPolicy, MemoryProvider
 from micro_agent.models import (
     FakeModelConfig,
@@ -32,7 +50,9 @@ from micro_agent.models import (
 )
 from micro_agent.observability import Telemetry
 from micro_agent.runtime import AgentRuntime
+from micro_agent.security import AgentPolicy, CredentialProvider, EnvironmentCredentialProvider
 from micro_agent.session import InMemorySessionProvider, SessionProvider, SqliteSessionProvider
+from micro_agent.tools import Tool, builtin_tool_registry
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
@@ -67,17 +87,38 @@ def build_runtime(
     *,
     telemetry: Telemetry | None = None,
     fake_model_config: FakeModelConfig | None = None,
+    policy: AgentPolicy | None = None,
+    policy_resolver: Callable[[list[str]], AgentPolicy | None] | None = None,
+    mcp_manager: McpConnectionManager | None = None,
+    credential_provider: CredentialProvider | None = None,
+    knowledge_retriever: KnowledgeRetriever | None = None,
 ) -> RuntimeBootstrap:
     """Build the current runtime from a definition and environment.
 
     Definition model fields provide the base values. ``MICRO_AGENT_*`` values
-    override them, while a definition ``credential_ref`` resolves from the
-    named environment variable. No provider health check is performed here;
-    the selected runtime performs its startup checks before readiness.
+    override them, while a definition ``credential_ref`` resolves through the
+    configured credential provider (environment by default). The tool
+    registry, MCP client, memory/session providers, knowledge provider,
+    policy, and telemetry are constructed from the definition and
+    configuration; declarations that cannot be satisfied fail before runtime
+    creation. No provider health check is performed here; the selected
+    runtime performs its startup checks before readiness.
     """
 
-    resolved = _resolve_definition_config(definition)
+    credential_provider = credential_provider or EnvironmentCredentialProvider()
+    resolved = _resolve_definition_config(definition, credential_provider)
     runtime_name = _runtime_name(resolved.runtime)
+
+    telemetry = telemetry or Telemetry()
+    telemetry.logger.set_level(resolved.log_level)
+
+    _validate_credential_bindings(definition, credential_provider)
+    mcp = _build_mcp_manager(definition, mcp_manager, credential_provider)
+    tool_registry = _build_tool_registry(definition)
+    _validate_tool_bindings(definition, tool_registry, mcp)
+    effective_policy = _resolve_policy(definition, policy, policy_resolver)
+    knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever)
+
     provider = _build_model_provider(
         resolved,
         fake_model_config=fake_model_config,
@@ -85,9 +126,21 @@ def build_runtime(
     )
     if runtime_name == "google-adk":
         _validate_google_adk_bindings(definition, resolved)
+        memory_provider = _build_memory_provider(definition, resolved)
         from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
 
-        runtime: AgentRuntime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+        runtime: AgentRuntime = GoogleAdkRuntime(
+            GoogleAdkRuntimeConfig(
+                model_provider=provider,
+                memory_provider=memory_provider,
+                memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                knowledge_provider=knowledge_provider,
+                mcp_manager=mcp,
+                policy=effective_policy,
+                telemetry=telemetry,
+                tool_registry=tool_registry,
+            )
+        )
     else:
         session_provider = _build_session_provider(definition, resolved)
         memory_provider = _build_memory_provider(definition, resolved)
@@ -97,7 +150,11 @@ def build_runtime(
                 session_provider=session_provider,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                knowledge_provider=knowledge_provider,
+                mcp_manager=mcp,
+                policy=effective_policy,
                 telemetry=telemetry,
+                tool_registry=tool_registry,
             )
         )
     return RuntimeBootstrap(runtime=runtime, resolved=resolved)
@@ -126,54 +183,28 @@ def _runtime_name(value: str | None) -> str:
 
 
 def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: ResolvedConfig) -> None:
-    """Reject declarations the optional adapter cannot silently ignore."""
-    dependencies = definition.spec.dependencies
-    if (
-        dependencies.session.persistence != "none"
-        or dependencies.memory is not None
-        or config.session_endpoint is not None
-        or config.memory_endpoint is not None
+    """Reject declarations the optional adapter cannot map to ADK constructs."""
+    session = definition.spec.dependencies.session
+    endpoint = config.session_endpoint
+    if session.persistence not in {"none", "memory"} or (
+        endpoint and endpoint not in {"memory://", "inmemory://"}
     ):
         raise BootstrapError(
-            "Google ADK runtime does not yet map Micro-Agent memory/session providers; "
-            "use the custom runtime or remove the state declarations"
+            "Google ADK runtime maps only in-memory sessions; use session "
+            "persistence 'none' or 'memory' with a memory:// endpoint, or use "
+            "the custom runtime for sqlite/external state"
         )
-    if dependencies.mcp_servers or config.mcp_endpoints:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map declared MCP servers; "
-            "use the custom runtime or remove the MCP declarations"
-        )
-    if definition.spec.security.policy_refs:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map policy references; "
-            "use the custom runtime or remove the policy declarations"
-        )
-    if dependencies.knowledge:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map knowledge providers; "
-            "use the custom runtime or remove the knowledge declarations"
-        )
-    model = dependencies.model
+    model = definition.spec.dependencies.model
     if model is not None and model.credential_ref:
         raise BootstrapError(
             "Google ADK runtime does not yet map model credential references; "
             "use the custom runtime or remove the credential reference"
         )
-    if definition.spec.security.credential_refs:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map security credential references; "
-            "use the custom runtime or remove the credential declarations"
-        )
-    unresolved_tools = [tool.name for tool in dependencies.tools if tool.name != "echo"]
-    if unresolved_tools:
-        names = ", ".join(unresolved_tools)
-        raise BootstrapError(
-            "Google ADK runtime cannot resolve declared tools yet: "
-            f"{names}; use the custom runtime or remove them"
-        )
 
 
-def _resolve_definition_config(definition: MicroAgentDefinition) -> ResolvedConfig:
+def _resolve_definition_config(
+    definition: MicroAgentDefinition, credential_provider: CredentialProvider
+) -> ResolvedConfig:
     model = definition.spec.dependencies.model
     overrides: dict[str, Any] = {}
     credential_ref: SecretRef | None = None
@@ -199,8 +230,58 @@ def _resolve_definition_config(definition: MicroAgentDefinition) -> ResolvedConf
         detail = "; ".join(diagnostic.message for diagnostic in errors)
         raise BootstrapError(f"Invalid runtime configuration: {detail}")
     if credential_ref is not None and resolved.model_api_key is None:
+        # The environment is resolved first (configuration precedence); a
+        # configured non-environment provider is the fallback binding.
+        resolved.model_api_key = credential_provider.resolve(credential_ref.name)
+    if credential_ref is not None and resolved.model_api_key is None:
         raise BootstrapError(f"Required model credential '{credential_ref.name}' is not available")
     return resolved
+
+
+def _validate_credential_bindings(
+    definition: MicroAgentDefinition,
+    credential_provider: CredentialProvider,
+) -> None:
+    """Every declared credential reference must resolve before runtime creation."""
+    required: list[str] = []
+    model = definition.spec.dependencies.model
+    if model is not None and model.credential_ref:
+        required.append(model.credential_ref)
+    required.extend(
+        server.credential_ref
+        for server in definition.spec.dependencies.mcp_servers
+        if server.credential_ref
+    )
+    required.extend(definition.spec.security.credential_refs)
+    missing = sorted({ref for ref in required if credential_provider.resolve(ref) is None})
+    if missing:
+        raise BootstrapError(f"Required credentials are not available: {', '.join(missing)}")
+
+
+def _resolve_policy(
+    definition: MicroAgentDefinition,
+    injected: AgentPolicy | None,
+    resolver: Callable[[list[str]], AgentPolicy | None] | None,
+) -> AgentPolicy | None:
+    """Resolve the effective platform policy from injection or policy refs.
+
+    Declared policy references must resolve to a policy — through the
+    injected policy or a configured resolver — or startup fails; silently
+    running without the declared policy would overstate allowed autonomy.
+    """
+    policy_refs = list(definition.spec.security.policy_refs)
+    if not policy_refs:
+        return injected
+    if injected is not None:
+        return injected
+    if resolver is not None:
+        resolved = resolver(policy_refs)
+        if resolved is not None:
+            return resolved
+    raise BootstrapError(
+        f"Policy references cannot be resolved: {', '.join(policy_refs)}; "
+        "inject a policy or a policy resolver through the bootstrap"
+    )
 
 
 def _build_session_provider(
@@ -294,6 +375,77 @@ def _build_memory_provider(
             "providers are not configured"
         )
     return InMemoryMemoryProvider(MemoryPolicy())
+
+
+def _build_mcp_manager(
+    definition: MicroAgentDefinition,
+    injected: McpConnectionManager | None,
+    credential_provider: CredentialProvider,
+) -> McpConnectionManager | None:
+    """Construct the MCP client for declared servers; an injected manager wins.
+
+    The constructed manager applies the built-in MCP security policy and
+    resolves declared MCP credentials through the configured credential
+    provider. It has no wire-protocol client factory, so connecting fails at
+    startup until a deployment supplies one (the official SDK integration is
+    tracked separately). Failing non-ready is deliberate: silently skipping
+    declared MCP servers would understate the agent's real capabilities.
+    """
+    if not definition.spec.dependencies.mcp_servers:
+        return None
+    if injected is not None:
+        return injected
+    return McpConnectionManager(credential_resolver=credential_provider.resolve)
+
+
+def _build_knowledge_provider(
+    definition: MicroAgentDefinition,
+    injected: KnowledgeRetriever | None,
+) -> KnowledgeRetriever | None:
+    """Construct the knowledge provider for declared knowledge sources.
+
+    Without an injected retriever, the built-in in-memory retriever is used;
+    it holds no documents, so the startup health check fails fast for any
+    declared source until a deployment supplies one.
+    """
+    if not definition.spec.dependencies.knowledge:
+        return None
+    if injected is not None:
+        return injected
+    return InMemoryKnowledgeRetriever()
+
+
+def _build_tool_registry(definition: MicroAgentDefinition) -> dict[str, Tool]:
+    """Instantiate the built-in native tools declared by the definition."""
+    builtins = builtin_tool_registry()
+    return {
+        tool_definition.name: builtins[tool_definition.name]
+        for tool_definition in definition.spec.dependencies.tools
+        if tool_definition.source != "mcp" and tool_definition.name in builtins
+    }
+
+
+def _validate_tool_bindings(
+    definition: MicroAgentDefinition,
+    registry: dict[str, Tool],
+    mcp_manager: McpConnectionManager | None,
+) -> None:
+    """Reject tool declarations the constructed registries cannot satisfy."""
+    unresolved = [
+        tool_definition.name
+        for tool_definition in definition.spec.dependencies.tools
+        if tool_definition.source != "mcp" and tool_definition.name not in registry
+    ]
+    if unresolved:
+        names = ", ".join(unresolved)
+        raise BootstrapError(
+            f"Cannot resolve declared native tools: {names}; only built-in "
+            "native tools and MCP tools can be resolved"
+        )
+    if mcp_manager is None and any(
+        tool_definition.source == "mcp" for tool_definition in definition.spec.dependencies.tools
+    ):
+        raise BootstrapError("MCP-sourced tools are declared but no MCP servers are declared")
 
 
 def _build_model_provider(

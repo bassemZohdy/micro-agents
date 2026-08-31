@@ -91,8 +91,13 @@ class McpClient(ABC):
     """Abstract MCP client interface."""
 
     @abstractmethod
-    async def connect(self, config: McpConfig) -> None:
-        """Connect to an MCP server."""
+    async def connect(self, config: McpConfig, credential: str | None = None) -> None:
+        """Connect to an MCP server.
+
+        The credential is resolved by the connection manager from the
+        configured credential provider and is passed separately from the
+        config so it never appears in config metadata, logs, or errors.
+        """
 
     @abstractmethod
     async def discover(self) -> McpDiscovery:

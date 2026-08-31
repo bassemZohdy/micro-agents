@@ -7,6 +7,7 @@ from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
+from micro_agent.security import AgentPolicy
 from micro_agent.session import InMemorySessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime
 from runtimes.google_adk import GoogleAdkRuntime
@@ -91,16 +92,24 @@ def test_unsupported_runtime_fails_before_runtime_creation(monkeypatch):
         build_runtime(_definition(provider="fake"))
 
 
-def test_google_adk_runtime_rejects_unmapped_state_bindings(monkeypatch):
+def test_google_adk_runtime_accepts_in_memory_session_persistence(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
-    with pytest.raises(BootstrapError, match="memory/session providers"):
-        build_runtime(_definition(provider="fake", session={"persistence": "memory"}))
+    bootstrap = build_runtime(
+        _definition(provider="fake", session={"persistence": "memory", "ttl_seconds": 60})
+    )
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert bootstrap.runtime.capabilities().memory is False
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
 
 
-def test_google_adk_runtime_rejects_ignored_state_endpoint(monkeypatch):
+def test_google_adk_runtime_rejects_sqlite_session_persistence(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
     monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "sqlite:///:memory:")
-    with pytest.raises(BootstrapError, match="memory/session providers"):
+    with pytest.raises(BootstrapError, match="only in-memory sessions"):
         build_runtime(_definition(provider="fake"))
 
 
@@ -261,3 +270,385 @@ def test_state_endpoint_without_definition_is_not_silently_ignored(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "sqlite:///:memory:")
     with pytest.raises(BootstrapError, match="persistence is 'none'"):
         build_runtime(_definition(provider="fake"))
+
+
+def test_google_adk_runtime_maps_declared_memory_dependency(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    bootstrap = build_runtime(
+        _definition(provider="fake", memory={"ref": "agent-memory", "scope": "agent"})
+    )
+    try:
+        assert isinstance(bootstrap.runtime._config.memory_provider, InMemoryMemoryProvider)
+        assert bootstrap.runtime.capabilities().memory is True
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_unresolvable_credential_refs_fail_before_runtime_creation(monkeypatch):
+    monkeypatch.delenv("external-token", raising=False)
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {"model": {"ref": "fake-model", "provider": "fake"}},
+                "security": {"credential_refs": ["external-token"]},
+            },
+        }
+    )
+    with pytest.raises(BootstrapError, match="Required credentials are not available"):
+        build_runtime(definition)
+
+
+def test_resolvable_credential_refs_pass_validation(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("EXTERNAL_TOKEN", "token-value")
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {"model": {"ref": "fake-model", "provider": "fake"}},
+                "security": {"credential_refs": ["EXTERNAL_TOKEN"]},
+            },
+        }
+    )
+    bootstrap = build_runtime(definition)
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+@pytest.mark.asyncio
+async def test_non_environment_credential_provider_resolves_references(monkeypatch):
+    monkeypatch.delenv("vault-token", raising=False)
+    from micro_agent.security import StaticCredentialProvider
+
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {
+                        "ref": "reasoning-model",
+                        "model_id": "gpt-4o-mini",
+                        "provider": "openai-compatible",
+                        "endpoint": "https://llm.example.test/v1",
+                        "credential_ref": "vault-token",
+                    }
+                },
+                "security": {"credential_refs": ["vault-token"]},
+            },
+        }
+    )
+    bootstrap = build_runtime(
+        definition,
+        credential_provider=StaticCredentialProvider({"vault-token": "s3cret-value"}),
+    )
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, OpenAICompatProvider)
+        assert provider._config.api_key == "s3cret-value"
+        assert bootstrap.resolved.model_api_key == "s3cret-value"
+    finally:
+        await bootstrap.runtime.close()
+
+
+def test_declared_mcp_servers_construct_connection_manager(monkeypatch):
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "mcp_servers": [
+                        {
+                            "ref": "profile-services",
+                            "transport": "streamable-http",
+                            "endpoint": "https://mcp.profile.example.test",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+    bootstrap = build_runtime(definition)
+    try:
+        manager = bootstrap.runtime._config.mcp_manager
+        assert manager is not None
+        assert bootstrap.runtime.capabilities().mcp is True
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+@pytest.mark.asyncio
+async def test_mcp_manager_without_wire_client_fails_startup_non_ready(monkeypatch):
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "mcp_servers": [
+                        {
+                            "ref": "profile-services",
+                            "transport": "streamable-http",
+                            "endpoint": "https://mcp.profile.example.test",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+    bootstrap = build_runtime(definition)
+    agent = DefaultMicroAgent(definition, bootstrap.runtime)
+    try:
+        await agent.initialize()
+        with pytest.raises(Exception, match="MCP client factory"):
+            await agent.start()
+    finally:
+        await agent.shutdown()
+        await bootstrap.runtime.close()
+
+
+def test_google_adk_runtime_maps_declared_mcp_servers(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "mcp_servers": [
+                        {
+                            "ref": "profile-services",
+                            "transport": "streamable-http",
+                            "endpoint": "http://127.0.0.1:9000",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+    bootstrap = build_runtime(definition)
+    try:
+        assert bootstrap.runtime._config.mcp_manager is not None
+        assert bootstrap.runtime.capabilities().mcp is True
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_unresolved_native_tools_fail_before_runtime_creation():
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "tools": [{"name": "check_eligibility", "source": "native"}],
+                },
+            },
+        }
+    )
+    with pytest.raises(BootstrapError, match="Cannot resolve declared native tools"):
+        build_runtime(definition)
+
+
+def test_mcp_sourced_tools_require_declared_mcp_servers():
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "tools": [{"name": "profile-lookup", "source": "mcp"}],
+                },
+            },
+        }
+    )
+    with pytest.raises(BootstrapError, match="no MCP servers are declared"):
+        build_runtime(definition)
+
+
+def test_injected_policy_is_passed_to_the_selected_runtime():
+    policy = AgentPolicy(denied_tools=["unrelated"])
+    bootstrap = build_runtime(_definition(provider="fake"), policy=policy)
+    try:
+        assert bootstrap.runtime._config.policy is policy
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_telemetry_is_constructed_with_configured_log_level():
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        import logging
+
+        assert bootstrap.runtime._config.telemetry is not None
+        assert (
+            bootstrap.runtime._config.telemetry.logger._logger.level
+            == logging.getLogger("micro_agent").level
+        )
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def _policy_definition():
+    return load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "policy-bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {"model": {"ref": "fake-model", "provider": "fake"}},
+                "security": {"policy_refs": ["access-policy"]},
+            },
+        }
+    )
+
+
+def test_policy_refs_resolve_through_configured_resolver():
+    seen_refs: list[list[str]] = []
+
+    def resolver(refs: list[str]):
+        seen_refs.append(refs)
+        return AgentPolicy(denied_tools=["echo"])
+
+    bootstrap = build_runtime(_policy_definition(), policy_resolver=resolver)
+    try:
+        assert seen_refs == [["access-policy"]]
+        assert bootstrap.runtime._config.policy is not None
+        assert bootstrap.runtime._config.policy.denied_tools == ["echo"]
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_unresolved_policy_refs_fail_before_runtime_creation():
+    with pytest.raises(BootstrapError, match="Policy references cannot be resolved"):
+        build_runtime(_policy_definition())
+
+
+def test_injected_policy_takes_precedence_over_resolver():
+    injected = AgentPolicy(denied_tools=["echo"])
+
+    def resolver(refs: list[str]):
+        raise AssertionError("resolver must not run when a policy is injected")
+
+    bootstrap = build_runtime(_policy_definition(), policy=injected, policy_resolver=resolver)
+    try:
+        assert bootstrap.runtime._config.policy is injected
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def _knowledge_definition():
+    return load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "knowledge-bootstrap-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Bootstrap test agent."},
+                "dependencies": {
+                    "model": {"ref": "fake-model", "provider": "fake"},
+                    "knowledge": [{"ref": "residency-rules", "source_type": "document"}],
+                },
+            },
+        }
+    )
+
+
+def test_declared_knowledge_constructs_builtin_provider():
+    from micro_agent.knowledge import InMemoryKnowledgeRetriever
+
+    bootstrap = build_runtime(_knowledge_definition())
+    try:
+        assert isinstance(bootstrap.runtime._config.knowledge_provider, InMemoryKnowledgeRetriever)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_declared_knowledge_constructs_provider_for_google_adk(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    from micro_agent.knowledge import InMemoryKnowledgeRetriever
+
+    bootstrap = build_runtime(_knowledge_definition())
+    try:
+        assert isinstance(bootstrap.runtime._config.knowledge_provider, InMemoryKnowledgeRetriever)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+@pytest.mark.asyncio
+async def test_unavailable_knowledge_source_fails_startup():
+    agent = DefaultMicroAgent(
+        _knowledge_definition(), build_runtime(_knowledge_definition()).runtime
+    )
+    try:
+        await agent.initialize()
+        with pytest.raises(RuntimeError, match="knowledge source 'residency-rules'"):
+            await agent.start()
+    finally:
+        await agent.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_available_knowledge_source_passes_startup():
+    from micro_agent.knowledge import InMemoryKnowledgeRetriever
+
+    retriever = InMemoryKnowledgeRetriever(documents={"residency-rules": ["Rule one."]})
+    bootstrap = build_runtime(_knowledge_definition(), knowledge_retriever=retriever)
+    agent = DefaultMicroAgent(_knowledge_definition(), bootstrap.runtime)
+    try:
+        await agent.initialize()
+        await agent.start()
+        assert "knowledge" in bootstrap.runtime.health_probes()
+    finally:
+        await agent.stop()
+        await agent.shutdown()
+        await bootstrap.runtime.close()
