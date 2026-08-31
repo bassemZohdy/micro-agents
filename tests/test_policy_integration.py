@@ -2,7 +2,7 @@
 
 import pytest
 
-from micro_agent.core import AgentRequest
+from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.models import FakeModelConfig, FakeModelProvider
 from micro_agent.security import (
@@ -102,12 +102,90 @@ class TestToolPolicyEnforcement:
         assert "side-effect policy" in (response.output["tool_results"][0]["error"] or "")
 
     @pytest.mark.asyncio
-    async def test_approval_required_blocks_tools(self):
+    async def test_approval_required_pauses_with_continuation(self):
+        from micro_agent.security import InMemoryApprovalStore
+
         policy = AgentPolicy(approval_required=True)
-        runtime = _echo_runtime(policy=policy)
+        runtime = _echo_runtime(policy=policy, approval_store=InMemoryApprovalStore())
         agent = await runtime.create(_definition())
         response = await runtime.invoke(agent, AgentRequest(input={}))
-        assert "approval" in (response.output["tool_results"][0]["error"] or "")
+        assert response.status == "approval_required"
+        assert response.metadata["continuation_id"]
+        assert response.metadata["pending_tools"] == ["echo"]
+        assert response.output["tool_results"] == []
+        # The pause is not a completed invocation: nothing was executed and
+        # nothing was persisted to the session.
+        assert await runtime._approval_store.get(response.metadata["continuation_id"])
+
+    @pytest.mark.asyncio
+    async def test_approved_continuation_executes_and_completes(self):
+        from micro_agent.security import InMemoryApprovalStore
+
+        policy = AgentPolicy(approval_required=True)
+        runtime = _echo_runtime(policy=policy, approval_store=InMemoryApprovalStore())
+        agent = await runtime.create(_definition())
+        paused = await runtime.invoke(agent, AgentRequest(input={}))
+        continuation_id = paused.metadata["continuation_id"]
+        response = await runtime.invoke(
+            agent,
+            AgentRequest(input={}, continuation_id=continuation_id, approval_decision="approve"),
+        )
+        assert response.status == "success"
+        tool_results = response.output["tool_results"]
+        assert tool_results[0]["output"] == {"echoed": "hi"}
+        assert response.metadata["tools_called"] == ["echo"]
+        # The continuation is consumed.
+        assert not await runtime._approval_store.get(continuation_id)
+
+    @pytest.mark.asyncio
+    async def test_denied_continuation_feeds_denial_to_model(self):
+        from micro_agent.security import InMemoryApprovalStore
+
+        policy = AgentPolicy(approval_required=True)
+        runtime = _echo_runtime(policy=policy, approval_store=InMemoryApprovalStore())
+        agent = await runtime.create(_definition())
+        paused = await runtime.invoke(agent, AgentRequest(input={}))
+        response = await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={},
+                continuation_id=paused.metadata["continuation_id"],
+                approval_decision="deny",
+            ),
+        )
+        assert response.status == "success"
+        tool_results = response.output["tool_results"]
+        assert tool_results[0].get("denied") is True
+        assert "approval denied" in tool_results[0]["error"]
+        assert response.metadata["tools_called"] == []
+
+    @pytest.mark.asyncio
+    async def test_unknown_continuation_fails_fast(self):
+        runtime = _echo_runtime(policy=AgentPolicy(approval_required=True))
+        agent = await runtime.create(_definition())
+        with pytest.raises(ContinuationNotFoundError):
+            await runtime.invoke(
+                agent,
+                AgentRequest(input={}, continuation_id="missing", approval_decision="approve"),
+            )
+
+    @pytest.mark.asyncio
+    async def test_expired_continuation_fails_fast(self):
+        from micro_agent.security import InMemoryApprovalStore
+
+        store = InMemoryApprovalStore(default_ttl_seconds=0.0)
+        runtime = _echo_runtime(policy=AgentPolicy(approval_required=True), approval_store=store)
+        agent = await runtime.create(_definition())
+        paused = await runtime.invoke(agent, AgentRequest(input={}))
+        with pytest.raises(ContinuationNotFoundError):
+            await runtime.invoke(
+                agent,
+                AgentRequest(
+                    input={},
+                    continuation_id=paused.metadata["continuation_id"],
+                    approval_decision="approve",
+                ),
+            )
 
     @pytest.mark.asyncio
     async def test_allowed_tool_executes(self):

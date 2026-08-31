@@ -48,7 +48,8 @@ from micro_agent.models import (
     OpenAICompatConfig,
     OpenAICompatProvider,
 )
-from micro_agent.observability import Telemetry
+from micro_agent.observability import FileAuditSink, JsonlAuditSink, NullAuditSink, Telemetry
+from micro_agent.observability.audit import AuditSink
 from micro_agent.runtime import AgentRuntime
 from micro_agent.security import AgentPolicy, CredentialProvider, EnvironmentCredentialProvider
 from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
@@ -119,6 +120,7 @@ def build_runtime(
     _validate_tool_bindings(definition, tool_registry, mcp)
     effective_policy = _resolve_policy(definition, policy, policy_resolver)
     knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever)
+    audit_sink = build_audit_sink(resolved)
 
     provider = _build_model_provider(
         resolved,
@@ -138,6 +140,7 @@ def build_runtime(
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
                 policy=effective_policy,
+                audit=audit_sink,
                 telemetry=telemetry,
                 tool_registry=tool_registry,
             )
@@ -154,6 +157,7 @@ def build_runtime(
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
                 policy=effective_policy,
+                audit=audit_sink,
                 telemetry=telemetry,
                 tool_registry=tool_registry,
             )
@@ -529,4 +533,31 @@ def build_authenticator(config: ResolvedConfig) -> Authenticator | None:
     raise BootstrapError(f"Unsupported auth mode '{config.auth}'. Supported modes: none, oidc")
 
 
-__all__ = ["BootstrapError", "RuntimeBootstrap", "build_authenticator", "build_runtime"]
+def build_audit_sink(config: ResolvedConfig) -> AuditSink:
+    """Build the audit sink from resolved configuration.
+
+    ``stdout`` (default) emits redacted JSON lines for platform log
+    collection; ``file`` appends to ``MICRO_AGENT_AUDIT_FILE``; ``none``
+    disables auditing.
+    """
+    mode = (config.audit_sink or "stdout").strip().lower()
+    if mode in ("", "stdout"):
+        return JsonlAuditSink()
+    if mode == "file":
+        if not config.audit_file:
+            raise BootstrapError("MICRO_AGENT_AUDIT_SINK=file requires MICRO_AGENT_AUDIT_FILE")
+        return FileAuditSink(config.audit_file)
+    if mode == "none":
+        return NullAuditSink()
+    raise BootstrapError(
+        f"Unsupported audit sink '{config.audit_sink}'. Supported: none, stdout, file"
+    )
+
+
+__all__ = [
+    "BootstrapError",
+    "RuntimeBootstrap",
+    "build_audit_sink",
+    "build_authenticator",
+    "build_runtime",
+]

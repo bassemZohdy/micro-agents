@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -19,6 +19,7 @@ from micro_agent.core import (
     AgentRequest,
     AuthenticationError,
     AuthorizationError,
+    ContinuationNotFoundError,
     DefaultMicroAgent,
     DependencyUnavailableError,
     InvocationOverloadedError,
@@ -28,7 +29,7 @@ from micro_agent.interoperability.a2a import (
     a2a_well_known_path,
     agent_card_from_definition,
 )
-from micro_agent.observability import HealthChecker, Telemetry
+from micro_agent.observability import AuditSink, HealthChecker, Telemetry
 from micro_agent.security.auth import AuthenticatedIdentity, Authenticator
 
 # ---------------------------------------------------------------------------
@@ -48,6 +49,11 @@ class InvokeRequestModel(BaseModel):
         gt=0,
         description="Optional end-to-end invocation deadline in seconds.",
     )
+    continuation_id: str | None = Field(
+        default=None,
+        description="Approval continuation id from an approval_required response.",
+    )
+    approval_decision: Literal["approve", "deny"] | None = None
 
 
 class InvokeResponseModel(BaseModel):
@@ -91,6 +97,8 @@ class InvokeRequest:
     session_id: str | None = None
     caller_metadata: dict[str, Any] = field(default_factory=dict)
     timeout_seconds: float | None = None
+    continuation_id: str | None = None
+    approval_decision: str | None = None
 
 
 @dataclass
@@ -163,6 +171,7 @@ def create_app(
     base_url: str | None = None,
     max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
     authenticator: Authenticator | None = None,
+    audit_sink: AuditSink | None = None,
 ) -> FastAPI:
     """Create a FastAPI application for a Micro-Agent.
 
@@ -209,8 +218,12 @@ def create_app(
             return await call_next(request)
         try:
             identity: AuthenticatedIdentity = await authenticator.authenticate(request.headers)
-        except AuthenticationError:
+        except AuthenticationError as exc:
             telemetry.increment("http_auth_failures_total", {"route": request.url.path})
+            if audit_sink is not None:
+                audit_sink.record(
+                    "auth.failure", route=request.url.path, reason=str(exc) or "rejected"
+                )
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 headers={"WWW-Authenticate": "Bearer"},
@@ -274,6 +287,8 @@ def create_app(
             timeout_seconds=request.timeout_seconds,
             caller_identity=identity.caller if identity else None,
             user_context=identity.user if identity else None,
+            continuation_id=request.continuation_id,
+            approval_decision=request.approval_decision,
         )
         if request.request_id:
             agent_request.request_id = request.request_id
@@ -290,6 +305,11 @@ def create_app(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 headers={"Retry-After": "1"},
                 detail={"code": "invocation_overloaded", "limit": exc.limit},
+            ) from exc
+        except ContinuationNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "continuation_not_found", "message": str(exc)},
             ) from exc
         except ContractValidationError as exc:
             raise HTTPException(

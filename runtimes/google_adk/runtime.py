@@ -44,7 +44,7 @@ from micro_agent.knowledge import KnowledgeRetriever, KnowledgeSource
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.models import ModelConfig, ModelProvider
-from micro_agent.observability import Telemetry
+from micro_agent.observability import AuditSink, Telemetry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import AgentPolicy, PolicyEvaluator
 from micro_agent.tools import Tool, builtin_tool_registry
@@ -78,6 +78,7 @@ class GoogleAdkRuntimeConfig:
     knowledge_provider: KnowledgeRetriever | None = None
     mcp_manager: McpConnectionManager | None = None
     policy: AgentPolicy | None = None
+    audit: AuditSink | None = None
     telemetry: Telemetry | None = None
     memory_provider: MemoryProvider | None = None
     memory_policy: MemoryPolicy | None = None
@@ -129,7 +130,12 @@ class GoogleAdkRuntime(AgentRuntime):
         adk_model = self._adk_model(definition, model_config)
         tools = self._resolve_tools(definition)
         adk_tools = [
-            _as_adk_tool(tool, evaluator=self._policy_evaluator, telemetry=self._telemetry)
+            _as_adk_tool(
+                tool,
+                evaluator=self._policy_evaluator,
+                telemetry=self._telemetry,
+                audit=self._config.audit,
+            )
             for tool in tools.values()
         ]
         adk_agent_name = _adk_name(definition.metadata.name)
@@ -231,10 +237,12 @@ class GoogleAdkRuntime(AgentRuntime):
             for server in definition.spec.dependencies.mcp_servers:
                 decision = self._policy_evaluator.evaluate_mcp(server.ref)
                 if not decision.allowed:
+                    self._audit("policy.mcp_denied", mcp=server.ref, reason=decision.reason)
                     raise PermissionError(decision.reason)
             for skill in definition.spec.dependencies.skills:
                 decision = self._policy_evaluator.evaluate_skill(skill.id)
                 if not decision.allowed:
+                    self._audit("policy.skill_denied", skill=skill.id, reason=decision.reason)
                     raise PermissionError(decision.reason)
             model_ref = definition.spec.dependencies.model
             if model_ref is not None:
@@ -242,6 +250,7 @@ class GoogleAdkRuntime(AgentRuntime):
                     model_ref.ref, model_ref.model_id, model_ref.provider
                 )
                 if not decision.allowed:
+                    self._audit("policy.model_denied", model=model_ref.ref, reason=decision.reason)
                     raise PermissionError(decision.reason)
 
         mcp_manager = self._config.mcp_manager
@@ -250,7 +259,12 @@ class GoogleAdkRuntime(AgentRuntime):
             if not agent._internal["mcp_tools_appended"]:
                 discovered = mcp_manager.tools()
                 adk_tools = [
-                    _as_adk_tool(tool, evaluator=self._policy_evaluator, telemetry=self._telemetry)
+                    _as_adk_tool(
+                        tool,
+                        evaluator=self._policy_evaluator,
+                        telemetry=self._telemetry,
+                        audit=self._config.audit,
+                    )
                     for tool in discovered.values()
                 ]
                 adk_agent = agent._internal["adk_agent"]
@@ -448,6 +462,10 @@ class GoogleAdkRuntime(AgentRuntime):
         )
         if session is not None:
             await memory_service.add_session_to_memory(session)
+
+    def _audit(self, event: str, **fields: Any) -> None:
+        if self._config.audit is not None:
+            self._config.audit.record(event, **fields)
 
     def _build_memory_service(self) -> Any:
         """Construct the ADK memory service for the declared memory dependency."""
@@ -671,6 +689,7 @@ def _as_adk_tool(
     *,
     evaluator: PolicyEvaluator | None = None,
     telemetry: Telemetry | None = None,
+    audit: AuditSink | None = None,
 ) -> Any:
     """Adapt a Micro-Agent tool to ADK's client-side ``BaseTool`` contract.
 
@@ -700,11 +719,13 @@ def _as_adk_tool(
                 parameters=cast(Any, schema or None),
             )
 
-        def _denied(self, reason: str) -> dict[str, Any]:
+        def _denied(self, reason: str, event: str = "policy.tool_denied") -> dict[str, Any]:
             tool_name = self._micro_tool.metadata.name
             if telemetry is not None:
                 telemetry.increment("policy_denials_total", {"tool": tool_name})
                 telemetry.logger.warning("tool denied by policy", tool=tool_name, reason=reason)
+            if audit is not None:
+                audit.record(event, tool=tool_name, reason=reason)
             return {"error": reason}
 
         async def run_async(self, *, args: dict[str, Any], tool_context: Any) -> Any:
@@ -717,7 +738,8 @@ def _as_adk_tool(
                 )
                 if not side_effect_decision.allowed:
                     return self._denied(
-                        f"denied by side-effect policy: {side_effect_decision.reason}"
+                        f"denied by side-effect policy: {side_effect_decision.reason}",
+                        event="policy.side_effect_denied",
                     )
             result = await self._micro_tool.execute(args)
             if result.is_error:

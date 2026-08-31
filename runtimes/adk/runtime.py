@@ -21,6 +21,7 @@ from micro_agent.core import (
     AgentIdentity,
     AgentRequest,
     AgentResponse,
+    ContinuationNotFoundError,
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
 from micro_agent.health import DependencyProbe, HealthStatus
@@ -33,18 +34,29 @@ from micro_agent.models import (
     ModelConfig,
     ModelProvider,
 )
-from micro_agent.observability import Telemetry
+from micro_agent.observability import AuditSink, Telemetry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
+    ApprovalStore,
+    InMemoryApprovalStore,
     Operation,
     OperationRegistry,
     OperationResult,
+    PendingApproval,
     PolicyEvaluator,
     build_security_context,
 )
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry
+
+
+class _ApprovalPausedError(Exception):
+    """Internal marker: the invocation paused waiting for an approval."""
+
+    def __init__(self, approval: PendingApproval) -> None:
+        self.approval = approval
+
 
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 _MAX_SESSION_HISTORY_MESSAGES = 20
@@ -109,6 +121,8 @@ class AdkRuntimeConfig:
     knowledge_provider: KnowledgeRetriever | None = None
     mcp_manager: McpConnectionManager | None = None
     policy: AgentPolicy | None = None
+    audit: AuditSink | None = None
+    approval_store: ApprovalStore | None = None
     operation_registry: OperationRegistry | None = None
     telemetry: Telemetry | None = None
     tool_registry: dict[str, Tool] | None = None
@@ -135,6 +149,7 @@ class AdkRuntime(AgentRuntime):
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )
+        self._approval_store = self._config.approval_store or InMemoryApprovalStore()
         self._knowledge_refs: list[KnowledgeSource] = []
         self._started = False
 
@@ -246,10 +261,12 @@ class AdkRuntime(AgentRuntime):
             for server in definition.spec.dependencies.mcp_servers:
                 decision = self._policy_evaluator.evaluate_mcp(server.ref)
                 if not decision.allowed:
+                    self._audit("policy.mcp_denied", mcp=server.ref, reason=decision.reason)
                     raise PermissionError(decision.reason)
             for skill in definition.spec.dependencies.skills:
                 decision = self._policy_evaluator.evaluate_skill(skill.id)
                 if not decision.allowed:
+                    self._audit("policy.skill_denied", skill=skill.id, reason=decision.reason)
                     raise PermissionError(decision.reason)
             model_ref = definition.spec.dependencies.model
             if model_ref is not None:
@@ -257,6 +274,7 @@ class AdkRuntime(AgentRuntime):
                     model_ref.ref, model_ref.model_id, model_ref.provider
                 )
                 if not decision.allowed:
+                    self._audit("policy.model_denied", model=model_ref.ref, reason=decision.reason)
                     raise PermissionError(decision.reason)
         mcp_manager = self._config.mcp_manager
         if mcp_manager is not None:
@@ -381,6 +399,31 @@ class AdkRuntime(AgentRuntime):
                 session_id=request.session_id,
             )
             raise
+        except _ApprovalPausedError as paused:
+            # A pause is not an error: retry/fallback policies must not apply.
+            approval = paused.approval
+            pending_names = [str(tr.get("name", "")) for tr in approval.tool_requests]
+            self._audit(
+                "approval.requested",
+                agent=definition.metadata.name,
+                tools=pending_names,
+                continuation_id=approval.continuation_id,
+            )
+            self._telemetry.logger.warning(
+                "invocation paused awaiting approval",
+                request_id=request.request_id,
+                tools=pending_names,
+            )
+            return AgentResponse(
+                output={"content": "", "tool_results": approval.all_tool_results},
+                request_id=approval.request_id or request.request_id,
+                session_id=approval.session_id,
+                status="approval_required",
+                metadata={
+                    "continuation_id": approval.continuation_id,
+                    "pending_tools": pending_names,
+                },
+            )
         except Exception as exc:
             self._telemetry.increment("agent_invocation_errors_total", labels)
             self._telemetry.logger.error(
@@ -434,21 +477,37 @@ class AdkRuntime(AgentRuntime):
         max_iterations = semantics.max_iterations or self._config.default_max_iterations
         labels = {"agent": definition.metadata.name}
 
+        # Approval continuation: restore the paused conversation state before
+        # anything else. Unknown, expired, or foreign continuations fail fast.
+        resume: PendingApproval | None = None
+        approved: bool = False
+        if request.continuation_id:
+            resume = await self._approval_store.get(request.continuation_id)
+            if resume is None or resume.agent_id != agent.identity.agent_id:
+                raise ContinuationNotFoundError("unknown or expired continuation")
+            await self._approval_store.delete(request.continuation_id)
+            approved = request.approval_decision == "approve"
+
+        session_id = request.session_id or (resume.session_id if resume else None)
+        input_payload: dict[str, Any] = (
+            resume.input_payload if resume is not None else request.input
+        )
+
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
             attributes={
                 "agent": definition.metadata.name,
-                "session_id": request.session_id,
+                "session_id": session_id,
             },
         )
 
         session = None
-        if session_provider is not None and request.session_id:
-            session = await deadline.run(session_provider.get(request.session_id))
+        if session_provider is not None and session_id:
+            session = await deadline.run(session_provider.get(session_id))
             if session is None:
                 session = await deadline.run(
-                    session_provider.create(request.session_id, ttl_seconds=session_ttl)
+                    session_provider.create(session_id, ttl_seconds=session_ttl)
                 )
 
         inner_start = time.monotonic()
@@ -457,7 +516,7 @@ class AdkRuntime(AgentRuntime):
         ]
         if session is not None:
             messages.extend(session.messages[-_MAX_SESSION_HISTORY_MESSAGES:])
-        messages.append({"role": "user", "content": json.dumps(request.input, default=str)})
+        messages.append({"role": "user", "content": json.dumps(input_payload, default=str)})
 
         model_ref = definition.spec.dependencies.model
         model_config = ModelConfig(
@@ -480,6 +539,61 @@ class AdkRuntime(AgentRuntime):
         usage: dict[str, int] = {}
         iterations = 0
         max_iterations_reached = False
+
+        if resume is not None:
+            # Replay the paused tool wave: approved requests execute (hard
+            # policy denials still apply), denied requests feed the model a
+            # denial so it can respond. The conversation continues from the
+            # paused snapshot, which already ends with the assistant
+            # tool-request turn.
+            iterations = resume.iterations
+            all_tool_results = list(resume.all_tool_results)
+            if approved:
+                self._audit(
+                    "approval.granted",
+                    agent=definition.metadata.name,
+                    tools=[str(tr.get("name", "")) for tr in resume.tool_requests],
+                    continuation_id=resume.continuation_id,
+                )
+                tool_results = await self._execute_tools(
+                    tools,
+                    resume.tool_requests,
+                    trace_id,
+                    agent_span.span_id,
+                    labels,
+                    deadline=deadline,
+                    skip_side_effect_approval=True,
+                )
+            else:
+                self._audit(
+                    "approval.denied",
+                    agent=definition.metadata.name,
+                    tools=[str(tr.get("name", "")) for tr in resume.tool_requests],
+                    continuation_id=resume.continuation_id,
+                )
+                tool_results = [
+                    {
+                        "tool": str(tool_request.get("name", "")),
+                        "output": None,
+                        "error": "denied by caller: approval denied",
+                        "latency_ms": 0.0,
+                        "denied": True,
+                    }
+                    for tool_request in resume.tool_requests
+                ]
+            all_tool_results.extend(tool_results)
+            # Continue from the paused transcript verbatim; freshly built
+            # history is discarded so the assistant tool-request turn stays
+            # in place ahead of the replayed results.
+            messages = list(resume.messages)
+            for result in tool_results:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "name": result["tool"],
+                        "content": json.dumps(result["error"] or result["output"], default=str),
+                    }
+                )
 
         while True:
             iterations += 1
@@ -521,6 +635,22 @@ class AdkRuntime(AgentRuntime):
                 )
                 break
 
+            if self._approval_needed(agent, tools, response.tool_requests):
+                continuation_id = request.continuation_id or str(uuid4())
+                approval = PendingApproval(
+                    continuation_id=continuation_id,
+                    agent_id=agent.identity.agent_id,
+                    tool_requests=[dict(tr) for tr in response.tool_requests],
+                    messages=[dict(m) for m in messages],
+                    all_tool_results=list(all_tool_results),
+                    iterations=iterations,
+                    request_id=request.request_id,
+                    session_id=session_id,
+                    input_payload=dict(input_payload),
+                )
+                await self._approval_store.save(approval)
+                raise _ApprovalPausedError(approval)
+
             tool_results = await self._execute_tools(
                 tools,
                 response.tool_requests,
@@ -541,7 +671,7 @@ class AdkRuntime(AgentRuntime):
 
         if session is not None:
             session.messages.append(
-                {"role": "user", "content": json.dumps(request.input, default=str)}
+                {"role": "user", "content": json.dumps(input_payload, default=str)}
             )
             session.messages.append({"role": "assistant", "content": response.content})
             await deadline.run(
@@ -575,7 +705,7 @@ class AdkRuntime(AgentRuntime):
         return AgentResponse(
             output={"content": response.content, "tool_results": all_tool_results},
             request_id=request.request_id,
-            session_id=request.session_id,
+            session_id=session_id,
             status="success",
             metadata={
                 "usage": usage,
@@ -592,9 +722,40 @@ class AdkRuntime(AgentRuntime):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _deny(self, labels: dict[str, str], tool_name: str, reason: str) -> None:
+    def _approval_needed(
+        self,
+        agent: RuntimeAgent,
+        tools: dict[str, Tool],
+        tool_requests: list[dict[str, Any]],
+    ) -> bool:
+        """Whether any pending tool request is waiting on an approval policy."""
+        if self._policy_evaluator is None:
+            return False
+        for tool_request in tool_requests:
+            tool = tools.get(tool_request.get("name", ""))
+            if tool is None:
+                continue
+            if not self._policy_evaluator.evaluate_tool(tool.metadata.name).allowed:
+                continue
+            decision = self._policy_evaluator.evaluate_side_effect(tool.metadata.name)
+            if decision.requires_approval:
+                return True
+        return False
+
+    def _deny(
+        self,
+        labels: dict[str, str],
+        tool_name: str,
+        reason: str,
+        event: str = "policy.tool_denied",
+    ) -> None:
         self._telemetry.increment("policy_denials_total", {**labels, "tool": tool_name})
         self._telemetry.logger.warning("tool denied by policy", tool=tool_name, reason=reason)
+        self._audit(event, agent=labels.get("agent"), tool=tool_name, reason=reason)
+
+    def _audit(self, event: str, **fields: Any) -> None:
+        if self._config.audit is not None:
+            self._config.audit.record(event, **fields)
 
     def _resolve_tools(self, definition: MicroAgentDefinition) -> tuple[dict[str, Tool], list[str]]:
         """Resolve definition-declared tools against the configured/built-in registry."""
@@ -635,6 +796,7 @@ class AdkRuntime(AgentRuntime):
         parent_span_id: str,
         labels: dict[str, str],
         deadline: _InvocationDeadline | None = None,
+        skip_side_effect_approval: bool = False,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for tool_request in tool_requests:
@@ -668,8 +830,16 @@ class AdkRuntime(AgentRuntime):
                     )
                     continue
                 side_effect_decision = self._policy_evaluator.evaluate_side_effect(tool_name)
-                if not side_effect_decision.allowed:
-                    self._deny(labels, tool_name, side_effect_decision.reason)
+                approval_satisfied = (
+                    skip_side_effect_approval and side_effect_decision.requires_approval
+                )
+                if not side_effect_decision.allowed and not approval_satisfied:
+                    self._deny(
+                        labels,
+                        tool_name,
+                        side_effect_decision.reason,
+                        event="policy.side_effect_denied",
+                    )
                     results.append(
                         {
                             "tool": tool_name,

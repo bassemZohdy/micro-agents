@@ -67,11 +67,20 @@ class AgentRequest:
     timeout_seconds: float | None = None
     caller_identity: CallerIdentity | None = None
     user_context: UserContext | None = None
+    continuation_id: str | None = None
+    approval_decision: str | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid caller-provided deadlines before runtime work starts."""
         if self.timeout_seconds is not None and self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
+        if self.approval_decision is not None and self.approval_decision not in (
+            "approve",
+            "deny",
+        ):
+            raise ValueError("approval_decision must be 'approve' or 'deny'")
+        if self.continuation_id is not None and self.approval_decision is None:
+            raise ValueError("continuation_id requires approval_decision")
 
 
 @dataclass
@@ -104,6 +113,10 @@ class AuthorizationError(PermissionError):
 
 class DependencyUnavailableError(ConnectionError):
     """Raised when a required model, tool, or state dependency is unavailable."""
+
+
+class ContinuationNotFoundError(RuntimeError):
+    """Raised when an approval continuation is unknown, expired, or foreign."""
 
 
 # ---------------------------------------------------------------------------

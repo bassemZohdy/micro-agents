@@ -6,6 +6,20 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added approval/confirmation continuation in the built-in runtime: when a
+  policy requires approval for a side-effect operation, the invocation now
+  pauses instead of permanently denying — the pending tool requests and
+  conversation state are stored under a continuation id (`approval_required`
+  response status), and the caller resumes with `approval_decision:
+  approve` (executes the pending wave; hard policy denials still apply) or
+  `deny` (feeds the model a denial so it can respond). Unknown, expired, or
+  foreign continuations fail fast with a stable 404 contract. The approval
+  store is an SPI with a dependency-free in-memory default and TTL expiry.
+- Added an `AuditSink` SPI for durable, redacted security events: policy
+  denials (tool, side effect, skill, model, MCP), approval decisions, and
+  authentication failures are recorded as redacted JSON lines — `stdout` by
+  default for platform log collection, with `file` and `none` selected
+  through `MICRO_AGENT_AUDIT_SINK`/`MICRO_AGENT_AUDIT_FILE`.
 - Added transport authentication with verified identity: an `Authenticator`
   SPI selected through external configuration (`MICRO_AGENT_AUTH=oidc` with
   `MICRO_AGENT_AUTH_ISSUER`/`MICRO_AGENT_AUTH_AUDIENCE`), with OIDC/OAuth2

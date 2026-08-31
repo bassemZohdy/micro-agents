@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 435 collected | 370 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication tests); the remaining 65 run in the integration/e2e jobs |
+| Tests | 448 collected | 379 selected by the default test job (including the fourteen optional Google ADK adapter tests, authentication, and audit tests); the remaining 69 run in the integration/e2e jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -187,6 +187,12 @@ Implemented:
   definition requires caller identity without an authenticator
 - verified identity travels on `AgentRequest`; caller-supplied request
   metadata is never used as identity, enforced by a source-level guard test
+- approval/confirmation continuation in the built-in runtime: approval-gated
+  operations pause with a continuation id and resume on approve/deny; the
+  approval store is an SPI with an in-memory default
+- durable, redacted audit events through an `AuditSink` SPI (stdout JSONL
+  default, optional file sink) covering policy denials, approval decisions,
+  and authentication failures
 - programmatically injected allow/deny evaluator
 - in-memory operation registry
 - recursive log-key/known-value redaction
@@ -200,8 +206,13 @@ Gaps:
 
 - verified identity is not yet propagated through model, tool, and MCP
   operation signatures, and workload identity is not yet populated
+- the Google ADK adapter still converts `approval_required` into a denial;
+  its continuation should map onto ADK's native tool confirmation
 - generic `PolicyRule` conditions are not evaluated
-- approval-required behavior becomes denial with no continuation
+- the audit sink persists to the platform log pipeline or a local file;
+  database-backed audit arrives with production state providers
+- the approval store is process-local; production approval state arrives
+  with production state providers
 - idempotency storage is process-local and non-atomic
 
 ### State and knowledge
@@ -240,6 +251,9 @@ Implemented:
   the stable 401 `authentication_required` contract with `WWW-Authenticate:
   Bearer` before the agent is reached; health and discovery routes stay
   public
+- unknown/expired approval continuations map to a stable 404
+  `continuation_not_found` contract; `approval_required` responses carry a
+  continuation id and pending tool names
 - configurable `Content-Length` request-size guard (1 MiB default)
 - structured logger, in-memory metrics, and in-memory span tree
 

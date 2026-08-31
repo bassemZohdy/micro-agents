@@ -98,6 +98,33 @@ Behavior when `oidc` is configured:
 Verification requires the optional `auth` extra (`PyJWT`): install with
 `pip install 'micro-agents[auth]'`.
 
+## Audit events
+
+Security-relevant decisions — policy denials (tool, side effect, skill,
+model, MCP), approval decisions, and authentication failures — are recorded
+through a configurable audit sink. Sensitive keys are redacted at write
+time; events carry identifiers and reasons, never payloads or credentials.
+
+| Variable | Meaning |
+|---|---|
+| `MICRO_AGENT_AUDIT_SINK` | `stdout` (default), `file`, or `none` |
+| `MICRO_AGENT_AUDIT_FILE` | Append path; required when the sink is `file` |
+
+The default `stdout` sink writes one JSON object per line for platform log
+collection (the 12-factor durability path); `file` appends to a local file
+for deployments without a log pipeline.
+
+## Approval continuation
+
+When a policy sets `approval_required`, side-effect tool calls pause the
+invocation instead of silently executing or permanently failing: the
+response returns `status: approval_required` with a `continuation_id` and
+the pending tool names. The caller resumes the same invocation by posting
+`continuation_id` with `approval_decision: approve` (the pending tools
+execute; hard policy denials still apply) or `deny` (the model receives the
+denial and can respond). Continuations expire after five minutes of
+inactivity; unknown or expired ids fail with a stable 404.
+
 Production requirements:
 
 - inject values from environment, Kubernetes Secret, Vault, or another

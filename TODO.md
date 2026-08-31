@@ -81,9 +81,16 @@ shutdown either drains within its deadline or cancels remaining work safely.
 - [x] Stop treating caller-supplied metadata as identity; a source-level
       guard keeps request metadata out of identity construction.
 - [x] Evaluate skills and model restrictions as well as tools and MCP servers.
-- [ ] Implement approval/confirmation continuation instead of converting
-      `approval_required` into a permanent denial.
-- [ ] Make policy decisions and audit events durable and redacted.
+- [x] Implement approval/confirmation continuation in the built-in runtime
+      instead of converting `approval_required` into a permanent denial:
+      invocations pause with a continuation id and resume on approve/deny;
+      hard policy denials still apply to approved requests.
+- [ ] Map approval continuation onto the Google ADK adapter's native
+      tool-confirmation mechanism.
+- [x] Make policy decisions and audit events durable and redacted: an
+      `AuditSink` SPI records policy denials, approval decisions, and
+      authentication failures as redacted JSON lines (stdout by default for
+      platform collection, or a file sink).
 
 Acceptance: unauthorized calls fail before model invocation; authorized
 delegated calls preserve verified identity through model/tool/MCP operations.

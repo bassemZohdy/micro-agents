@@ -26,7 +26,12 @@ from micro_agent.definition import (
 from micro_agent.interoperability import create_app, serialize_response
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
-from micro_agent.security import AuthenticatedIdentity, Authenticator, CallerIdentity
+from micro_agent.security import (
+    AgentPolicy,
+    AuthenticatedIdentity,
+    Authenticator,
+    CallerIdentity,
+)
 from runtimes.adk import AdkRuntime
 
 
@@ -471,6 +476,76 @@ class TestHTTPAuthentication:
         agent.definition.spec.security.identity_requirements["require_caller_identity"] = True
         with pytest.raises(RuntimeError, match="require_caller_identity"):
             create_app(agent, authenticator=None)
+
+    @pytest.mark.asyncio
+    async def test_approval_continuation_contract_over_http(self):
+        from micro_agent.definition import load_definition_from_dict
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        class OneShotToolProvider(FakeModelProvider):
+            async def generate(self, config, messages, tools=None):
+                if len(self.invocations) == 1:
+                    self._config.tool_requests = []
+                return await super().generate(config, messages, tools=tools)
+
+        definition = load_definition_from_dict(
+            {
+                "apiVersion": "microagents.io/v1alpha1",
+                "kind": "MicroAgent",
+                "metadata": {"name": "approval-agent", "version": "1.0.0"},
+                "spec": {
+                    "behavior": {"instructions": "Test agent."},
+                    "dependencies": {
+                        "model": {"ref": "fake-model"},
+                        "tools": [{"name": "echo", "source": "native"}],
+                    },
+                },
+            }
+        )
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=OneShotToolProvider(
+                    FakeModelConfig(
+                        response="done",
+                        tool_requests=[{"name": "echo", "arguments": {"message": "hi"}}],
+                    )
+                ),
+                policy=AgentPolicy(approval_required=True),
+            )
+        )
+        agent = DefaultMicroAgent(definition, runtime)
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["status"] == "approval_required"
+            continuation_id = body["metadata"]["continuation_id"]
+            assert body["metadata"]["pending_tools"] == ["echo"]
+
+            unknown = await client.post(
+                "/v1/invoke",
+                json={"input": {}, "continuation_id": "missing", "approval_decision": "approve"},
+            )
+            assert unknown.status_code == 404
+            assert unknown.json()["detail"]["code"] == "continuation_not_found"
+
+            resumed = await client.post(
+                "/v1/invoke",
+                json={
+                    "input": {},
+                    "continuation_id": continuation_id,
+                    "approval_decision": "approve",
+                },
+            )
+            assert resumed.status_code == 200
+            assert resumed.json()["status"] == "success"
+        await agent.stop()
+        await agent.shutdown()
 
 
 class TestHTTPServer:

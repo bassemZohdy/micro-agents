@@ -78,6 +78,7 @@ class PolicyDecision:
     allowed: bool
     reason: str = ""
     rule: PolicyRule | None = None
+    requires_approval: bool = False
 
 
 class PolicyEvaluator:
@@ -167,5 +168,6 @@ class PolicyEvaluator:
             return PolicyDecision(
                 allowed=False,
                 reason=f"Side-effect '{operation}' requires approval",
+                requires_approval=True,
             )
         return PolicyDecision(allowed=True)

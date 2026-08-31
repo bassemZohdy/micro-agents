@@ -13,6 +13,12 @@ from micro_agent.health import (
     LivenessResult,
     ReadinessResult,
 )
+from micro_agent.observability.audit import (
+    AuditSink,
+    FileAuditSink,
+    JsonlAuditSink,
+    NullAuditSink,
+)
 from micro_agent.observability.telemetry import (
     MetricPoint,
     MetricsCollector,
@@ -40,13 +46,17 @@ from micro_agent.security import (
 
 __all__ = [
     "AgentIdentity",
+    "AuditSink",
     "AgentPolicy",
     "CallerIdentity",
     "DependencyHealth",
     "DependencyProbe",
+    "FileAuditSink",
     "HealthChecker",
     "HealthStatus",
+    "JsonlAuditSink",
     "LivenessResult",
+    "NullAuditSink",
     "MetricPoint",
     "MetricsCollector",
     "Operation",

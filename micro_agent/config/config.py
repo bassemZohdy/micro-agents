@@ -37,6 +37,8 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     auth: str | None = None
     auth_issuer: str | None = None
     auth_audience: str | None = None
+    audit_sink: str | None = None
+    audit_file: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -59,6 +61,8 @@ class ResolvedConfig:
     auth: str | None = None
     auth_issuer: str | None = None
     auth_audience: str | None = None
+    audit_sink: str = "stdout"
+    audit_file: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -137,6 +141,10 @@ def resolve_config(
             config.auth_issuer = env_config.auth_issuer
         if env_config.auth_audience:
             config.auth_audience = env_config.auth_audience
+        if env_config.audit_sink:
+            config.audit_sink = env_config.audit_sink
+        if env_config.audit_file:
+            config.audit_file = env_config.audit_file
         config.extra.update(env_config.extra)
 
     # Layer 3b: Environment variable overrides
@@ -184,6 +192,14 @@ def resolve_config(
     if env_auth_audience:
         config.auth_audience = env_auth_audience
 
+    env_audit_sink = _read_env("audit_sink")
+    if env_audit_sink:
+        config.audit_sink = env_audit_sink
+
+    env_audit_file = _read_env("audit_file")
+    if env_audit_file:
+        config.audit_file = env_audit_file
+
     # Layer 4: Secret bindings
     if env_config and env_config.model_api_key_ref:
         config.model_api_key = _resolve_secret(env_config.model_api_key_ref)
@@ -224,6 +240,24 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                 level="error",
                 message=f"Invalid log level: {config.log_level}",
                 path="log_level",
+            )
+        )
+
+    audit_mode = (config.audit_sink or "").strip().lower()
+    if audit_mode not in ("", "none", "stdout", "file"):
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message=(f"Invalid audit sink: {config.audit_sink}. Supported: none, stdout, file"),
+                path="audit_sink",
+            )
+        )
+    if audit_mode == "file" and not config.audit_file:
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message="MICRO_AGENT_AUDIT_SINK=file requires MICRO_AGENT_AUDIT_FILE",
+                path="audit_file",
             )
         )
 

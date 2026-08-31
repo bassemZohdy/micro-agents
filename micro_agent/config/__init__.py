@@ -3,6 +3,7 @@
 from micro_agent.config.bootstrap import (
     BootstrapError,
     RuntimeBootstrap,
+    build_audit_sink,
     build_authenticator,
     build_runtime,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "ResolvedConfig",
     "RuntimeBootstrap",
     "SecretRef",
+    "build_audit_sink",
     "build_authenticator",
     "build_runtime",
     "resolve_config",
