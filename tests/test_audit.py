@@ -47,11 +47,11 @@ def test_null_sink_drops_events():
     NullAuditSink().record("policy.tool_denied", tool="echo")
 
 
-def test_build_audit_sink_selection():
+def test_build_audit_sink_selection(tmp_path):
     assert isinstance(build_audit_sink(ResolvedConfig()), JsonlAuditSink)
     assert isinstance(build_audit_sink(ResolvedConfig(audit_sink="none")), NullAuditSink)
     assert isinstance(
-        build_audit_sink(ResolvedConfig(audit_sink="file", audit_file="a.jsonl")),
+        build_audit_sink(ResolvedConfig(audit_sink="file", audit_file=str(tmp_path / "a.jsonl"))),
         FileAuditSink,
     )
 
