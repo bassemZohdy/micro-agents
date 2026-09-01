@@ -4,6 +4,15 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+- Added docs/OBSERVABILITY.md: the complete operational-metric inventory
+  (counters and gauges with labels), scraping guidance for `GET /metrics`,
+  recommended dashboard panels (traffic, errors, latency, tools, retries,
+  approvals, cost, saturation), and PromQL alert examples keyed to real
+  emitted series — with a source-level guard test that fails when an emitted
+  metric is missing from the inventory.
+
 ### HTTP and API compatibility
 
 - Versioned the native OpenAPI surface under `/v1` and added an API-version

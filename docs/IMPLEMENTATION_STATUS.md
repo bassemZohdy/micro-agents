@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 526 collected | Full local run: 526 passed, 2 skipped; default selector: 438 passed, 2 skipped, 88 deselected. CI separately runs the Redis-backed integration, Google ADK, and OpenTelemetry jobs when their extras/services are available |
+| Tests | 545 collected | 459 selected by the default test job; the remaining 86 run in the integration/e2e jobs (Redis and PostgreSQL service containers) |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -367,9 +367,11 @@ Gaps:
 
 - no response streaming implementation; runtimes currently advertise
   `streaming: false`
-- production dashboards and alerts remain deployment-owned; `/metrics` exposes
-  the in-memory operational series and the OTel SDK remains configurable through
-  standard exporter/provider settings
+- dashboards and alert thresholds remain deployment-owned; the full metric
+  inventory, recommended dashboard panels, and PromQL alert examples are
+  documented in docs/OBSERVABILITY.md (guarded by a source-vs-docs test), and
+  `/metrics` exposes the in-memory operational series while the OTel SDK stays
+  configurable through standard exporter/provider settings
 
 ### Packaging, release, and deployment
 

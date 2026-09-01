@@ -230,7 +230,10 @@ state through an external service under concurrent load.
 - [x] Propagate trace context through HTTP, model, MCP, tool, and A2A calls.
 - [x] Define safe content-capture defaults, cardinality limits, and cost/token
       conventions.
-- [ ] Expose operational metrics and document dashboards/alerts.
+- [x] Expose operational metrics on `GET /metrics` (Prometheus text format)
+      and document dashboards, recommended alerts, and the full metric
+      inventory in docs/OBSERVABILITY.md; a source-level guard test keeps the
+      documented inventory aligned with emitted metrics.
 
 ### P1.8 Side-effect and retry safety
 

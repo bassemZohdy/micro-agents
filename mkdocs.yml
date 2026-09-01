@@ -13,6 +13,7 @@ nav:
   - Getting Started: GETTING_STARTED.md
   - Implementation Status: IMPLEMENTATION_STATUS.md
   - Configuration: CONFIGURATION.md
+  - Observability: OBSERVABILITY.md
   - HTTP API: API.md
   - Deployment: DEPLOYMENT.md
   - Standards: STANDARDS.md

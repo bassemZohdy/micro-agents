@@ -211,3 +211,22 @@ def test_otel_bridge_exports_spans_metrics_and_w3c_context():
     metric_data = metric_reader.get_metrics_data()
     assert metric_data is not None
     assert metric_data.resource_metrics
+
+
+class TestMetricsDocumentation:
+    """Every emitted metric is documented in docs/OBSERVABILITY.md."""
+
+    def test_emitted_metrics_are_documented(self):
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).parent.parent
+        doc = (root / "docs" / "OBSERVABILITY.md").read_text(encoding="utf-8")
+        emitted: set[str] = set()
+        pattern = re.compile(r'\.(?:increment|record)\(\s*"([a-z_]+)"')
+        for package in ("micro_agent", "runtimes"):
+            for path in (root / package).rglob("*.py"):
+                emitted.update(pattern.findall(path.read_text(encoding="utf-8")))
+        assert emitted, "metric emission scan must find metrics"
+        missing = sorted(name for name in emitted if f"| `{name}` |" not in doc)
+        assert missing == [], f"metrics missing from OBSERVABILITY.md: {missing}"
