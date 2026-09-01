@@ -203,6 +203,13 @@ execute; hard policy denials still apply) or `deny` (the model receives the
 denial and can respond). Continuations expire after five minutes of
 inactivity; unknown or expired ids fail with a stable 404.
 
+The Google ADK adapter maps the same request onto ADK's native experimental
+`ToolConfirmation` flow. ADK continuations are backed by the original ADK
+session, so resume requests must include the original `session_id`; the
+returned metadata also includes the pending tool names, approval hints, and
+payloads. The adapter keeps ADK classes behind the runtime SPI and does not
+enable the feature for runtimes that do not advertise the adapter.
+
 ## MCP servers
 
 Declared MCP servers connect through the official MCP SDK (stable

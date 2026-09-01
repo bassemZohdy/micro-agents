@@ -40,7 +40,13 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
 
-from micro_agent.core import AgentCapabilities, AgentIdentity, AgentRequest, AgentResponse
+from micro_agent.core import (
+    AgentCapabilities,
+    AgentIdentity,
+    AgentRequest,
+    AgentResponse,
+    ContinuationNotFoundError,
+)
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.health import DependencyProbe, HealthStatus
 from micro_agent.knowledge import KnowledgeRetriever, KnowledgeSource
@@ -59,6 +65,8 @@ from micro_agent.security import (
     set_invocation_identity,
 )
 from micro_agent.tools import Tool, builtin_tool_registry
+
+_ADK_REQUEST_CONFIRMATION_NAME = "adk_request_confirmation"
 
 
 class GoogleAdkError(RuntimeError):
@@ -419,6 +427,10 @@ class GoogleAdkRuntime(AgentRuntime):
         service = agent._internal["adk_session_service"]
         app_name = agent._internal["app_name"]
         user_id = agent._internal["user_id"]
+        if request.continuation_id is not None and request.session_id is None:
+            raise ContinuationNotFoundError(
+                "Google ADK approval continuations require the original session_id"
+            )
         session_id = request.session_id or str(uuid4())
         trace_id = request.request_id or str(uuid4())
         labels = {"agent": definition.metadata.name}
@@ -440,8 +452,23 @@ class GoogleAdkRuntime(AgentRuntime):
         start_time = time.monotonic()
 
         async def run() -> AgentResponse:
-            await _ensure_session(service, app_name, user_id, session_id)
-            content = _user_content(request.input)
+            if request.continuation_id is not None:
+                session = await service.get_session(
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+                if session is None or not _has_pending_confirmation(
+                    getattr(session, "events", []) or [], request.continuation_id
+                ):
+                    raise ContinuationNotFoundError("unknown or expired ADK continuation")
+                content = _approval_response_content(
+                    request.continuation_id,
+                    approved=request.approval_decision == "approve",
+                )
+            else:
+                await _ensure_session(service, app_name, user_id, session_id)
+                content = _user_content(request.input)
             events: list[Any] = []
             async for event in runner.run_async(
                 user_id=user_id,
@@ -450,8 +477,35 @@ class GoogleAdkRuntime(AgentRuntime):
                 new_message=content,
             ):
                 events.append(event)
-            output = _terminal_text(events, agent._internal["adk_agent"].name)
             await self._auto_store(agent, service, app_name, user_id, session_id)
+            approval = _approval_metadata(events)
+            if approval is not None:
+                pending_tools = list(approval["pending_tools"])
+                continuation_id = str(approval["continuation_id"])
+                self._audit(
+                    "approval.requested",
+                    agent=definition.metadata.name,
+                    tools=pending_tools,
+                    continuation_id=continuation_id,
+                )
+                return AgentResponse(
+                    output={
+                        "content": "",
+                        "tool_results": _tool_results_from_events(events),
+                    },
+                    request_id=request.request_id,
+                    session_id=session_id,
+                    status="approval_required",
+                    metadata={
+                        "runtime": "google-adk",
+                        "event_count": len(events),
+                        "continuation_id": continuation_id,
+                        "pending_tools": pending_tools,
+                        "approval_hints": approval["approval_hints"],
+                        "approval_payloads": approval["approval_payloads"],
+                    },
+                )
+            output = _terminal_text(events, agent._internal["adk_agent"].name)
             return AgentResponse(
                 output={
                     "content": output,
@@ -774,6 +828,12 @@ def _as_adk_tool(
                 audit.record(event, tool=tool_name, reason=reason)
             return {"error": reason}
 
+        async def check_require_confirmation(self, args: dict[str, Any], tool_context: Any) -> bool:
+            """Expose Micro-Agent approval policy to ADK's resume validator."""
+            if evaluator is None:
+                return False
+            return evaluator.evaluate_side_effect(self._micro_tool.metadata.name).requires_approval
+
         async def run_async(self, *, args: dict[str, Any], tool_context: Any) -> Any:
             if evaluator is not None:
                 decision = evaluator.evaluate_tool(self._micro_tool.metadata.name)
@@ -783,10 +843,43 @@ def _as_adk_tool(
                     self._micro_tool.metadata.name
                 )
                 if not side_effect_decision.allowed:
-                    return self._denied(
-                        f"denied by side-effect policy: {side_effect_decision.reason}",
-                        event="policy.side_effect_denied",
-                    )
+                    if side_effect_decision.requires_approval:
+                        confirmation = getattr(tool_context, "tool_confirmation", None)
+                        if confirmation is None:
+                            tool_context.request_confirmation(
+                                hint=(
+                                    f"Approve the side-effect tool call "
+                                    f"{self._micro_tool.metadata.name}"
+                                ),
+                                payload={"tool": self._micro_tool.metadata.name},
+                            )
+                            tool_context.actions.skip_summarization = True
+                            if telemetry is not None:
+                                telemetry.increment(
+                                    "approval_requests_total",
+                                    {"tool": self._micro_tool.metadata.name},
+                                )
+                            return {
+                                "error": (
+                                    "This tool call requires confirmation, "
+                                    "please approve or reject."
+                                )
+                            }
+                        if not getattr(confirmation, "confirmed", False):
+                            return self._denied(
+                                "denied by caller: approval denied",
+                                event="approval.denied",
+                            )
+                        if audit is not None:
+                            audit.record(
+                                "approval.granted",
+                                tool=self._micro_tool.metadata.name,
+                            )
+                    else:
+                        return self._denied(
+                            f"denied by side-effect policy: {side_effect_decision.reason}",
+                            event="policy.side_effect_denied",
+                        )
             result = await self._micro_tool.execute(args)
             if result.is_error:
                 return {"error": result.error or f"tool '{self.name}' failed"}
@@ -818,6 +911,101 @@ def _user_content(payload: dict[str, Any]) -> Any:
         role="user",
         parts=[types.Part.from_text(text=json.dumps(payload, default=str))],
     )
+
+
+def _approval_response_content(continuation_id: str, *, approved: bool) -> Any:
+    """Build ADK's native user function response for a confirmation resume."""
+    try:
+        from google.genai import types
+    except ImportError as exc:  # pragma: no cover - guarded by ``_load_adk``
+        raise GoogleAdkError("Google GenAI content types are unavailable") from exc
+    return types.Content(
+        role="user",
+        parts=[
+            types.Part(
+                function_response=types.FunctionResponse(
+                    id=continuation_id,
+                    name=_ADK_REQUEST_CONFIRMATION_NAME,
+                    response={"confirmed": approved},
+                )
+            )
+        ],
+    )
+
+
+def _has_pending_confirmation(events: list[Any], continuation_id: str) -> bool:
+    """Check that an ADK confirmation call exists and was not already answered."""
+    found = False
+    answered = False
+    for event in events:
+        content = getattr(event, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            function_call = getattr(part, "function_call", None)
+            if (
+                function_call is not None
+                and function_call.name == _ADK_REQUEST_CONFIRMATION_NAME
+                and function_call.id == continuation_id
+            ):
+                found = True
+            function_response = getattr(part, "function_response", None)
+            if function_response is not None and function_response.id == continuation_id:
+                answered = True
+    return found and not answered
+
+
+def _approval_metadata(events: list[Any]) -> dict[str, Any] | None:
+    """Extract a runtime-neutral approval continuation from ADK events."""
+    requested: dict[str, Any] = {}
+    for event in events:
+        actions = getattr(event, "actions", None)
+        confirmations = getattr(actions, "requested_tool_confirmations", None) or {}
+        requested.update(confirmations)
+    if not requested:
+        return None
+
+    generated: dict[str, dict[str, Any]] = {}
+    for event in events:
+        content = getattr(event, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            function_call = getattr(part, "function_call", None)
+            if function_call is None or function_call.name != _ADK_REQUEST_CONFIRMATION_NAME:
+                continue
+            args = getattr(function_call, "args", None) or {}
+            original = args.get("originalFunctionCall")
+            if not isinstance(original, dict) or not original.get("id"):
+                continue
+            if not function_call.id:
+                continue
+            tool_confirmation = args.get("toolConfirmation") or {}
+            generated[str(original["id"])] = {
+                "continuation_id": str(function_call.id),
+                "tool": str(original.get("name", "")),
+                "hint": tool_confirmation.get("hint", ""),
+                "payload": tool_confirmation.get("payload"),
+            }
+
+    pending_tools: list[str] = []
+    approval_hints: dict[str, str] = {}
+    approval_payloads: dict[str, Any] = {}
+    continuation_id: str | None = None
+    for original_id, _confirmation in requested.items():
+        details = generated.get(str(original_id))
+        if details is None:
+            continue
+        continuation_id = continuation_id or details["continuation_id"]
+        tool_name = details["tool"]
+        pending_tools.append(tool_name)
+        approval_hints[tool_name] = details["hint"]
+        approval_payloads[tool_name] = details["payload"]
+
+    if continuation_id is None:
+        return None
+    return {
+        "continuation_id": continuation_id,
+        "pending_tools": pending_tools,
+        "approval_hints": approval_hints,
+        "approval_payloads": approval_payloads,
+    }
 
 
 def _terminal_text(events: list[Any], agent_name: str) -> str:

@@ -15,6 +15,15 @@ All notable changes to the Micro-Agents project are documented in this file.
   asking for `text/event-stream` are rejected when the selected runtime does
   not advertise streaming; no unsupported streaming capability is claimed.
 
+### Google ADK
+
+- Mapped approval-gated tools onto Google ADK's native experimental
+  `ToolConfirmation` protocol. The adapter now emits an
+  `approval_required` continuation with pending tools, hints, and payloads;
+  callers resume the original ADK session with the continuation id and an
+  approve/deny decision, and approved tools execute exactly once. Added an
+  ADK integration test for the pause/resume flow.
+
 ### Bootstrap
 
 - Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,
