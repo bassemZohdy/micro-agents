@@ -26,6 +26,6 @@ before runtime creation rather than silently falling back to local state.
 - independently scaled processes can share session state through Redis;
 - the base package remains dependency-light and fake/SQLite development paths
   remain available;
-- update conflicts are still last-write-wins; optimistic versioning and tenant
-  isolation remain separate P1.5 work;
+- session keys are tenant-scoped when a verified tenant is available, and
+  optimistic versions reject stale non-zero-version updates;
 - memory and idempotency providers are not implicitly made distributed.

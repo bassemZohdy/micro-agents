@@ -1,6 +1,7 @@
 """Tests for Micro-Agent Session."""
 
 import asyncio
+from copy import deepcopy
 
 import pytest
 
@@ -10,6 +11,7 @@ from micro_agent.session import (
     SessionContext,
     SessionMetadata,
     SessionProvider,
+    StateConflictError,
 )
 from tests.fake_redis import FakeRedis, FakeRedisBackend
 
@@ -98,6 +100,23 @@ class TestInMemorySessionProvider:
         active = await provider.list_active()
         assert len(active) == 2
 
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_and_version_conflict(self):
+        provider = InMemorySessionProvider()
+        tenant_a = await provider.create("shared", tenant_id="tenant-a")
+        tenant_b = await provider.create("shared", tenant_id="tenant-b")
+        assert tenant_a.version == tenant_b.version == 1
+        assert await provider.get("shared") is None
+        assert (await provider.get("shared", tenant_id="tenant-a")).tenant_id == "tenant-a"
+
+        stale = deepcopy(await provider.get("shared", tenant_id="tenant-a"))
+        current = await provider.get("shared", tenant_id="tenant-a")
+        current.messages.append({"role": "user", "content": "new"})
+        await provider.update(current)
+        assert current.version == 2
+        with pytest.raises(StateConflictError, match="version conflict"):
+            await provider.update(stale)
+
 
 class TestSqliteSessionProvider:
     """SQLite operations are serialized for one development provider."""
@@ -123,6 +142,23 @@ class TestSqliteSessionProvider:
         provider = SqliteSessionProvider()
         await provider.aclose()
         await provider.aclose()
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_and_version_conflict(self, tmp_path):
+        from micro_agent.session import SqliteSessionProvider
+
+        provider = SqliteSessionProvider(str(tmp_path / "sessions.db"))
+        try:
+            await provider.create("shared", tenant_id="tenant-a")
+            await provider.create("shared", tenant_id="tenant-b")
+            assert await provider.get("shared") is None
+            stale = deepcopy(await provider.get("shared", tenant_id="tenant-a"))
+            current = await provider.get("shared", tenant_id="tenant-a")
+            await provider.update(current)
+            with pytest.raises(StateConflictError, match="version conflict"):
+                await provider.update(stale)
+        finally:
+            await provider.aclose()
 
 
 class TestRedisSessionProvider:
@@ -165,3 +201,17 @@ class TestRedisSessionProvider:
         await provider.aclose()
         await provider.aclose()
         assert client.closed is False
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_and_version_conflict(self):
+        backend = FakeRedisBackend()
+        provider = RedisSessionProvider(client=FakeRedis(backend))
+        await provider.create("shared", tenant_id="tenant-a")
+        await provider.create("shared", tenant_id="tenant-b")
+        assert await provider.get("shared") is None
+        stale = deepcopy(await provider.get("shared", tenant_id="tenant-a"))
+        current = await provider.get("shared", tenant_id="tenant-a")
+        await provider.update(current)
+        assert current.version == 2
+        with pytest.raises(StateConflictError, match="version conflict"):
+            await provider.update(stale)

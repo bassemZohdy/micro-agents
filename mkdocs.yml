@@ -33,3 +33,4 @@ nav:
       - 0009 Redis session provider: adr/0009-redis-session-provider.md
       - 0010 Redis memory provider: adr/0010-redis-memory-provider.md
       - 0011 Redis idempotency registry: adr/0011-redis-idempotency-registry.md
+      - 0012 Versioned tenant state: adr/0012-versioned-tenant-state.md

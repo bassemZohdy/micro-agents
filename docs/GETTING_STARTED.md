@@ -54,9 +54,11 @@ memory, `MICRO_AGENT_SESSION_ENDPOINT` for external sessions, and
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` for distributed operation deduplication in
 the custom runtime. The Redis providers use transactional writes and key TTLs;
 operation claims use an atomic `SET NX` reservation. The idempotency registry
-scopes operation keys by verified tenant when available, but session/memory
-records do not yet provide tenant isolation or optimistic versioning. Google
-ADK rejects this binding. Set `persistence: external` for shared sessions.
+scopes operation keys by verified tenant when available. Operation, session,
+and memory records use the same tenant boundary; reads carry a version and
+stale updates raise `StateConflictError`, while zero-version writes preserve
+compatibility for legacy callers. Google ADK rejects this binding. Set
+`persistence: external` for shared sessions.
 
 For environment-specific model or MCP locations, keep this definition
 unchanged and pass a typed `EnvironmentOverlay` to `build_runtime()`; see the

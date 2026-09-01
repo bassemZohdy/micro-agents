@@ -47,7 +47,8 @@ Trade-offs and remaining work:
 
 - operation keys are namespaced by verified tenant when present; local or
   unverified calls retain a legacy provider-wide namespace, and session/memory
-  tenant isolation plus optimistic versioning are separate backlog items;
+  session/memory snapshots now carry the same tenant boundary and optimistic
+  version checks;
 - completion uses an ownership check before persistence, so callers must still
   choose a TTL long enough for the expected operation duration;
 - Google ADK idempotency mapping, durable knowledge, and production approval

@@ -7,10 +7,12 @@ import json
 import math
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 from micro_agent.memory.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.session.redis import _import_redis, _validate_endpoint
 from micro_agent.session.session import _iso, _utc_now
+from micro_agent.state import StateConflictError
 
 
 class RedisMemoryProvider(MemoryProvider):
@@ -56,8 +58,9 @@ class RedisMemoryProvider(MemoryProvider):
     def _scope(scope: str | None) -> str:
         return scope or "agent"
 
-    def _key(self, key: str, scope: str | None) -> str:
-        return f"{self._prefix}{self._scope(scope)}:{key}"
+    def _key(self, key: str, scope: str | None, tenant_id: str | None = None) -> str:
+        tenant_prefix = "" if tenant_id is None else f"tenant:{quote(tenant_id, safe='')}:"
+        return f"{self._prefix}{tenant_prefix}{self._scope(scope)}:{key}"
 
     def _expiry(self, now: datetime) -> str | None:
         ttl = self.policy.ttl_seconds
@@ -89,6 +92,8 @@ class RedisMemoryProvider(MemoryProvider):
         metadata = dict(data.get("metadata") or {})
         stored_at = data.get("stored_at")
         expires_at = data.get("expires_at")
+        tenant_id = data.get("tenant_id")
+        version = int(data.get("version") or 1)
         if stored_at is not None:
             metadata.setdefault("stored_at", stored_at)
         if expires_at is not None:
@@ -98,6 +103,8 @@ class RedisMemoryProvider(MemoryProvider):
             value=data.get("value"),
             scope=str(data["scope"]),
             metadata=metadata,
+            tenant_id=str(tenant_id) if tenant_id is not None else None,
+            version=version,
         )
 
     @staticmethod
@@ -112,6 +119,8 @@ class RedisMemoryProvider(MemoryProvider):
                 "key": entry.key,
                 "value": entry.value,
                 "scope": entry.scope,
+                "tenant_id": entry.tenant_id,
+                "version": entry.version or 1,
                 "metadata": metadata,
                 "stored_at": _iso(now),
                 "expires_at": expires_at,
@@ -165,13 +174,79 @@ class RedisMemoryProvider(MemoryProvider):
             key = self._text(popped[0][0])
             await self._client.delete(key)
 
-    async def store(self, entry: MemoryEntry) -> None:
-        key = self._key(entry.key, entry.scope)
-        existing = await self._client.get(key)
-        if existing is None:
-            await self._evict_if_full()
-        now = _utc_now()
-        expires_at = self._expiry(now)
+    async def store(self, entry: MemoryEntry, *, expected_version: int | None = None) -> None:
+        key = self._key(entry.key, entry.scope, entry.tenant_id)
+        expected = expected_version if expected_version is not None else entry.version
+
+        def prepare(existing: Any) -> tuple[datetime, str | None, int]:
+            if existing is None:
+                actual_version = 0
+            else:
+                try:
+                    actual_version = self._decode(existing).version or 1
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    actual_version = 0
+            if actual_version == 0:
+                if expected not in (0, None):
+                    raise StateConflictError("memory", entry.key, expected, 0)
+                new_version = 1
+            else:
+                if expected and expected != actual_version:
+                    raise StateConflictError("memory", entry.key, expected, actual_version)
+                new_version = actual_version + 1
+            now = _utc_now()
+            return now, self._expiry(now), new_version
+
+        for _attempt in range(3):
+            pipeline = self._client.pipeline(transaction=True)
+            watch = getattr(pipeline, "watch", None)
+            if not callable(watch):
+                existing = await self._client.get(key)
+                if existing is None:
+                    await self._evict_if_full()
+                now, expires_at, new_version = prepare(existing)
+                entry.version = new_version
+                await self._write_entry(key, entry, now, expires_at)
+                return
+            try:
+                watched = watch(key)
+                if inspect.isawaitable(watched):
+                    await watched
+                existing = pipeline.get(key)
+                if inspect.isawaitable(existing):
+                    existing = await existing
+                if existing is None:
+                    await self._evict_if_full()
+                now, expires_at, new_version = prepare(existing)
+                entry.version = new_version
+                ttl = self._remaining_ttl(expires_at, now)
+                pipeline.multi()
+                if ttl == 0:
+                    pipeline.delete(key)
+                    pipeline.zrem(self._index_key, key)
+                else:
+                    payload = self._record(entry, now, expires_at)
+                    if ttl is None:
+                        pipeline.set(key, payload)
+                    else:
+                        pipeline.set(key, payload, ex=ttl)
+                    pipeline.zadd(self._index_key, {key: now.timestamp()})
+                await pipeline.execute()
+                return
+            except Exception as exc:
+                if exc.__class__.__name__ != "WatchError":
+                    raise
+            finally:
+                reset = getattr(pipeline, "reset", None)
+                if callable(reset):
+                    result = reset()
+                    if inspect.isawaitable(result):
+                        await result
+        raise StateConflictError("memory", entry.key, expected or 0, -1)
+
+    async def _write_entry(
+        self, key: str, entry: MemoryEntry, now: datetime, expires_at: str | None
+    ) -> None:
         ttl = self._remaining_ttl(expires_at, now)
         pipeline = self._client.pipeline(transaction=True)
         if ttl == 0:
@@ -187,16 +262,23 @@ class RedisMemoryProvider(MemoryProvider):
         await pipeline.execute()
 
     async def search(
-        self, query: str, scope: str | None = None, limit: int = 10
+        self,
+        query: str,
+        scope: str | None = None,
+        limit: int = 10,
+        *,
+        tenant_id: str | None = None,
     ) -> list[MemoryEntry]:
         if limit <= 0:
             return []
-        entries = await self.list_entries(scope=scope)
+        entries = await self.list_entries(scope=scope, tenant_id=tenant_id)
         query_lower = query.lower()
         return [entry for entry in entries if query_lower in str(entry.value).lower()][:limit]
 
-    async def get(self, key: str, scope: str | None = None) -> MemoryEntry | None:
-        redis_key = self._key(key, scope)
+    async def get(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> MemoryEntry | None:
+        redis_key = self._key(key, scope, tenant_id)
         raw = await self._client.get(redis_key)
         if raw is None:
             await self._client.zrem(self._index_key, redis_key)
@@ -210,13 +292,17 @@ class RedisMemoryProvider(MemoryProvider):
             await self._remove_key(redis_key)
             return None
 
-    async def delete(self, key: str, scope: str | None = None) -> bool:
-        redis_key = self._key(key, scope)
+    async def delete(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> bool:
+        redis_key = self._key(key, scope, tenant_id)
         existed = await self._client.get(redis_key) is not None
         await self._remove_key(redis_key)
         return existed
 
-    async def list_entries(self, scope: str | None = None) -> list[MemoryEntry]:
+    async def list_entries(
+        self, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> list[MemoryEntry]:
         members = await self._client.zrange(self._index_key, 0, -1)
         if not members:
             return []
@@ -234,7 +320,7 @@ class RedisMemoryProvider(MemoryProvider):
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 stale.append(key)
                 continue
-            if scope is None or entry.scope == scope:
+            if entry.tenant_id == tenant_id and (scope is None or entry.scope == scope):
                 entries.append(entry)
         if stale:
             pipeline = self._client.pipeline(transaction=True)

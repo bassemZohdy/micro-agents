@@ -65,9 +65,12 @@ tool again; while the first attempt is still running, the duplicate receives an
 `operation is already in progress` result with `was_deduplicated: true`.
 Claims are atomic and results expire with the registry TTL (one day by default).
 Keys are tenant-scoped when a verified tenant identity is available (local or
-unverified calls retain the legacy provider-wide namespace), and optimistic
-versioning is not implemented. The Google ADK runtime rejects this binding
-until its idempotency mapping is available.
+unverified calls retain the legacy provider-wide namespace). Session and memory
+records carry the same optional `tenant_id` boundary and a monotonically
+increasing `version`. Providers raise `StateConflictError` when a non-zero
+expected version is stale; a zero-version write keeps legacy unconditional
+semantics. The Google ADK runtime rejects this binding until its idempotency
+mapping is available.
 
 ## Invoke response
 

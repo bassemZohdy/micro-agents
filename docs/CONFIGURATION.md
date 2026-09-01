@@ -53,9 +53,11 @@ replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`. Redis (`redis://` or
 use an atomic `SET ... NX` claim and completed results expire after the provider
 TTL (one day by default). When a verified tenant identity is present, operation
 keys are namespaced by that tenant; unverified/local calls retain the legacy
-provider-wide namespace. Optimistic versioning and tenant isolation for
-session/memory records remain open backlog work. The Google ADK runtime rejects
-this binding until its distributed idempotency mapping is implemented.
+provider-wide namespace. Session and memory records use the same verified
+tenant boundary. Reads return a versioned snapshot (starting at version 1),
+and writing a stale snapshot raises `StateConflictError`; zero-version writes
+retain the legacy unconditional behavior. The Google ADK runtime rejects this
+binding until its distributed idempotency mapping is implemented.
 
 ```bash
 pip install 'micro-agents[redis]'

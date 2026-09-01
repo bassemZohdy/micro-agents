@@ -8,6 +8,7 @@ from micro_agent.session.session import (
     SessionProvider,
 )
 from micro_agent.session.sqlite import SqliteSessionProvider
+from micro_agent.state import ConcurrencyConflictError, StateConflictError
 
 __all__ = [
     "InMemorySessionProvider",
@@ -16,4 +17,6 @@ __all__ = [
     "SessionMetadata",
     "SessionProvider",
     "SqliteSessionProvider",
+    "ConcurrencyConflictError",
+    "StateConflictError",
 ]

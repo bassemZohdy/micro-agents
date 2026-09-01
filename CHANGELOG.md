@@ -37,8 +37,11 @@ All notable changes to the Micro-Agents project are documented in this file.
   `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` or `rediss://...` enables
   atomic idempotency-key claims, shared in-progress/completed results, result
   TTLs, readiness probing, and ownership-aware shutdown. The Google ADK runtime
-  rejects this binding until its distributed mapping is implemented; tenant
-  isolation for session/memory records and optimistic versioning remain open.
+  rejects this binding until its distributed mapping is implemented.
+- Added verified-tenant namespaces and optimistic versions to in-memory,
+  SQLite, and Redis session/memory providers. Provider reads return snapshots,
+  updates advance their version, and stale non-zero-version writes raise
+  `StateConflictError`; zero-version writes retain legacy compatibility.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

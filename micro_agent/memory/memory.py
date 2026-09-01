@@ -7,9 +7,12 @@ Memory != Session. Memory != Knowledge.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field
 from time import monotonic
 from typing import Any
+
+from micro_agent.state import StateConflictError
 
 # ---------------------------------------------------------------------------
 # Memory Model
@@ -24,6 +27,8 @@ class MemoryEntry:
     value: Any
     scope: str = "agent"
     metadata: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str | None = None
+    version: int = 0
 
 
 @dataclass
@@ -61,25 +66,36 @@ class MemoryProvider(ABC):
     """Abstract memory provider interface."""
 
     @abstractmethod
-    async def store(self, entry: MemoryEntry) -> None:
+    async def store(self, entry: MemoryEntry, *, expected_version: int | None = None) -> None:
         """Store a memory entry."""
 
     @abstractmethod
     async def search(
-        self, query: str, scope: str | None = None, limit: int = 10
+        self,
+        query: str,
+        scope: str | None = None,
+        limit: int = 10,
+        *,
+        tenant_id: str | None = None,
     ) -> list[MemoryEntry]:
         """Search memory entries."""
 
     @abstractmethod
-    async def get(self, key: str, scope: str | None = None) -> MemoryEntry | None:
+    async def get(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> MemoryEntry | None:
         """Get a specific memory entry by key."""
 
     @abstractmethod
-    async def delete(self, key: str, scope: str | None = None) -> bool:
+    async def delete(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> bool:
         """Delete a memory entry. Returns True if deleted."""
 
     @abstractmethod
-    async def list_entries(self, scope: str | None = None) -> list[MemoryEntry]:
+    async def list_entries(
+        self, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> list[MemoryEntry]:
         """List all memory entries, optionally filtered by scope."""
 
 
@@ -102,10 +118,12 @@ class InMemoryMemoryProvider(MemoryProvider):
         self._entries: dict[str, MemoryEntry] = {}
         self._stored_at: dict[str, float] = {}
 
-    def _key(self, key: str, scope: str | None) -> str:
+    def _key(self, key: str, scope: str | None, tenant_id: str | None = None) -> str:
         # Default scope matches MemoryEntry.scope's default so that
         # store(MemoryEntry(key=...)) / get(key=...) round-trip.
-        return f"{scope or 'agent'}:{key}"
+        if tenant_id is None:
+            return f"{scope or 'agent'}:{key}"
+        return f"{tenant_id}\x1f{scope or 'agent'}:{key}"
 
     def _is_expired(self, k: str, now: float | None = None) -> bool:
         if self.policy.ttl_seconds is None:
@@ -135,21 +153,39 @@ class InMemoryMemoryProvider(MemoryProvider):
             del self._entries[oldest]
             self._stored_at.pop(oldest, None)
 
-    async def store(self, entry: MemoryEntry) -> None:
+    async def store(self, entry: MemoryEntry, *, expected_version: int | None = None) -> None:
         self._purge_expired()
-        k = self._key(entry.key, entry.scope)
+        k = self._key(entry.key, entry.scope, entry.tenant_id)
+        existing = self._entries.get(k)
+        expected = expected_version if expected_version is not None else entry.version
+        if existing is None:
+            if expected not in (0, None):
+                raise StateConflictError("memory", entry.key, expected, 0)
+            entry.version = 1
+        else:
+            actual = existing.version or 1
+            if expected and expected != actual:
+                raise StateConflictError("memory", entry.key, expected, actual)
+            entry.version = actual + 1
         # Re-storing an existing key must not evict itself.
-        if k not in self._entries:
+        if existing is None:
             self._evict_if_full()
         self._entries[k] = entry
         self._stored_at[k] = monotonic()
 
     async def search(
-        self, query: str, scope: str | None = None, limit: int = 10
+        self,
+        query: str,
+        scope: str | None = None,
+        limit: int = 10,
+        *,
+        tenant_id: str | None = None,
     ) -> list[MemoryEntry]:
         self._purge_expired()
         results = []
         for entry in self._entries.values():
+            if entry.tenant_id != tenant_id:
+                continue
             if scope and entry.scope != scope:
                 continue
             if query.lower() in str(entry.value).lower():
@@ -158,24 +194,31 @@ class InMemoryMemoryProvider(MemoryProvider):
                     break
         return results
 
-    async def get(self, key: str, scope: str | None = None) -> MemoryEntry | None:
+    async def get(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> MemoryEntry | None:
         self._purge_expired()
-        k = self._key(key, scope)
-        return self._entries.get(k)
+        k = self._key(key, scope, tenant_id)
+        entry = self._entries.get(k)
+        return deepcopy(entry) if entry is not None else None
 
-    async def delete(self, key: str, scope: str | None = None) -> bool:
+    async def delete(
+        self, key: str, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> bool:
         self._purge_expired()
-        k = self._key(key, scope)
+        k = self._key(key, scope, tenant_id)
         if k in self._entries:
             del self._entries[k]
             self._stored_at.pop(k, None)
             return True
         return False
 
-    async def list_entries(self, scope: str | None = None) -> list[MemoryEntry]:
+    async def list_entries(
+        self, scope: str | None = None, *, tenant_id: str | None = None
+    ) -> list[MemoryEntry]:
         self._purge_expired()
         results = []
         for entry in self._entries.values():
-            if scope is None or entry.scope == scope:
+            if entry.tenant_id == tenant_id and (scope is None or entry.scope == scope):
                 results.append(entry)
         return results

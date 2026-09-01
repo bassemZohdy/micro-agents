@@ -7,10 +7,13 @@ Session persistence is externally configurable.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
+
+from micro_agent.state import StateConflictError
 
 
 def _utc_now() -> datetime:
@@ -34,6 +37,8 @@ class SessionContext:
     messages: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     caller_context: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str | None = None
+    version: int = 0
 
 
 @dataclass
@@ -45,6 +50,8 @@ class SessionMetadata:
     expires_at: str | None = None
     is_active: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str | None = None
+    version: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -57,24 +64,34 @@ class SessionProvider(ABC):
 
     @abstractmethod
     async def create(
-        self, session_id: str | None = None, ttl_seconds: int | None = None
+        self,
+        session_id: str | None = None,
+        ttl_seconds: int | None = None,
+        *,
+        tenant_id: str | None = None,
     ) -> SessionContext:
         """Create a new session. Optional ttl_seconds overrides the provider default."""
 
     @abstractmethod
-    async def get(self, session_id: str) -> SessionContext | None:
+    async def get(self, session_id: str, *, tenant_id: str | None = None) -> SessionContext | None:
         """Get a session by ID. Returns None if not found or expired."""
 
     @abstractmethod
-    async def update(self, session: SessionContext, ttl_seconds: int | None = None) -> None:
+    async def update(
+        self,
+        session: SessionContext,
+        ttl_seconds: int | None = None,
+        *,
+        expected_version: int | None = None,
+    ) -> None:
         """Update an existing session. Optional ttl_seconds refreshes expiration."""
 
     @abstractmethod
-    async def delete(self, session_id: str) -> None:
+    async def delete(self, session_id: str, *, tenant_id: str | None = None) -> None:
         """Delete a session."""
 
     @abstractmethod
-    async def list_active(self) -> list[SessionMetadata]:
+    async def list_active(self, *, tenant_id: str | None = None) -> list[SessionMetadata]:
         """List all active sessions."""
 
 
@@ -95,6 +112,10 @@ class InMemorySessionProvider(SessionProvider):
         self._metadata: dict[str, SessionMetadata] = {}
         self._ttl_seconds = ttl_seconds
 
+    @staticmethod
+    def _key(session_id: str, tenant_id: str | None = None) -> str:
+        return session_id if tenant_id is None else f"{tenant_id}\x1f{session_id}"
+
     def _expiry(self, ttl_seconds: int | None, now: datetime) -> str | None:
         ttl = ttl_seconds if ttl_seconds is not None else self._ttl_seconds
         if ttl is None:
@@ -112,57 +133,96 @@ class InMemorySessionProvider(SessionProvider):
         return reference >= expires
 
     async def create(
-        self, session_id: str | None = None, ttl_seconds: int | None = None
+        self,
+        session_id: str | None = None,
+        ttl_seconds: int | None = None,
+        *,
+        tenant_id: str | None = None,
     ) -> SessionContext:
         sid = session_id or str(uuid4())
         now = _utc_now()
-        session = SessionContext(session_id=sid)
+        key = self._key(sid, tenant_id)
+        session = SessionContext(session_id=sid, tenant_id=tenant_id, version=1)
         session.metadata["created_at"] = _iso(now)
-        self._sessions[sid] = session
-        self._metadata[sid] = SessionMetadata(
+        self._sessions[key] = session
+        self._metadata[key] = SessionMetadata(
             session_id=sid,
+            tenant_id=tenant_id,
+            version=1,
             created_at=_iso(now),
             expires_at=self._expiry(ttl_seconds, now),
             is_active=True,
         )
         return session
 
-    async def get(self, session_id: str) -> SessionContext | None:
-        meta = self._metadata.get(session_id)
+    async def get(self, session_id: str, *, tenant_id: str | None = None) -> SessionContext | None:
+        key = self._key(session_id, tenant_id)
+        meta = self._metadata.get(key)
         if meta is not None and self._is_expired(meta):
-            await self.delete(session_id)
+            await self.delete(session_id, tenant_id=tenant_id)
             return None
-        return self._sessions.get(session_id)
+        context = self._sessions.get(key)
+        return deepcopy(context) if context is not None else None
 
-    async def update(self, session: SessionContext, ttl_seconds: int | None = None) -> None:
-        self._sessions[session.session_id] = session
-        meta = self._metadata.get(session.session_id)
+    async def update(
+        self,
+        session: SessionContext,
+        ttl_seconds: int | None = None,
+        *,
+        expected_version: int | None = None,
+    ) -> None:
+        tenant_id = session.tenant_id
+        key = self._key(session.session_id, tenant_id)
+        meta = self._metadata.get(key)
         if meta is None:
             now = _utc_now()
+            if expected_version not in (None, 0) or session.version not in (0, 1):
+                expected = expected_version if expected_version is not None else session.version
+                raise StateConflictError("session", session.session_id, expected, 0)
+            session.version = 1
             meta = SessionMetadata(
                 session_id=session.session_id,
+                tenant_id=tenant_id,
+                version=1,
                 created_at=_iso(now),
                 expires_at=self._expiry(ttl_seconds, now),
                 is_active=True,
             )
-            self._metadata[session.session_id] = meta
+            self._metadata[key] = meta
         elif ttl_seconds is not None:
+            expected = expected_version if expected_version is not None else session.version
+            if expected and expected != meta.version:
+                raise StateConflictError("session", session.session_id, expected, meta.version)
+            session.version = meta.version + 1
+            meta.version = session.version
             # Sliding expiration: refresh from the update time.
             meta.expires_at = self._expiry(ttl_seconds, _utc_now())
+        else:
+            expected = expected_version if expected_version is not None else session.version
+            if expected and expected != meta.version:
+                raise StateConflictError("session", session.session_id, expected, meta.version)
+            session.version = meta.version + 1
+            meta.version = session.version
+        self._sessions[key] = session
 
-    async def delete(self, session_id: str) -> None:
-        self._sessions.pop(session_id, None)
-        self._metadata.pop(session_id, None)
+    async def delete(self, session_id: str, *, tenant_id: str | None = None) -> None:
+        key = self._key(session_id, tenant_id)
+        self._sessions.pop(key, None)
+        self._metadata.pop(key, None)
 
-    async def list_active(self) -> list[SessionMetadata]:
+    async def list_active(self, *, tenant_id: str | None = None) -> list[SessionMetadata]:
         now = _utc_now()
         active: list[SessionMetadata] = []
         expired: list[str] = []
-        for sid, meta in self._metadata.items():
+        for key, meta in self._metadata.items():
+            if tenant_id is not None and meta.tenant_id != tenant_id:
+                continue
             if self._is_expired(meta, now):
-                expired.append(sid)
+                expired.append(key)
                 continue
             active.append(meta)
-        for sid in expired:
-            await self.delete(sid)
+        for key in expired:
+            expired_meta = self._metadata.get(key)
+            if expired_meta is not None:
+                await self.delete(expired_meta.session_id, tenant_id=expired_meta.tenant_id)
         return active

@@ -24,5 +24,5 @@ runtime creation rather than silently using process-local memory.
 - independently scaled processes share declared memory records;
 - memory and session data use separate Redis key namespaces;
 - values are JSON-serialized and non-JSON values use their string form;
-- idempotency, optimistic versioning, and tenant isolation remain separate
-  backlog work.
+- entries are tenant-scoped when a verified tenant is available and carry
+  optimistic versions; stale non-zero-version writes raise `StateConflictError`.
