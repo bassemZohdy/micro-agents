@@ -24,6 +24,7 @@ from micro_agent.definition import (
     load_definition_from_dict,
 )
 from micro_agent.interoperability import create_app, serialize_response
+from micro_agent.interoperability.a2a import a2a_well_known_path
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
@@ -455,7 +456,7 @@ class TestHTTPAuthentication:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             live = await client.get("/health/live")
             assert live.status_code == 200
-            card = await client.get("/.well-known/agent.json")
+            card = await client.get(a2a_well_known_path())
             assert card.status_code == 200
         await agent.stop()
         await agent.shutdown()

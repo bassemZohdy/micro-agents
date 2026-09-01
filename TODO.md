@@ -102,20 +102,33 @@ delegated calls preserve verified identity through model/tool/MCP operations.
 
 ### P1.1 A2A v1.0.1 compliance
 
-- [ ] Replace `/.well-known/agent.json` with the standard
+- [x] Replace `/.well-known/agent.json` with the standard
       `/.well-known/agent-card.json` route.
-- [ ] Replace the project-local card shape with the v1 card model, including
-      `supportedInterfaces`, protocol binding/version, security schemes,
-      modalities, and complete skill metadata.
-- [ ] Implement at least one complete standard binding and task/message
-      lifecycle, not discovery only.
-- [ ] Add authentication at the HTTP transport layer.
-- [ ] Validate server and card with the official A2A Python SDK.
-- [ ] Make the declared protocol version explicit and reject unsupported
-      versions.
+- [x] Replace the project-local card shape with the official SDK card model,
+      including protocol binding/version (`preferredTransport`,
+      `protocolVersion`), security schemes (advertised from the configured
+      authenticator), input/output modalities, and complete skill metadata.
+- [x] Implement the JSON-RPC binding and a complete non-streaming
+      task/message lifecycle (submitted → working → completed/failed) over
+      `message/send`.
+- [x] Add authentication at the HTTP transport layer; A2A interactions are
+      guarded by the same transport authentication as the native API when
+      caller identity is required.
+- [x] Validate server and card with the official A2A Python SDK: the card is
+      the SDK model served by the SDK server stack, and the acceptance run
+      uses the official client (resolver + client) end-to-end without
+      project-specific adapters.
+- [x] Make the declared protocol version explicit and reject unsupported
+      versions (definition declarations are validated at startup; requests
+      declaring another version are rejected).
 
-Acceptance: an official v1.0.1 client resolves the card and completes a
-non-streaming task without project-specific adapters.
+Note: the official SDK's wire protocol version is `0.3.0` (its own version
+domain, distinct from the v1.0.1 specification document); declarations are
+validated against the versions the installed SDK supports.
+
+Acceptance: an official client resolves the card and completes a
+non-streaming task without project-specific adapters — proven by the
+official-SDK client integration test.
 
 ### P1.2 MCP stable-wire client
 

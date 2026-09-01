@@ -1,120 +1,70 @@
-"""Micro-Agent A2A (Agent-to-Agent) interoperability.
+"""Micro-Agent A2A interoperability via the official a2a-sdk.
 
-Uses existing A2A protocol for agent-to-agent communication.
+The agent card is the SDK's model served at the standard
+``/.well-known/agent-card.json`` route, and the JSON-RPC transport bridges
+A2A tasks onto Micro-Agent invocations with a complete non-streaming task
+lifecycle. Declared protocol versions must be supported by the installed
+SDK; requests declaring an unsupported version are rejected.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Agent Card
-# ---------------------------------------------------------------------------
+from micro_agent.definition import A2AConfig
+
+_A2A_WELL_KNOWN_PATH = "/.well-known/agent-card.json"
+_DEFAULT_PROTOCOL_VERSION = "0.3.0"
+
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({"0.3.0"})
 
 
-@dataclass
-class AgentSkill:
-    """A skill exposed via A2A Agent Card."""
+class A2aSdkUnavailableError(RuntimeError):
+    """Raised when A2A features are requested without the official SDK."""
 
-    id: str
-    name: str
-    description: str | None = None
-    tags: list[str] = field(default_factory=list)
-    examples: list[str] = field(default_factory=list)
-
-
-@dataclass
-class AgentCard:
-    """A2A Agent Card for agent discovery."""
-
-    name: str
-    description: str = ""
-    version: str = ""
-    url: str = ""
-    skills: list[AgentSkill] = field(default_factory=list)
-    capabilities: dict[str, bool] = field(default_factory=dict)
-    security: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    def __init__(self) -> None:
+        super().__init__(
+            "the official a2a-sdk is required; install the optional 'a2a' "
+            "extra ('micro-agents[a2a]')"
+        )
 
 
-# ---------------------------------------------------------------------------
-# A2A Message
-# ---------------------------------------------------------------------------
+class UnsupportedProtocolVersionError(RuntimeError):
+    """Raised when a declared or requested A2A version is not supported."""
 
 
-@dataclass
-class A2AMessage:
-    """An A2A protocol message."""
-
-    role: str = "user"
-    parts: list[dict[str, Any]] = field(default_factory=list)
+def a2a_well_known_path() -> str:
+    """The standard A2A agent-card discovery path."""
+    return _A2A_WELL_KNOWN_PATH
 
 
-@dataclass
-class A2ATask:
-    """An A2A task."""
-
-    task_id: str = ""
-    messages: list[A2AMessage] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class A2AResponse:
-    """An A2A task response."""
-
-    task_id: str = ""
-    status: str = "completed"
-    messages: list[A2AMessage] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+def _import_sdk() -> Any:
+    try:
+        import a2a.types as a2a_types
+    except ImportError as exc:  # pragma: no cover - exercised without extra
+        raise A2aSdkUnavailableError() from exc
+    return a2a_types
 
 
-# ---------------------------------------------------------------------------
-# A2A Configuration
-# ---------------------------------------------------------------------------
+def normalize_protocol_version(declared: str | None) -> str:
+    """Validate a declared protocol version against the supported set."""
+    version = (declared or _DEFAULT_PROTOCOL_VERSION).strip()
+    if version not in SUPPORTED_PROTOCOL_VERSIONS:
+        supported = ", ".join(sorted(SUPPORTED_PROTOCOL_VERSIONS))
+        raise UnsupportedProtocolVersionError(
+            f"unsupported A2A protocol version '{declared}'; supported: {supported}"
+        )
+    return version
 
 
-# ---------------------------------------------------------------------------
-# A2A Configuration
-# ---------------------------------------------------------------------------
-
-# The canonical A2AConfig is the pydantic model in
-# micro_agent.definition.models; re-exported here so A2A consumers have one
-# import path without a duplicate type.
-from micro_agent.definition import A2AConfig  # noqa: E402
-
-__all__ = [
-    "A2AConfig",
-    "A2AMessage",
-    "A2AResponse",
-    "A2ATask",
-    "AgentCard",
-    "AgentSkill",
-    "a2a_well_known_path",
-    "agent_card_from_definition",
-    "skills_mapping",
-]
-
-
-# ---------------------------------------------------------------------------
-# Agent Card generation (definition -> A2A)
-# ---------------------------------------------------------------------------
-
-_A2A_WELL_KNOWN_PATH = "/.well-known/agent.json"
-
-
-def skills_mapping(definition: Any) -> list[AgentSkill]:
-    """Map a definition's skills to A2A AgentCard skills.
-
-    Conversion helper between the definition's SkillDefinition (pydantic) and
-    the A2A AgentSkill shape (dataclass).
-    """
+def skills_mapping(definition: Any) -> list[Any]:
+    """Map a definition's skills to SDK AgentSkill models."""
+    a2a_types = _import_sdk()
     return [
-        AgentSkill(
+        a2a_types.AgentSkill(
             id=skill.id,
             name=skill.name,
-            description=skill.description,
+            description=skill.description or "",
             tags=list(skill.tags),
         )
         for skill in definition.spec.dependencies.skills
@@ -124,32 +74,49 @@ def skills_mapping(definition: Any) -> list[AgentSkill]:
 def agent_card_from_definition(
     definition: Any,
     base_url: str | None = None,
-    capabilities: dict[str, bool] | None = None,
-) -> AgentCard:
-    """Generate an A2A AgentCard from a MicroAgentDefinition."""
+    security_scheme: dict[str, Any] | None = None,
+    scheme_name: str = "oidc",
+) -> Any:
+    """Build the SDK AgentCard from a MicroAgentDefinition.
+
+    ``security_scheme`` is a concrete scheme payload (for example from
+    :meth:`~micro_agent.security.auth.Authenticator.security_scheme`);
+    when present the card advertises it as a requirement for interaction.
+    """
+    a2a_types = _import_sdk()
     a2a_config = definition.spec.interoperability.a2a if definition.spec.interoperability else None
+    declared = a2a_config.protocol_version if a2a_config else None
     url = base_url or (a2a_config.endpoint if a2a_config else "") or ""
-    security: dict[str, Any] = {}
-    identity_requirements = (
-        definition.spec.security.identity_requirements if definition.spec.security else {}
-    )
-    if identity_requirements.get("require_caller_identity"):
-        security = {"callerIdentityRequired": True}
-    return AgentCard(
+    security: list[dict[str, list[str]]] | None = None
+    security_schemes: dict[str, Any] | None = None
+    if security_scheme:
+        security_schemes = {
+            scheme_name: a2a_types.SecurityScheme(root=security_scheme),
+        }
+        security = [{scheme_name: []}]
+    return a2a_types.AgentCard(
         name=definition.metadata.name,
         description=definition.metadata.description or "",
         version=definition.metadata.version,
         url=url,
+        preferred_transport="JSONRPC",
+        protocol_version=normalize_protocol_version(declared),
         skills=skills_mapping(definition),
-        capabilities=capabilities or {"streaming": False, "pushNotifications": False},
+        capabilities=a2a_types.AgentCapabilities(streaming=False, push_notifications=False),
+        default_input_modes=["application/json"],
+        default_output_modes=["application/json"],
         security=security,
-        metadata={
-            "protocolVersion": a2a_config.protocol_version if a2a_config else "1.0",
-            "labels": dict(definition.metadata.labels),
-        },
+        security_schemes=security_schemes,
     )
 
 
-def a2a_well_known_path() -> str:
-    """The A2A well-known agent-card endpoint path."""
-    return _A2A_WELL_KNOWN_PATH
+__all__ = [
+    "A2AConfig",
+    "A2aSdkUnavailableError",
+    "SUPPORTED_PROTOCOL_VERSIONS",
+    "UnsupportedProtocolVersionError",
+    "a2a_well_known_path",
+    "agent_card_from_definition",
+    "normalize_protocol_version",
+    "skills_mapping",
+]

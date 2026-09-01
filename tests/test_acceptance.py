@@ -10,6 +10,7 @@ import uvicorn
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.interoperability import create_app
+from micro_agent.interoperability.a2a import a2a_well_known_path
 from micro_agent.models import FakeModelConfig
 from micro_agent.session import SqliteSessionProvider
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -79,7 +80,7 @@ class TestRealNetworkService:
                 assert ready.status_code == 200
                 assert ready.json()["details"]["ready"] is True
 
-                card = await client.get("/.well-known/agent.json")
+                card = await client.get(a2a_well_known_path())
                 assert card.status_code == 200
                 assert card.json()["name"] == "net-agent"
         finally:

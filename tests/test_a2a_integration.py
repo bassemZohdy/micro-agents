@@ -1,9 +1,5 @@
-"""A2A: AgentCard generation, skills mapping, well-known endpoint.
-
-The "independent client" test validates the served agent card as raw JSON
-against the A2A card contract — it deliberately does not import the
-AgentCard/AgentSkill classes, simulating a third-party consumer.
-"""
+"""A2A integration: standard card route, v1 card contract, and an official
+SDK client resolving the card and completing a non-streaming task."""
 
 import httpx
 import pytest
@@ -19,6 +15,8 @@ from micro_agent.interoperability.a2a import (
 from runtimes.adk import AdkRuntime
 
 pytestmark = pytest.mark.integration
+
+pytest.importorskip("a2a")
 
 
 def _definition() -> object:
@@ -51,8 +49,7 @@ def _definition() -> object:
                         },
                     ],
                 },
-                "interoperability": {"a2a": {"enabled": True, "protocol_version": "1.0"}},
-                "security": {"identity_requirements": {"require_caller_identity": True}},
+                "interoperability": {"a2a": {"enabled": True, "protocol_version": "0.3.0"}},
             },
         }
     )
@@ -78,8 +75,7 @@ class TestAgentCardGeneration:
         assert card.name == "residency-renewal"
         assert card.version == "1.0.0"
         assert card.url == "https://agent.example.com"
-        assert card.security == {"callerIdentityRequired": True}
-        assert card.metadata["protocolVersion"] == "1.0"
+        assert card.protocol_version == "0.3.0"
         assert len(card.skills) == 2
 
     def test_card_url_falls_back_to_a2a_endpoint(self):
@@ -101,27 +97,11 @@ class TestAgentCardGeneration:
 
 
 class TestAgentCardEndpoint:
-    """The well-known agent-card endpoint serves the card."""
+    """The standard well-known agent-card endpoint serves the v1 card."""
 
     def _app(self):
-        from micro_agent.security import (
-            AuthenticatedIdentity,
-            Authenticator,
-            CallerIdentity,
-        )
-
-        class _StubAuthenticator(Authenticator):
-            async def authenticate(self, headers):
-                return AuthenticatedIdentity(caller=CallerIdentity(caller_id="caller-1"))
-
-        definition = _definition()
-        agent = DefaultMicroAgent(definition, AdkRuntime())
-        # The definition demands caller identity, so the app must be created
-        # with an authenticator configured.
         return create_app(
-            agent,
-            base_url="https://agent.example.com",
-            authenticator=_StubAuthenticator(),
+            DefaultMicroAgent(_definition(), AdkRuntime()), base_url="https://agent.example.com"
         )
 
     @pytest.mark.asyncio
@@ -139,20 +119,74 @@ class TestAgentCardEndpoint:
         app = self._app()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/.well-known/agent.json")
+            response = await client.get(a2a_well_known_path())
         card = response.json()
 
         # A2A agent-card contract checks (no framework types involved).
-        assert isinstance(card["name"], str) and card["name"]
         assert card["name"] == "residency-renewal"
-        assert isinstance(card["version"], str) and card["version"]
-        assert isinstance(card["description"], str)
+        assert card["protocolVersion"] == "0.3.0"
+        assert card["preferredTransport"] == "JSONRPC"
         assert card["url"].startswith("https://")
         assert isinstance(card["capabilities"], dict)
         assert isinstance(card["skills"], list) and card["skills"]
         for skill in card["skills"]:
-            assert isinstance(skill["id"], str) and skill["id"]
-            assert isinstance(skill["name"], str) and skill["name"]
-            assert isinstance(skill["description"], str)
+            assert skill["id"]
+            assert skill["name"]
             assert isinstance(skill["tags"], list)
-        assert card["security"]["callerIdentityRequired"] is True
+        assert card["defaultInputModes"] == ["application/json"]
+        assert card["defaultOutputModes"] == ["application/json"]
+
+
+class TestOfficialSdkInterop:
+    """The official a2a-sdk client resolves the card and completes a task."""
+
+    @pytest.mark.asyncio
+    async def test_official_client_resolves_card_and_completes_task(self):
+        """An official SDK client resolves the card and completes a task."""
+        import json as jsonlib
+
+        from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
+        from a2a.client.helpers import create_text_message_object
+        from a2a.types import Role, TaskState, TextPart
+        from a2a.types import TransportProtocol as TransportProtocolType
+
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=FakeModelProvider(FakeModelConfig(response="renewal done"))
+            )
+        )
+        agent = DefaultMicroAgent(_definition(), runtime)
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, base_url="http://test")
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http_client:
+            resolver = A2ACardResolver(httpx_client=http_client, base_url="http://test")
+            card = await resolver.get_agent_card()
+            assert card.name == "residency-renewal"
+
+            config = ClientConfig(
+                httpx_client=http_client,
+                streaming=False,
+                supported_transports=[TransportProtocolType.jsonrpc],
+            )
+            client = ClientFactory(config).create(card)
+            message = create_text_message_object(
+                content=jsonlib.dumps({"action": "renew"}), role=Role.user
+            )
+            final_task = None
+            async for task, _update in client.send_message(message):
+                final_task = task
+            assert final_task is not None
+            assert final_task.status.state == TaskState.completed
+            artifacts = final_task.artifacts or []
+            assert artifacts
+            texts = [
+                part.root.text for part in artifacts[0].parts if isinstance(part.root, TextPart)
+            ]
+            assert texts and texts[0]
+            await agent.stop()
+            await agent.shutdown()

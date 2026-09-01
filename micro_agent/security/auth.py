@@ -42,6 +42,10 @@ class Authenticator(ABC):
     async def authenticate(self, headers: Mapping[str, str]) -> AuthenticatedIdentity:
         """Return verified identity, or raise :class:`AuthenticationError`."""
 
+    def security_scheme(self) -> dict[str, Any] | None:
+        """The A2A/agent-card security-scheme payload for this authenticator."""
+        return None
+
 
 class OidcJwtAuthenticator(Authenticator):
     """Validates OIDC/OAuth2 Bearer JWTs against issuer, audience, and JWKS.
@@ -71,6 +75,13 @@ class OidcJwtAuthenticator(Authenticator):
         self._audience = audience
         self._leeway_seconds = leeway_seconds
         self._jwks_client = jwks_client or jwt.PyJWKClient(f"{self._issuer}/.well-known/jwks.json")
+
+    def security_scheme(self) -> dict[str, Any] | None:
+        """OpenID Connect scheme advertised on the A2A agent card."""
+        return {
+            "type": "openIdConnect",
+            "open_id_connect_url": f"{self._issuer}/.well-known/openid-configuration",
+        }
 
     async def authenticate(self, headers: Mapping[str, str]) -> AuthenticatedIdentity:
         token = self._extract_bearer_token(headers)

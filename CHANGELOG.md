@@ -6,6 +6,18 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added A2A compliance on the official a2a-sdk: the standard
+  `/.well-known/agent-card.json` route serves the SDK's card model (protocol
+  binding/version, security schemes advertised from the configured
+  authenticator, input/output modalities, complete skill metadata), and the
+  JSON-RPC transport runs a complete non-streaming task lifecycle
+  (submitted → working → completed/failed) bridged onto Micro-Agent
+  invocations. Declared protocol versions are validated at startup against
+  the versions the SDK supports, requests declaring another version are
+  rejected, and A2A interactions are guarded by the same transport
+  authentication as the native API when caller identity is required. An
+  official SDK client resolves the card and completes a task end-to-end in
+  the integration suite (optional `a2a` extra).
 - Corrected the model tool-call protocol: provider tool-call IDs are
   preserved end-to-end, the assistant `tool_calls` payload stays in the
   conversation history (with generated ids for requests that lack one), and

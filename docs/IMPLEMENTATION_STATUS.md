@@ -178,18 +178,31 @@ Gaps:
 
 Implemented:
 
-- project-local dataclasses
-- definition-to-card mapping
-- one discovery endpoint
+- the official a2a-sdk serves the standard `/.well-known/agent-card.json`
+  route with the SDK card model: protocol binding/version, security schemes
+  advertised from the configured authenticator, input/output modalities, and
+  complete skill metadata
+- the JSON-RPC transport with a complete non-streaming task lifecycle
+  (submitted → working → completed/failed) bridged onto Micro-Agent
+  invocations through an AgentExecutor
+- transport authentication shared with the native API guards A2A
+  interactions when caller identity is required; the card advertises the
+  configured OIDC scheme
+- declared protocol versions are validated at startup against the versions
+  the installed SDK supports, and requests declaring another version are
+  rejected
+- official-SDK client interop test: resolver + client resolve the card and
+  complete a non-streaming task end-to-end
 
 Gaps:
 
-- current route is `/.well-known/agent.json`, while A2A v1 uses
-  `/.well-known/agent-card.json`
-- current card shape is pre-v1/custom and lacks `supportedInterfaces`
-- no standard message/task server binding
-- the “independent client” test checks raw JSON with project-authored
-  expectations; it is not official-SDK compatibility
+- streaming tasks, push notifications, and extended authenticated cards are
+  not implemented (card advertises streaming as unavailable)
+- task store is in-memory; durable task state arrives with production state
+  providers
+- cancellation of in-flight invocations is not wired to the A2A task
+  cancellation path
+
 
 ### Security and policy
 

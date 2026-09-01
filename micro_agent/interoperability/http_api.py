@@ -25,10 +25,7 @@ from micro_agent.core import (
     InvocationOverloadedError,
 )
 from micro_agent.definition import ContractValidationError
-from micro_agent.interoperability.a2a import (
-    a2a_well_known_path,
-    agent_card_from_definition,
-)
+from micro_agent.interoperability.a2a import A2aSdkUnavailableError
 from micro_agent.observability import AuditSink, HealthChecker, Telemetry
 from micro_agent.security.auth import AuthenticatedIdentity, Authenticator
 
@@ -203,7 +200,51 @@ def create_app(
         agent_version=agent.identity.agent_version,
     )
 
-    agent_card = agent_card_from_definition(agent.definition, base_url=base_url)
+    # A2A: the standard agent card is served whenever the official SDK is
+    # installed; the JSON-RPC task transport requires the definition to
+    # enable it, and fails fast when enabled without the SDK.
+    a2a_config = agent.definition.spec.interoperability.a2a
+    a2a_paths: dict[str, str] = {}
+    try:
+        from micro_agent.interoperability.a2a_server import attach_a2a
+
+        a2a_paths = attach_a2a(
+            app,
+            agent,
+            base_url=base_url,
+            security_scheme=authenticator.security_scheme() if authenticator else None,
+            enable_rpc=bool(a2a_config.enabled),
+        )
+    except A2aSdkUnavailableError:
+        if a2a_config.enabled:
+            raise
+        # Discovery-only A2A stays optional when the definition does not
+        # enable the transport and the SDK is not installed.
+
+    identity_requirements = agent.definition.spec.security.identity_requirements
+    authenticated_paths = set(AUTHENTICATED_PATHS)
+    if a2a_paths.get("rpc") and identity_requirements.get("require_caller_identity"):
+        # A2A interactions are guarded by the same transport authentication.
+        authenticated_paths.add(a2a_paths["rpc"])
+
+    @app.middleware("http")
+    async def guard_a2a_protocol_version(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Reject A2A requests that declare an unsupported protocol version."""
+        rpc_url = a2a_paths.get("rpc")
+        if rpc_url is None or request.url.path != rpc_url:
+            return await call_next(request)
+        declared = request.headers.get("x-a2a-version")
+        if declared and declared != a2a_paths.get("protocol_version"):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "code": "unsupported_protocol_version",
+                    "message": f"Protocol version '{declared}' is not supported",
+                },
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def authenticate_request(
@@ -214,7 +255,7 @@ def create_app(
         Verified identity is stored on the request state and attached to the
         invocation; unauthenticated calls fail before the agent is reached.
         """
-        if authenticator is None or request.url.path not in AUTHENTICATED_PATHS:
+        if authenticator is None or request.url.path not in authenticated_paths:
             return await call_next(request)
         try:
             identity: AuthenticatedIdentity = await authenticator.authenticate(request.headers)
@@ -269,12 +310,6 @@ def create_app(
                     },
                 )
         return await call_next(request)
-
-    @app.get(a2a_well_known_path(), response_model=None)
-    async def get_agent_card() -> dict[str, Any]:
-        """A2A well-known agent card for discovery."""
-        telemetry.increment("http_requests_total", {"route": "/.well-known/agent.json"})
-        return asdict(agent_card)
 
     @app.post("/v1/invoke", response_model=InvokeResponseModel)
     async def invoke(request: InvokeRequestModel, http_request: Request) -> InvokeResponseModel:
