@@ -1,6 +1,6 @@
 # Standards Baseline
 
-Baseline date: 2026-08-30.
+Baseline date: 2026-09-01.
 
 The project targets the latest released stable protocol and does not silently
 adopt drafts or release candidates.
@@ -25,9 +25,12 @@ Relevant v1 requirements for this project:
 - complete AgentSkill metadata
 - at least one real standard message/task binding
 
-Current status: **not compliant**. The implementation uses
-`/.well-known/agent.json`, a project-local pre-v1-shaped card, and has no A2A
-task server. Raw JSON retrieval is not a conformance test.
+Current status: **tested subset implemented**. The official `a2a-sdk` serves
+`/.well-known/agent-card.json` and mounts JSON-RPC `message/send` when enabled;
+the integration suite resolves the card with the official client and completes
+a non-streaming task. Streaming, push notifications, durable task state, and
+in-flight cancellation remain open, so this is not a claim of full production
+conformance.
 
 ## MCP
 
@@ -51,9 +54,12 @@ Stable transport expectations:
 - Streamable HTTP for remote servers
 - legacy SSE compatibility is documented separately
 
-Current status: **integration seam only**. The repository provides interfaces,
-a fake client, security checks, and adapters, but no MCP SDK wire client,
-protocol negotiation, or real-server compatibility test.
+Current status: **tested subset implemented**. The official MCP Python SDK is
+wired behind the `McpClient` SPI for stdio and Streamable HTTP (with legacy SSE
+compatibility), including initialization negotiation, discovery, bounded
+calls, security controls, graceful close, bounded automatic reconnect, and
+real FastMCP interop tests. Notifications are consumed but not surfaced, and
+remote production load testing remains open.
 
 ## Google ADK
 

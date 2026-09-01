@@ -8,10 +8,12 @@ graceful close through :class:`SdkMcpClient`.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import textwrap
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -168,6 +170,81 @@ async def test_connect_failure_propagates_clear_error():
     )
     with pytest.raises(Exception, match="connection failed"):
         await client.connect(config)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_transport_drop_reconnects(monkeypatch):
+    """A dropped transport is retried without requiring a runtime restart."""
+
+    class DropOnceEvent:
+        def __init__(self) -> None:
+            self._event = asyncio.Event()
+            self._drop = True
+
+        def clear(self) -> None:
+            # ``connect`` clears the event before starting the transport, but
+            # the first wait is deliberately used to model a dropped link.
+            self._event.clear()
+
+        def is_set(self) -> bool:
+            return self._event.is_set()
+
+        def set(self) -> None:
+            self._event.set()
+
+        async def wait(self) -> None:
+            if self._drop:
+                self._drop = False
+                raise ConnectionError("simulated transport drop")
+            await self._event.wait()
+
+    class Session:
+        def __init__(self, _read, _write) -> None:
+            self.protocolVersion = "2025-11-25"
+            self.serverInfo = SimpleNamespace(name="reconnect-server")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+        async def initialize(self):
+            return self
+
+    client = SdkMcpClient(
+        reconnect_attempts=2,
+        reconnect_backoff_seconds=0.001,
+    )
+    closing = DropOnceEvent()
+    client._closing = closing
+
+    async def enter_transport(_stack, _config, _sdk):
+        return object(), object()
+
+    monkeypatch.setattr(
+        "micro_agent.mcp.sdk_client._import_sdk",
+        lambda: SimpleNamespace(ClientSession=Session),
+    )
+    monkeypatch.setattr(client, "_enter_transport", enter_transport)
+
+    try:
+        await client.connect(McpConfig(ref="reconnect"))
+        for _ in range(100):
+            if client.state() == McpConnectionState.CONNECTED and client._connected_once:
+                break
+            await asyncio.sleep(0.001)
+        assert client.state() == McpConnectionState.CONNECTED
+        assert client.protocol_version == "2025-11-25"
+    finally:
+        await client.disconnect()
+
+
+def test_reconnect_arguments_are_validated():
+    with pytest.raises(ValueError, match="reconnect_attempts"):
+        SdkMcpClient(reconnect_attempts=-1)
+    with pytest.raises(ValueError, match="reconnect_backoff_seconds"):
+        SdkMcpClient(reconnect_backoff_seconds=-0.1)
 
 
 class _UvicornThread:

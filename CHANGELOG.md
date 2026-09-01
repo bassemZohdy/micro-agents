@@ -42,6 +42,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   YAML-only MCP declaration now discovers and invokes a real MCP server
   through the executable bootstrap, proven by interop tests over stdio and
   Streamable HTTP with FastMCP servers.
+- Added bounded automatic reconnect for unexpected MCP transport termination.
+  Reconnect attempts use exponential backoff, preserve negotiated configuration
+  and credentials, never run during explicit shutdown, and expose an unhealthy
+  terminal state when the retry budget is exhausted.
 - Added verified identity propagation: the runtime binds caller and user
   identity into an invocation-scoped context (contextvar-based) so model,
   tool, and MCP operations observe the verified principal without SPI

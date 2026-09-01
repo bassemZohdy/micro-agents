@@ -61,7 +61,10 @@ curl -X POST http://127.0.0.1:8080/v1/invoke \
 ```
 
 Expected invoke content is the deterministic fake response unless the runtime
-is constructed programmatically with another provider.
+is constructed programmatically with another provider. The default application
+also serves the standard A2A agent card at
+`/.well-known/agent-card.json`; enable `spec.interoperability.a2a.enabled`
+for the official SDK JSON-RPC task endpoint.
 
 `timeout_seconds` is optional. It sets an end-to-end deadline for the request;
 the runtime cancels any active model, tool/MCP, session, or memory operation
@@ -116,8 +119,10 @@ runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
 ```
 
 The adapter owns ADK agent, runner, and session objects internally; only the
-runtime-neutral `AgentRuntime` contracts are exposed to callers. External
-dependency mappings remain open and unsupported declarations fail fast.
+runtime-neutral `AgentRuntime` contracts are exposed to callers. Memory, MCP,
+policy, knowledge, credential, and telemetry mappings are validated at startup;
+unsupported external session bindings and model credential references fail
+fast.
 
 ## Container
 
@@ -129,5 +134,6 @@ docker run --rm -p 8080:8080 \
 ```
 
 This validates the explicit fake-provider service and local bootstrap only. It
-does not prove live model, MCP, authentication, external state, or A2A task
-interoperability.
+does not prove a live model or external state deployment; official MCP and A2A
+interoperability is covered by the integration suite when their extras are
+installed.

@@ -14,11 +14,12 @@ The image:
 - probes `/health/live`
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
-from the mounted definition and environment. It also constructs local
-in-memory memory/session providers and SQLite sessions when those persistence
-modes are declared. Startup probes the configured model, state providers, and
-declared MCP servers before readiness. External MCP, state, policy, and
-non-environment secret providers remain unsupported and fail before readiness.
+from the mounted definition and environment. It constructs local memory/session
+providers, the official MCP SDK client for declared servers, knowledge and
+credential providers, policy, telemetry, and audit sinks from configuration.
+Startup probes the configured model, state providers, knowledge sources, and
+declared MCP servers before readiness. Unsupported external state bindings and
+unavailable credentials fail before readiness.
 
 ## Kubernetes manifests
 
@@ -64,7 +65,7 @@ is not the recommended shared store for independently scheduled pods. An
 
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
-- [ ] authenticated HTTP and standards endpoints
+- [ ] authenticated HTTP and enabled A2A standards endpoints
 - [ ] external session, memory, and idempotency state
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation

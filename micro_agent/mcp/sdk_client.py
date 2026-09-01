@@ -11,10 +11,12 @@ Implements the :class:`~micro_agent.mcp.mcp.McpClient` SPI with the official
 The SDK session performs initialization and version/capability negotiation.
 Each connection runs in a dedicated task holding the transport context
 managers; per-call timeouts bound requests; disconnect closes the session
-and transports gracefully. Credentials are injected at connect time — HTTP
-servers receive an Authorization header, stdio servers receive the value in
-the child-process environment under the credential reference name — and
-never appear on config objects, logs, or errors.
+and transports gracefully. Unexpected transport termination triggers bounded
+automatic reconnect attempts, while an explicit disconnect never reconnects.
+Credentials are injected at connect time — HTTP servers receive an
+Authorization header, stdio servers receive the value in the child-process
+environment under the credential reference name — and never appear on config
+objects, logs, or errors.
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ from micro_agent.mcp.mcp import (
 _CONNECT_TIMEOUT_SECONDS = 10.0
 _DISCONNECT_TIMEOUT_SECONDS = 10.0
 _CALL_TIMEOUT_SECONDS = 60.0
+_RECONNECT_ATTEMPTS = 3
+_RECONNECT_BACKOFF_SECONDS = 0.25
 
 _T = TypeVar("_T")
 
@@ -83,10 +87,18 @@ class SdkMcpClient(McpClient):
         connect_timeout_seconds: float = _CONNECT_TIMEOUT_SECONDS,
         disconnect_timeout_seconds: float = _DISCONNECT_TIMEOUT_SECONDS,
         call_timeout_seconds: float = _CALL_TIMEOUT_SECONDS,
+        reconnect_attempts: int = _RECONNECT_ATTEMPTS,
+        reconnect_backoff_seconds: float = _RECONNECT_BACKOFF_SECONDS,
     ) -> None:
+        if reconnect_attempts < 0:
+            raise ValueError("reconnect_attempts must be non-negative")
+        if reconnect_backoff_seconds < 0:
+            raise ValueError("reconnect_backoff_seconds must be non-negative")
         self._connect_timeout = connect_timeout_seconds
         self._disconnect_timeout = disconnect_timeout_seconds
         self._call_timeout = call_timeout_seconds
+        self._reconnect_attempts = reconnect_attempts
+        self._reconnect_backoff = reconnect_backoff_seconds
         self._session: Any = None
         self._protocol_version: str | None = None
         self._server_name: str | None = None
@@ -97,6 +109,7 @@ class SdkMcpClient(McpClient):
         self._state = McpConnectionState.DISCONNECTED
         self._config: McpConfig | None = None
         self._credential: str | None = None
+        self._connected_once = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -111,6 +124,7 @@ class SdkMcpClient(McpClient):
         self._closing.clear()
         self._ready.clear()
         self._error = None
+        self._connected_once = False
         self._task = asyncio.create_task(self._run(), name=f"micro-agent-mcp-{config.ref}")
         try:
             await asyncio.wait_for(self._ready.wait(), timeout=self._connect_timeout)
@@ -120,7 +134,7 @@ class SdkMcpClient(McpClient):
             raise SdkMcpError(
                 f"mcp '{config.ref}': connection timed out after {self._connect_timeout}s"
             ) from exc
-        if self._error is not None or self._state != McpConnectionState.CONNECTED:
+        if not self._connected_once:
             error = self._error
             self._state = McpConnectionState.ERROR
             self._task = None
@@ -131,27 +145,57 @@ class SdkMcpClient(McpClient):
 
     async def _run(self) -> None:
         assert self._config is not None
-        sdk = _import_sdk()
         config = self._config
         try:
-            async with AsyncExitStack() as stack:
-                read, write = await self._enter_transport(stack, config, sdk)
-                session = await stack.enter_async_context(sdk.ClientSession(read, write))
-                init = await asyncio.wait_for(session.initialize(), timeout=self._connect_timeout)
-                self._protocol_version = init.protocolVersion
-                self._server_name = getattr(init.serverInfo, "name", None)
-                self._session = session
-                self._state = McpConnectionState.CONNECTED
-                self._ready.set()
-                # Hold the transport context open until disconnect.
-                await self._closing.wait()
-        except Exception as exc:
+            sdk = _import_sdk()
+        except Exception as exc:  # noqa: BLE001 — optional SDK/import failures
             self._error = exc
-            if self._state != McpConnectionState.CONNECTED:
-                self._state = McpConnectionState.ERROR
+            self._state = McpConnectionState.ERROR
             self._ready.set()
-        finally:
-            self._session = None
+            return
+
+        reconnects = 0
+        while not self._closing.is_set():
+            try:
+                async with AsyncExitStack() as stack:
+                    read, write = await self._enter_transport(stack, config, sdk)
+                    session = await stack.enter_async_context(sdk.ClientSession(read, write))
+                    init = await asyncio.wait_for(
+                        session.initialize(), timeout=self._connect_timeout
+                    )
+                    self._protocol_version = init.protocolVersion
+                    self._server_name = getattr(init.serverInfo, "name", None)
+                    self._session = session
+                    self._connected_once = True
+                    self._error = None
+                    self._state = McpConnectionState.CONNECTED
+                    self._ready.set()
+                    reconnects = 0
+                    # Hold the transport context open until disconnect. A
+                    # transport exception exits this block and is retried.
+                    await self._closing.wait()
+                    return
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — reconnectable transport failures
+                self._session = None
+                self._error = exc
+                if not self._connected_once or self._closing.is_set():
+                    self._state = McpConnectionState.ERROR
+                    self._ready.set()
+                    return
+                reconnects += 1
+                self._state = McpConnectionState.CONNECTING
+                if reconnects > self._reconnect_attempts:
+                    self._state = McpConnectionState.ERROR
+                    self._ready.set()
+                    return
+                self._ready.set()
+                delay = self._reconnect_backoff * (2 ** (reconnects - 1))
+                with suppress(TimeoutError):
+                    await asyncio.wait_for(self._closing.wait(), timeout=delay)
+            finally:
+                self._session = None
 
     async def _enter_transport(
         self,
