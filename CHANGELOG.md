@@ -36,6 +36,17 @@ All notable changes to the Micro-Agents project are documented in this file.
   `model_cost_usd_total` conventions plus a public Prometheus-compatible
   `/metrics` endpoint for the in-memory operational series.
 
+### Safety and retries
+
+- Added explicit `read_only`, `idempotent`, and `unsafe` tool side-effect
+  classifications to the v1alpha1 definition and both runtime adapters.
+  Legacy and discovered tools default to `unsafe`; read-only tools remain
+  subject to tool allow/deny policy but bypass side-effect approval and
+  idempotency claims, while idempotent and unsafe tools retain policy and
+  operation-registry handling. Operation objects carry the mapped retry
+  classification into registry and audit hooks for downstream dispatch and
+  audit decisions.
+
 ### Bootstrap
 
 - Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,

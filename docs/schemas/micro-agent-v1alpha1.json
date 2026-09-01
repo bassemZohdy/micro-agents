@@ -784,7 +784,7 @@
     },
     "ToolDefinition": {
       "additionalProperties": false,
-      "description": "Defines a tool available to the agent.",
+      "description": "Defines a tool available to the agent.\n\n``side_effect`` is intentionally explicit at the definition boundary so\nruntimes can enforce approval and retry behavior without inferring safety\nfrom a tool name or prompt text.  Existing definitions default to\n``unsafe`` for backward-compatible fail-closed behavior.",
       "properties": {
         "name": {
           "maxLength": 128,
@@ -831,6 +831,17 @@
           ],
           "default": null,
           "title": "Timeout Seconds"
+        },
+        "side_effect": {
+          "default": "unsafe",
+          "description": "Tool side-effect classification: read_only performs no writes, idempotent can be retried with a stable idempotency key, and unsafe may have non-repeatable effects.",
+          "enum": [
+            "read_only",
+            "idempotent",
+            "unsafe"
+          ],
+          "title": "Side Effect",
+          "type": "string"
         }
       },
       "required": [

@@ -47,6 +47,7 @@ from micro_agent.security import (
     OperationResult,
     PendingApproval,
     PolicyEvaluator,
+    RetryClassification,
     build_security_context,
     get_invocation_identity,
     reset_invocation_identity,
@@ -54,7 +55,7 @@ from micro_agent.security import (
     set_invocation_identity,
 )
 from micro_agent.session import SessionProvider
-from micro_agent.tools import Tool, builtin_tool_registry
+from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
 
 
 class _ApprovalPausedError(Exception):
@@ -201,6 +202,10 @@ class AdkRuntime(AgentRuntime):
         capabilities = AgentCapabilities(memory=self._config.memory_provider is not None)
 
         tools, unresolved = self._resolve_tools(definition)
+        tool_side_effects = {
+            tool_definition.name: tool_definition.side_effect
+            for tool_definition in definition.spec.dependencies.tools
+        }
         if unresolved:
             self._telemetry.logger.warning(
                 "unresolved tools (no native implementation or MCP binding)",
@@ -232,6 +237,7 @@ class AdkRuntime(AgentRuntime):
                 "definition": definition,
                 "model_provider": self._model_provider,
                 "tools": tools,
+                "tool_side_effects": tool_side_effects,
                 "unresolved_tools": unresolved,
                 "session_provider": self._config.session_provider,
                 "session_ttl": session_ttl,
@@ -660,6 +666,7 @@ class AdkRuntime(AgentRuntime):
                     labels,
                     deadline=deadline,
                     skip_side_effect_approval=True,
+                    side_effects=agent._internal.get("tool_side_effects"),
                 )
             else:
                 self._audit(
@@ -774,6 +781,7 @@ class AdkRuntime(AgentRuntime):
                 agent_span.span_id,
                 labels,
                 deadline=deadline,
+                side_effects=agent._internal.get("tool_side_effects"),
             )
             all_tool_results.extend(tool_results)
             for result in tool_results:
@@ -853,10 +861,17 @@ class AdkRuntime(AgentRuntime):
         if self._policy_evaluator is None:
             return False
         for tool_request in tool_requests:
-            tool = tools.get(tool_request.get("name", ""))
+            tool_name = tool_request.get("name", "")
+            tool = tools.get(tool_name)
             if tool is None:
                 continue
             if not self._policy_evaluator.evaluate_tool(tool.metadata.name).allowed:
+                continue
+            classification = normalize_tool_side_effect(
+                (agent._internal.get("tool_side_effects") or {}).get(tool_name)
+                or tool.metadata.side_effect
+            )
+            if classification == "read_only":
                 continue
             decision = self._policy_evaluator.evaluate_side_effect(tool.metadata.name)
             if decision.requires_approval:
@@ -918,6 +933,7 @@ class AdkRuntime(AgentRuntime):
         labels: dict[str, str],
         deadline: _InvocationDeadline | None = None,
         skip_side_effect_approval: bool = False,
+        side_effects: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for tool_request in tool_requests:
@@ -935,6 +951,15 @@ class AdkRuntime(AgentRuntime):
                     }
                 )
                 continue
+
+            side_effect = normalize_tool_side_effect(
+                (side_effects or {}).get(tool_name) or tool.metadata.side_effect
+            )
+            retry_classification = {
+                "read_only": RetryClassification.SAFE,
+                "idempotent": RetryClassification.IDEMPOTENT,
+                "unsafe": RetryClassification.UNSAFE,
+            }[side_effect]
 
             arguments = tool_request.get("arguments", {})
             validation_error = _validate_tool_arguments(tool, arguments)
@@ -967,42 +992,49 @@ class AdkRuntime(AgentRuntime):
                         }
                     )
                     continue
-                side_effect_decision = self._policy_evaluator.evaluate_side_effect(tool_name)
-                approval_satisfied = (
-                    skip_side_effect_approval and side_effect_decision.requires_approval
-                )
-                if not side_effect_decision.allowed and not approval_satisfied:
-                    self._deny(
-                        labels,
-                        tool_name,
-                        side_effect_decision.reason,
-                        event="policy.side_effect_denied",
+                if side_effect != "read_only":
+                    side_effect_decision = self._policy_evaluator.evaluate_side_effect(tool_name)
+                    approval_satisfied = (
+                        skip_side_effect_approval and side_effect_decision.requires_approval
                     )
-                    results.append(
-                        {
-                            "tool": tool_name,
-                            "tool_call_id": tool_call_id,
-                            "output": None,
-                            "error": (
-                                f"denied by side-effect policy: {side_effect_decision.reason}"
-                            ),
-                            "latency_ms": 0.0,
-                            "denied": True,
-                        }
-                    )
-                    continue
+                    if not side_effect_decision.allowed and not approval_satisfied:
+                        self._deny(
+                            labels,
+                            tool_name,
+                            side_effect_decision.reason,
+                            event="policy.side_effect_denied",
+                        )
+                        results.append(
+                            {
+                                "tool": tool_name,
+                                "tool_call_id": tool_call_id,
+                                "output": None,
+                                "error": (
+                                    f"denied by side-effect policy: {side_effect_decision.reason}"
+                                ),
+                                "latency_ms": 0.0,
+                                "denied": True,
+                                "side_effect": side_effect,
+                            }
+                        )
+                        continue
 
             # Idempotency/deduplication for side-effect operations.
             registry = self._config.operation_registry
             operation = None
-            if registry is not None:
+            if registry is not None and side_effect != "read_only":
                 bound_identity = get_invocation_identity()
                 tenant_id = (
                     bound_identity.user.tenant_id
                     if bound_identity is not None and bound_identity.user is not None
                     else None
                 )
-                operation = _new_operation(tool_name, arguments, tenant_id=tenant_id)
+                operation = _new_operation(
+                    tool_name,
+                    arguments,
+                    tenant_id=tenant_id,
+                    retry_classification=retry_classification,
+                )
                 claim = getattr(registry, "claim", None)
                 if callable(claim):
                     claimed, prior = await _maybe_await(claim(operation))
@@ -1032,6 +1064,7 @@ class AdkRuntime(AgentRuntime):
                             ),
                             "latency_ms": 0.0,
                             "was_deduplicated": True,
+                            "side_effect": side_effect,
                         }
                     )
                     continue
@@ -1090,6 +1123,7 @@ class AdkRuntime(AgentRuntime):
                     "output": output,
                     "error": error,
                     "latency_ms": tool_latency,
+                    "side_effect": side_effect,
                 }
             )
         return results
@@ -1133,7 +1167,11 @@ def _validate_tool_arguments(tool: Tool, arguments: Any) -> str | None:
 
 
 def _new_operation(
-    tool_name: str, arguments: dict[str, Any], *, tenant_id: str | None = None
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    tenant_id: str | None = None,
+    retry_classification: RetryClassification = RetryClassification.SAFE,
 ) -> Operation:
     """Build an Operation for a tool call; arguments may carry an idempotency key."""
     key = arguments.get("idempotency_key")
@@ -1142,4 +1180,5 @@ def _new_operation(
         arguments=arguments,
         idempotency_key=str(key) if key else None,
         tenant_id=tenant_id,
+        retry_classification=retry_classification,
     )

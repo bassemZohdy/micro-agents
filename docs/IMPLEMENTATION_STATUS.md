@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-01
-Documentation-audit baseline: `76cbd0a129c85b511da12b03553a320ec6744a06`
-Cleanup verification baseline: `76cbd0a129c85b511da12b03553a320ec6744a06`
+Documentation-audit baseline: `0a32d65ec4a87079deef6472d53d4f4f35ebcea2`
+Cleanup verification baseline: `0a32d65ec4a87079deef6472d53d4f4f35ebcea2`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 518 collected | 433 pass in the default test job plus two expected optional-dependency skips; 83 integration/E2E/optional tests are deselected there, plus three Redis service tests, 15 Google ADK tests, and five OpenTelemetry tests when optional extras are installed |
+| Tests | 522 collected | 437 pass in the default test job plus two expected optional-dependency skips; 85 integration/E2E/optional tests are deselected there, plus three Redis service tests, 16 Google ADK tests, and five OpenTelemetry tests when optional extras are installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -127,6 +127,9 @@ Implemented:
 - the optional Redis operation registry atomically claims idempotency keys,
   shares in-progress/completed results across custom-runtime replicas, applies
   result TTLs, exposes a health probe, and closes only clients it owns
+- tool declarations classify side effects as `read_only`, `idempotent`, or
+  `unsafe`; both runtimes enforce the classification, defaulting legacy and
+  discovered tools to `unsafe`
 
 Current custom-runtime capability matrix:
 
@@ -145,6 +148,9 @@ Gaps:
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
 - retrying the complete invocation can replay side effects
+- unknown write outcomes, retry budgets/backoff, circuit breaking, and crash /
+  replay recovery are not yet implemented; classification is an enforcement
+  contract, not automatic retry behavior
 
 ### Models and tools
 

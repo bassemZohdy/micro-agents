@@ -99,6 +99,55 @@ class TestMinimalDefinition:
         assert definition.spec.runtime.error_policy.value == "retry"
         assert definition.spec.interoperability.a2a.enabled is True
 
+    def test_tool_side_effect_classification_is_preserved(self):
+        data = {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "classified-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Use the declared tool."},
+                "dependencies": {
+                    "tools": [
+                        {"name": "lookup", "side_effect": "read_only"},
+                        {"name": "charge", "side_effect": "idempotent"},
+                        {"name": "notify", "side_effect": "unsafe"},
+                    ]
+                },
+            },
+        }
+        definition = load_definition_from_dict(data)
+        assert [tool.side_effect for tool in definition.spec.dependencies.tools] == [
+            "read_only",
+            "idempotent",
+            "unsafe",
+        ]
+
+    def test_tool_side_effect_defaults_to_unsafe(self):
+        data = {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "legacy-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Keep legacy behavior."},
+                "dependencies": {"tools": [{"name": "echo"}]},
+            },
+        }
+        definition = load_definition_from_dict(data)
+        assert definition.spec.dependencies.tools[0].side_effect == "unsafe"
+
+    def test_invalid_tool_side_effect_is_rejected(self):
+        data = {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "invalid-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Reject invalid metadata."},
+                "dependencies": {"tools": [{"name": "echo", "side_effect": "sometimes"}]},
+            },
+        }
+        with pytest.raises(DefinitionError):
+            load_definition_from_dict(data)
+
 
 class TestInvalidDefinitions:
     """Test that invalid definitions fail with useful diagnostics."""

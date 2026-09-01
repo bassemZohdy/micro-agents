@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+ToolSideEffect = Literal["read_only", "idempotent", "unsafe"]
+_TOOL_SIDE_EFFECTS = frozenset({"read_only", "idempotent", "unsafe"})
+
+
+def normalize_tool_side_effect(value: str | None) -> ToolSideEffect:
+    """Normalize untrusted metadata to a fail-closed side-effect class."""
+    return value if value in _TOOL_SIDE_EFFECTS else "unsafe"  # type: ignore[return-value]
+
 
 # ---------------------------------------------------------------------------
 # Tool Definition
@@ -16,12 +25,17 @@ from typing import Any
 
 @dataclass
 class ToolMetadata:
-    """Metadata for a tool."""
+    """Metadata for a tool.
+
+    Native and discovered tools default to ``unsafe`` so an omitted
+    declaration never weakens approval or idempotency enforcement.
+    """
 
     name: str
     description: str | None = None
     source: str | None = None
     timeout_seconds: int | None = None
+    side_effect: ToolSideEffect = "unsafe"
 
 
 @dataclass

@@ -80,6 +80,10 @@ spec:
     model:
       ref: reasoning-model
       model_id: provider-model-v2
+    tools:
+      - name: profile
+        source: native
+        side_effect: read_only
     skills:
       - id: send-notification
         name: Send Notification
@@ -92,6 +96,8 @@ The complete schema is
 The larger residency example demonstrates the available definition fields; it
 also declares integrations (such as external MCP and state providers) that the
 default command-line bootstrap rejects until matching providers are installed.
+Tool declarations use `side_effect: read_only`, `idempotent`, or `unsafe` to
+make approval and retry behavior explicit; omitted values default to `unsafe`.
 
 ## Quick start
 
