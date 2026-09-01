@@ -70,6 +70,7 @@ the validation and precedence rules.
 ```bash
 curl http://127.0.0.1:8080/health/live
 curl http://127.0.0.1:8080/health/ready
+curl http://127.0.0.1:8080/metrics
 curl http://127.0.0.1:8080/v1/capabilities
 curl -X POST http://127.0.0.1:8080/v1/invoke \
   -H 'Content-Type: application/json' \

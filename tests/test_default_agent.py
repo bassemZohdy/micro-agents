@@ -31,7 +31,7 @@ from micro_agent.interoperability import (
     serialize_response,
 )
 from micro_agent.interoperability.a2a import a2a_well_known_path
-from micro_agent.observability import HealthChecker, HealthStatus
+from micro_agent.observability import HealthChecker, HealthStatus, Telemetry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
@@ -862,6 +862,22 @@ class TestHTTPServer:
             assert versioned_openapi.json()["info"]["title"] == "test-agent"
             legacy_openapi = await client.get("/openapi.json")
             assert legacy_openapi.status_code == 200
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_metrics_endpoint_exposes_prometheus_series(self, agent):
+        await agent.initialize()
+        await agent.start()
+        telemetry = Telemetry()
+        telemetry.increment("test_requests_total", {"route": "/v1/invoke"})
+        app = create_app(agent, telemetry=telemetry)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/metrics")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain")
+        assert 'test_requests_total{route="/v1/invoke"} 1' in response.text
         await agent.stop()
         await agent.shutdown()
 

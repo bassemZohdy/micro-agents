@@ -309,6 +309,54 @@ async def test_streamable_http_interop_discover_and_call():
             await client.disconnect()
 
 
+@pytest.mark.otel
+@pytest.mark.asyncio
+async def test_streamable_http_propagates_w3c_context_per_tool_call():
+    """MCP transport links a caller span to the JSON-RPC HTTP request."""
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from micro_agent.observability import Telemetry
+
+    seen_traceparents: list[str] = []
+    mcp_app = _http_app()
+
+    async def capture_app(scope, receive, send):
+        if scope["type"] == "http":
+            headers = {key.decode().lower(): value.decode() for key, value in scope["headers"]}
+            traceparent = headers.get("traceparent")
+            if traceparent:
+                seen_traceparents.append(traceparent)
+        await mcp_app(scope, receive, send)
+
+    tracer_provider = TracerProvider()
+    telemetry = Telemetry(otel_tracer=tracer_provider.get_tracer("mcp-test"))
+    with _UvicornThread(capture_app) as server:
+        client = SdkMcpClient(telemetry=telemetry)
+        config = McpConfig(
+            ref="http-otel",
+            transport="streamable-http",
+            endpoint=f"http://127.0.0.1:{server.port}/mcp",
+        )
+        await client.connect(config)
+        try:
+            span = telemetry.start_span("tool.mcp")
+            try:
+                payload = await client.call_tool("echo", {"message": "traced"})
+            finally:
+                telemetry.finish_span(span)
+            assert payload == {"result": {"result": "traced"}}
+            span_context = span._otel_span.get_span_context()
+            expected = (
+                f"00-{span_context.trace_id:032x}-{span_context.span_id:016x}-"
+                f"{int(span_context.trace_flags):02x}"
+            )
+        finally:
+            await client.disconnect()
+
+    assert expected in seen_traceparents
+
+
 @pytest.mark.asyncio
 async def test_yaml_only_declaration_invokes_real_server_through_bootstrap(tmp_path):
     """P1.2 acceptance: YAML-only MCP declaration works through the bootstrap."""

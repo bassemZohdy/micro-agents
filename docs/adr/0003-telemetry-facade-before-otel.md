@@ -22,6 +22,7 @@ default and metric labels are bounded.
 - Agent/model/tool/MCP spans share the facade's correlation; OTel-enabled
   deployments export standard spans/metrics without changing runtime code.
 - Secret redaction is centralized in the logger.
-- HTTP middleware extracts and injects W3C trace context when OTel is enabled;
-  downstream carrier instrumentation and operational dashboards remain
-  follow-up work.
+- HTTP middleware and outbound model/MCP clients extract and inject W3C trace
+  context when OTel is enabled; token/cost conventions and `/metrics` expose
+  the operational contract, while production dashboards and alerts remain
+  deployment-owned.

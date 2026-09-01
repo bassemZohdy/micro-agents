@@ -22,6 +22,7 @@ objects, logs, or errors.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
@@ -54,6 +55,7 @@ def _direct_httpx_client_factory(
     headers: dict[str, str] | None = None,
     timeout: httpx.Timeout | None = None,
     auth: httpx.Auth | None = None,
+    request_hooks: list[Callable[[httpx.Request], Any]] | None = None,
 ) -> httpx.AsyncClient:
     """Build an MCP HTTP client without ambient proxy environment variables."""
     kwargs: dict[str, Any] = {"follow_redirects": True, "trust_env": False}
@@ -63,6 +65,8 @@ def _direct_httpx_client_factory(
         kwargs["timeout"] = timeout
     if auth is not None:
         kwargs["auth"] = auth
+    if request_hooks:
+        kwargs["event_hooks"] = {"request": request_hooks}
     return httpx.AsyncClient(**kwargs)
 
 
@@ -107,6 +111,7 @@ class SdkMcpClient(McpClient):
         call_timeout_seconds: float = _CALL_TIMEOUT_SECONDS,
         reconnect_attempts: int = _RECONNECT_ATTEMPTS,
         reconnect_backoff_seconds: float = _RECONNECT_BACKOFF_SECONDS,
+        telemetry: Any | None = None,
     ) -> None:
         if reconnect_attempts < 0:
             raise ValueError("reconnect_attempts must be non-negative")
@@ -128,6 +133,8 @@ class SdkMcpClient(McpClient):
         self._config: McpConfig | None = None
         self._credential: str | None = None
         self._connected_once = False
+        self._telemetry = telemetry
+        self._trace_contexts: dict[int, dict[str, str]] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -214,6 +221,7 @@ class SdkMcpClient(McpClient):
                     await asyncio.wait_for(self._closing.wait(), timeout=delay)
             finally:
                 self._session = None
+                self._trace_contexts.clear()
 
     async def _enter_transport(
         self,
@@ -222,6 +230,7 @@ class SdkMcpClient(McpClient):
         sdk: SimpleNamespace,
     ) -> tuple[Any, Any]:
         headers = {"Authorization": f"Bearer {self._credential}"} if self._credential else None
+        httpx_client_factory = self._httpx_client_factory()
         if config.transport == "stdio":
             assert config.command is not None
             env = dict(os.environ)
@@ -237,7 +246,11 @@ class SdkMcpClient(McpClient):
             # Legacy compatibility transport, not a stable peer.
             assert config.endpoint is not None
             return await stack.enter_async_context(
-                sdk.sse.sse_client(config.endpoint, headers=headers)
+                sdk.sse.sse_client(
+                    config.endpoint,
+                    headers=headers,
+                    httpx_client_factory=httpx_client_factory,
+                )
             )
         assert config.endpoint is not None
         timeout = float(config.timeout_seconds) if config.timeout_seconds else 30.0
@@ -246,10 +259,39 @@ class SdkMcpClient(McpClient):
                 config.endpoint,
                 headers=headers,
                 timeout=timeout,
-                httpx_client_factory=_direct_httpx_client_factory,
+                httpx_client_factory=httpx_client_factory,
             )
         )
         return read, write
+
+    def _httpx_client_factory(self) -> Callable[..., httpx.AsyncClient]:
+        """Build an MCP HTTP client that injects the active W3C context.
+
+        The SDK owns one client for the connection, so context must be added
+        at request time rather than only when the transport is initialized.
+        This keeps each MCP tool call linked to its current runtime span.
+        """
+
+        async def inject_context(request: httpx.Request) -> None:
+            carrier = self._trace_context_for_request(request)
+            if carrier:
+                request.headers.update(carrier)
+            elif self._telemetry is not None:
+                self._telemetry.inject_context(request.headers)
+
+        def factory(
+            headers: dict[str, str] | None = None,
+            timeout: httpx.Timeout | None = None,
+            auth: httpx.Auth | None = None,
+        ) -> httpx.AsyncClient:
+            return _direct_httpx_client_factory(
+                headers=headers,
+                timeout=timeout,
+                auth=auth,
+                request_hooks=[inject_context],
+            )
+
+        return factory
 
     async def disconnect(self) -> None:
         if self._task is None:
@@ -282,7 +324,7 @@ class SdkMcpClient(McpClient):
 
     async def discover(self) -> McpDiscovery:
         session = self._require_session()
-        tools_result = await self._bounded(session.list_tools())
+        tools_result = await self._with_trace_context(session.list_tools())
         tools = [
             McpTool(
                 name=tool.name,
@@ -303,7 +345,9 @@ class SdkMcpClient(McpClient):
             else None
         )
         try:
-            result = await self._bounded(session.call_tool(name, arguments, read_timeout))
+            result = await self._with_trace_context(
+                session.call_tool(name, arguments, read_timeout)
+            )
         except TimeoutError as exc:
             raise SdkMcpError(f"tool '{name}' timed out") from exc
         if result.isError:
@@ -338,6 +382,46 @@ class SdkMcpClient(McpClient):
     async def _bounded(self, operation: Awaitable[_T]) -> _T:
         return await asyncio.wait_for(operation, timeout=self._call_timeout)
 
+    async def _with_trace_context(self, operation: Awaitable[_T]) -> _T:
+        """Associate the caller's W3C carrier with the next MCP request.
+
+        The SDK sends requests from a long-lived transport task, so its
+        ``contextvars`` context is not the caller's invocation context. The
+        SDK request id is assigned synchronously before the send is awaited;
+        reserve that id here and let the HTTPX request hook apply the captured
+        carrier when the transport task emits the JSON-RPC request.
+        """
+        request_id = self._reserve_trace_context()
+        try:
+            return await self._bounded(operation)
+        finally:
+            if request_id is not None:
+                self._trace_contexts.pop(request_id, None)
+
+    def _reserve_trace_context(self) -> int | None:
+        if self._telemetry is None or self._session is None:
+            return None
+        raw_request_id = getattr(self._session, "_request_id", None)
+        if not isinstance(raw_request_id, int):
+            return None
+        request_id = raw_request_id
+        while request_id in self._trace_contexts:
+            request_id += 1
+        carrier: dict[str, str] = {}
+        self._telemetry.inject_context(carrier)
+        if carrier:
+            self._trace_contexts[request_id] = carrier
+        return request_id
+
+    def _trace_context_for_request(self, request: httpx.Request) -> dict[str, str] | None:
+        """Find a caller carrier from an MCP JSON-RPC request body."""
+        try:
+            payload = json.loads(request.content)
+            request_id = payload.get("id")
+        except (TypeError, ValueError):
+            return None
+        return self._trace_contexts.get(request_id)
+
     def _require_session(self) -> Any:
         if self._session is None or self._state != McpConnectionState.CONNECTED:
             raise ConnectionError("mcp client is not connected")
@@ -351,7 +435,7 @@ class SdkMcpClient(McpClient):
     ) -> list[Any]:
         """List an optional capability; servers without it yield an empty list."""
         try:
-            result = await self._bounded(listing())
+            result = await self._with_trace_context(listing())
         except Exception:  # noqa: BLE001 — servers may not expose this capability
             return []
         return [adapt(item) for item in getattr(result, attribute, []) or []]
@@ -410,7 +494,7 @@ def sdk_available() -> bool:
     return True
 
 
-def sdk_client_factory() -> Callable[[McpConfig], McpClient]:
+def sdk_client_factory(telemetry: Any | None = None) -> Callable[[McpConfig], McpClient]:
     """Build a connection-manager client factory backed by the official SDK.
 
     Raises :class:`SdkMcpError` at bootstrap when the optional extra is
@@ -428,6 +512,7 @@ def sdk_client_factory() -> Callable[[McpConfig], McpClient]:
             call_timeout_seconds=(
                 float(config.timeout_seconds) if config.timeout_seconds else _CALL_TIMEOUT_SECONDS
             ),
+            telemetry=telemetry,
         )
 
     return factory

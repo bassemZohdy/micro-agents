@@ -116,4 +116,6 @@ Google ADK rejects the binding until its mapping is implemented.
 - [x] optional OpenTelemetry instrumentation with content capture disabled and
       bounded metric labels; configure SDK exporters before enabling in
       production
+- [ ] scrape `/metrics` and define deployment-owned latency, error, readiness,
+      token, and cost dashboards/alerts
 - [ ] rollback and compatibility-tested release

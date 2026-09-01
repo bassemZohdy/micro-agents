@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -159,6 +160,48 @@ class MetricsCollector:
         """Clear all recorded metrics."""
         self._metrics.clear()
 
+    def prometheus_text(self) -> str:
+        """Render a bounded snapshot in Prometheus text format.
+
+        Counter points (``*_total``) are accumulated per label set. Other
+        points are exported as their latest value, which keeps the lightweight
+        collector useful for scraping without pretending to be a histogram
+        implementation. OpenTelemetry deployments should configure a native
+        exporter for production aggregation.
+        """
+        series: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+        kinds: dict[str, str] = {}
+        for point in self._metrics:
+            name = _prometheus_name(point.name)
+            labels = tuple(
+                sorted(
+                    (_prometheus_name(str(key)), str(value)) for key, value in point.labels.items()
+                )
+            )
+            key = (name, labels)
+            if point.name.endswith("_total"):
+                series[key] = series.get(key, 0.0) + point.value
+                kinds[name] = "counter"
+            else:
+                series[key] = point.value
+                kinds.setdefault(name, "gauge")
+
+        lines: list[str] = []
+        emitted_types: set[str] = set()
+        for (name, labels), value in sorted(series.items()):
+            if name not in emitted_types:
+                lines.append(f"# TYPE {name} {kinds.get(name, 'gauge')}")
+                emitted_types.add(name)
+            label_text = ""
+            if labels:
+                label_text = (
+                    "{"
+                    + ",".join(f'{key}="{_prometheus_escape(value)}"' for key, value in labels)
+                    + "}"
+                )
+            lines.append(f"{name}{label_text} {_format_metric_value(value)}")
+        return "\n".join(lines) + ("\n" if lines else "")
+
 
 # ---------------------------------------------------------------------------
 # Trace Span
@@ -249,6 +292,8 @@ class Telemetry:
         capture_content: bool = False,
         max_attribute_length: int = 256,
         max_label_values: int = 100,
+        input_cost_per_1k_usd: float | None = None,
+        output_cost_per_1k_usd: float | None = None,
         otel_tracer: Any | None = None,
         otel_meter: Any | None = None,
     ) -> None:
@@ -256,12 +301,20 @@ class Telemetry:
             raise ValueError("max_attribute_length must be greater than zero")
         if max_label_values < 1:
             raise ValueError("max_label_values must be greater than zero")
+        for name, value in (
+            ("input_cost_per_1k_usd", input_cost_per_1k_usd),
+            ("output_cost_per_1k_usd", output_cost_per_1k_usd),
+        ):
+            if value is not None and (value < 0 or not math.isfinite(value)):
+                raise ValueError(f"{name} must be a finite non-negative number")
         self.logger = logger or StructuredLogger()
         self.metrics = metrics or MetricsCollector()
         self._spans: list[TraceSpan] = []
         self._capture_content = capture_content
         self._max_attribute_length = max_attribute_length
         self._max_label_values = max_label_values
+        self._input_cost_per_1k_usd = input_cost_per_1k_usd
+        self._output_cost_per_1k_usd = output_cost_per_1k_usd
         self._label_values: dict[tuple[str, str], set[str]] = {}
         self._otel_tracer = otel_tracer
         self._otel_meter = otel_meter
@@ -337,6 +390,12 @@ class Telemetry:
             ),
             max_label_values=_parse_positive_int(
                 os.environ.get("MICRO_AGENT_OTEL_MAX_LABEL_VALUES"), 100
+            ),
+            input_cost_per_1k_usd=_parse_nonnegative_float(
+                os.environ.get("MICRO_AGENT_OTEL_INPUT_COST_PER_1K_USD")
+            ),
+            output_cost_per_1k_usd=_parse_nonnegative_float(
+                os.environ.get("MICRO_AGENT_OTEL_OUTPUT_COST_PER_1K_USD")
             ),
         )
 
@@ -445,6 +504,49 @@ class Telemetry:
                 else:
                     instrument.record(value, attributes=bounded)
 
+    def record_model_usage(
+        self, usage: Mapping[str, Any], labels: dict[str, str] | None = None
+    ) -> None:
+        """Record normalized token counts and optional USD cost.
+
+        Providers commonly expose ``prompt_tokens``, ``completion_tokens``,
+        and ``total_tokens``. The total is trusted when present; otherwise it
+        is derived from prompt plus completion. Cost is emitted only when both
+        token counts and the corresponding configured USD prices are available.
+        """
+        if not usage:
+            return
+        prompt = _usage_count(usage.get("prompt_tokens"))
+        completion = _usage_count(usage.get("completion_tokens"))
+        total = _usage_count(usage.get("total_tokens"))
+        if "total_tokens" not in usage:
+            total = prompt + completion
+        base_labels = dict(labels or {})
+        for token_type, count in (
+            ("prompt", prompt),
+            ("completion", completion),
+            ("total", total),
+        ):
+            self.record(
+                "model_tokens_total",
+                float(count),
+                {**base_labels, "token_type": token_type},
+            )
+        cost = 0.0
+        priced = False
+        if self._input_cost_per_1k_usd is not None:
+            cost += prompt * self._input_cost_per_1k_usd / 1000
+            priced = True
+        if self._output_cost_per_1k_usd is not None:
+            cost += completion * self._output_cost_per_1k_usd / 1000
+            priced = True
+        if priced:
+            self.record(
+                "model_cost_usd_total",
+                cost,
+                {**base_labels, "currency": "USD"},
+            )
+
     def _otel_attributes(self, attributes: dict[str, Any]) -> dict[str, Any]:
         redacted = redact_mapping(attributes)
         result: dict[str, Any] = {}
@@ -518,6 +620,51 @@ def _parse_positive_int(value: str | None, default: int) -> int:
     if parsed < 1:
         raise ValueError(f"value must be positive: {value!r}")
     return parsed
+
+
+def _parse_nonnegative_float(value: str | None) -> float | None:
+    """Parse an optional finite non-negative deployment price."""
+    if value is None or not value.strip():
+        return None
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid non-negative number value: {value!r}") from exc
+    if parsed < 0 or not math.isfinite(parsed):
+        raise ValueError(f"value must be finite and non-negative: {value!r}")
+    return parsed
+
+
+def _usage_count(value: Any) -> int:
+    """Normalize a provider usage value into a non-negative integer."""
+    if isinstance(value, bool) or value is None:
+        return 0
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(parsed, 0)
+
+
+_PROMETHEUS_NAME = re.compile(r"[^a-zA-Z0-9_:]")
+
+
+def _prometheus_name(value: str) -> str:
+    """Keep metric and label names valid without exposing arbitrary syntax."""
+    normalized = _PROMETHEUS_NAME.sub("_", value)
+    if not normalized or not (normalized[0].isalpha() or normalized[0] == "_"):
+        normalized = "_" + normalized
+    return normalized
+
+
+def _prometheus_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _format_metric_value(value: float) -> str:
+    if math.isfinite(value):
+        return format(value, ".12g")
+    return "NaN"
 
 
 def _otel_value(value: Any, max_length: int = 256) -> Any:

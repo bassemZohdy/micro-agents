@@ -76,13 +76,44 @@ class TestMetricsCollector:
         points = telemetry.metrics.get_metrics("requests_total")
         assert [point.labels["tenant"] for point in points] == ["first", "[OTHER]"]
 
+    def test_model_usage_conventions_and_optional_cost(self):
+        telemetry = Telemetry(input_cost_per_1k_usd=0.01, output_cost_per_1k_usd=0.02)
+        telemetry.record_model_usage(
+            {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 999},
+            {"agent": "test"},
+        )
+        points = telemetry.metrics.get_metrics("model_tokens_total")
+        assert {point.labels["token_type"]: point.value for point in points} == {
+            "prompt": 100.0,
+            "completion": 50.0,
+            "total": 999.0,
+        }
+        cost = telemetry.metrics.get_metrics("model_cost_usd_total")
+        assert cost[0].labels["currency"] == "USD"
+        assert cost[0].value == pytest.approx(0.002)
+
+    def test_prometheus_text_aggregates_counters_and_escapes_labels(self):
+        telemetry = Telemetry()
+        telemetry.increment("requests_total", {"route": '/v1/"invoke"'})
+        telemetry.increment("requests_total", {"route": '/v1/"invoke"'})
+        telemetry.record("latency_ms", 12.5, {"route": "/v1/invoke"})
+        output = telemetry.metrics.prometheus_text()
+        assert 'requests_total{route="/v1/\\"invoke\\""} 2' in output
+        assert 'latency_ms{route="/v1/invoke"} 12.5' in output
+
     @pytest.mark.otel
     def test_otel_environment_is_opt_in(self, monkeypatch):
         monkeypatch.delenv("MICRO_AGENT_OTEL_ENABLED", raising=False)
         assert not Telemetry.from_environment().otel_enabled
         monkeypatch.setenv("MICRO_AGENT_OTEL_ENABLED", "true")
         monkeypatch.setenv("MICRO_AGENT_OTEL_MAX_LABEL_VALUES", "3")
-        assert Telemetry.from_environment().otel_enabled
+        monkeypatch.setenv("MICRO_AGENT_OTEL_INPUT_COST_PER_1K_USD", "0.01")
+        telemetry = Telemetry.from_environment()
+        assert telemetry.otel_enabled
+        telemetry.record_model_usage({"prompt_tokens": 100, "completion_tokens": 50})
+        assert telemetry.metrics.get_metrics("model_cost_usd_total")[0].value == pytest.approx(
+            0.001
+        )
 
 
 class TestMetricPoint:

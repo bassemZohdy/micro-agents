@@ -717,7 +717,7 @@ class AdkRuntime(AgentRuntime):
 
             self._telemetry.record("model_latency_ms", model_latency, labels)
             usage = {k: usage.get(k, 0) + v for k, v in response.usage.items()}
-            self._telemetry.record("model_tokens_total", sum(response.usage.values()), labels)
+            self._telemetry.record_model_usage(response.usage, labels)
 
             assistant_message: dict[str, Any] = {"role": "assistant", "content": response.content}
             if response.tool_requests:

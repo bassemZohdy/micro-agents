@@ -11,6 +11,7 @@ read-only compatibility alias; new clients should use the versioned URL.
 | Method and path | Purpose | Current limitation |
 |---|---|---|
 | `POST /v1/invoke` | invoke the agent | authentication is applied when configured/required; declared contracts are enforced |
+| `GET /metrics` | Prometheus operational metrics | exposes the in-memory collector; configure an OpenTelemetry exporter for multi-replica production aggregation |
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
 | `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy; configured model, state, and declared MCP providers are probed before startup readiness |
 | `GET /v1/capabilities` | runtime/skill metadata | reports the runtime capability matrix, not end-to-end readiness |
@@ -209,6 +210,16 @@ retry cannot reset the caller's remaining budget.
 Liveness answers whether the process should be restarted. Readiness answers
 whether the instance can serve traffic. The readiness endpoint returns HTTP
 503 with `"status":"unhealthy"` when a required dependency fails its probe.
+
+## Operational metrics
+
+`GET /metrics` is a public scrape endpoint that returns Prometheus text format.
+Counter points are accumulated per label set and other points expose their
+latest value. The lightweight collector is intended for local/single-process
+scraping; configure an OpenTelemetry metrics provider/exporter for durable
+aggregation across replicas. Model usage follows the `model_tokens_total`
+`token_type` convention (`prompt`, `completion`, `total`), and optional pricing
+produces `model_cost_usd_total`.
 
 ## A2A
 

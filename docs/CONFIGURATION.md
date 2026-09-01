@@ -35,6 +35,8 @@ the service becomes ready.
 | `MICRO_AGENT_OTEL_CAPTURE_CONTENT` | telemetry bootstrap | wired; opt-in bounded content attributes (default `false`) |
 | `MICRO_AGENT_OTEL_MAX_ATTRIBUTE_LENGTH` | telemetry bootstrap | wired; positive bound for attribute/label strings (default `256`) |
 | `MICRO_AGENT_OTEL_MAX_LABEL_VALUES` | telemetry bootstrap | wired; maximum distinct values per metric label (default `100`, overflow is `[OTHER]`) |
+| `MICRO_AGENT_OTEL_INPUT_COST_PER_1K_USD` | telemetry bootstrap | optional non-negative input-token price used for `model_cost_usd_total` |
+| `MICRO_AGENT_OTEL_OUTPUT_COST_PER_1K_USD` | telemetry bootstrap | optional non-negative output-token price used for `model_cost_usd_total` |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
 in-memory provider when `MICRO_AGENT_MEMORY_ENDPOINT` is `memory://` or
@@ -209,13 +211,22 @@ export MICRO_AGENT_OTEL_SERVICE_NAME=orders-agent
 
 `Telemetry` keeps the in-memory metrics and span tree for deterministic tests
 and adds SDK-backed spans, counters, histograms, and W3C `traceparent`/
-`tracestate` extraction and injection when enabled. Configure the OpenTelemetry
-SDK/exporter using the standard `OTEL_*` environment variables or an embedding
-process's providers. Content-bearing attributes are suppressed by default;
-only enable `MICRO_AGENT_OTEL_CAPTURE_CONTENT` after reviewing redaction,
-retention, and cost controls. Label values are truncated and capped to avoid
-unbounded cardinality. Model/MCP outbound carrier instrumentation and
-dashboard/alert definitions remain deployment follow-up work.
+`tracestate` extraction and injection when enabled. Model requests and
+SDK-backed MCP HTTP requests inject the active carrier on each outbound call;
+tool and A2A work stays in the same in-process span context. Configure the
+OpenTelemetry SDK/exporter using the standard `OTEL_*` environment variables or
+an embedding process's providers. Content-bearing attributes are suppressed by
+default; only enable `MICRO_AGENT_OTEL_CAPTURE_CONTENT` after reviewing
+redaction, retention, and cost controls. Label values are truncated and capped
+to avoid unbounded cardinality. Dashboard/alert definitions remain deployment
+follow-up work.
+
+Token metrics use `model_tokens_total` with a `token_type` label (`prompt`,
+`completion`, and `total`); `total` is taken from the provider when available
+and otherwise equals prompt plus completion tokens. Optional USD prices per
+1,000 input/output tokens produce `model_cost_usd_total`; no cost is inferred
+when prices are not configured. The `/metrics` endpoint exposes in-memory
+operational series in Prometheus text format for a scraper.
 
 ## Approval continuation
 
