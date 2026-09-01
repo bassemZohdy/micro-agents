@@ -276,8 +276,12 @@ class Telemetry:
             enabled = otel_tracer is not None or otel_meter is not None
         if enabled and self._otel_tracer is None and self._otel_meter is None:
             try:
-                from opentelemetry import context, propagate, trace
-                from opentelemetry import metrics as otel_metrics
+                from importlib import import_module
+
+                context = import_module("opentelemetry.context")
+                otel_metrics = import_module("opentelemetry.metrics")
+                propagate = import_module("opentelemetry.propagate")
+                trace = import_module("opentelemetry.trace")
             except ImportError as exc:  # pragma: no cover - optional dependency
                 raise RuntimeError(
                     "OpenTelemetry is enabled but unavailable; install the optional "
@@ -290,7 +294,11 @@ class Telemetry:
             self._otel_trace = trace
         elif self._otel_tracer is not None or self._otel_meter is not None:
             try:
-                from opentelemetry import context, propagate, trace
+                from importlib import import_module
+
+                context = import_module("opentelemetry.context")
+                propagate = import_module("opentelemetry.propagate")
+                trace = import_module("opentelemetry.trace")
             except ImportError as exc:  # pragma: no cover - optional dependency
                 raise RuntimeError(
                     "an OpenTelemetry tracer or meter was supplied but the API is unavailable"
