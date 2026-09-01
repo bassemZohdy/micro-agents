@@ -237,7 +237,7 @@ state through an external service under concurrent load.
 - [x] Classify tools as read-only, idempotent, or unsafe instead of treating
       every tool as a side effect.
 - [x] Persist Redis idempotency records atomically with status and expiry.
-- [ ] Do not retry an entire invocation after an unknown write outcome.
+- [x] Do not retry an entire invocation after an unknown write outcome.
 - [ ] Add backoff, jitter, retry budgets, circuit breaking, and error
       classification.
 - [ ] Test crash/replay and partial-failure scenarios.

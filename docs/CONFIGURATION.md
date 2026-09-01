@@ -278,7 +278,11 @@ The field defaults to `unsafe` for backward compatibility and fail-closed
 behavior. Runtime metadata for injected or discovered tools also defaults to
 `unsafe` when no declaration overrides it. A classification documents the
 contract; it does not make an implementation idempotent or add automatic
-retry logic. Unknown write outcomes and retry budgets remain deployment work.
+retry logic. The custom runtime suppresses its whole-invocation retry policy
+after any non-read-only tool has started, including when a later model call or
+operation-record write fails. This conservative rule avoids replaying a write
+whose final outcome is unknown; retry budgets, backoff, and reconciliation
+remain deployment work.
 
 ## MCP servers
 

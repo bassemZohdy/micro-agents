@@ -65,6 +65,10 @@ class _ApprovalPausedError(Exception):
         self.approval = approval
 
 
+class _RetrySuppressedAfterSideEffectError(RuntimeError):
+    """Prevent replaying an invocation after a non-read-only tool ran."""
+
+
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 _MAX_SESSION_HISTORY_MESSAGES = 20
 _T = TypeVar("_T")
@@ -460,9 +464,16 @@ class AdkRuntime(AgentRuntime):
             semantics.timeout_seconds,
             request.timeout_seconds,
         )
+        side_effect_state: dict[str, Any] = {"attempted_tools": []}
 
         async def run_once() -> AgentResponse:
-            return await self._invoke_inner(agent, request, trace_id, deadline)
+            return await self._invoke_inner(
+                agent,
+                request,
+                trace_id,
+                deadline,
+                side_effect_state=side_effect_state,
+            )
 
         start_time = time.monotonic()
         try:
@@ -509,6 +520,16 @@ class AdkRuntime(AgentRuntime):
                 error=str(exc),
             )
             if semantics.error_policy is ErrorPolicy.RETRY:
+                if isinstance(exc, _RetrySuppressedAfterSideEffectError):
+                    raise
+                attempted_tools = side_effect_state.get("attempted_tools", [])
+                if attempted_tools:
+                    tool_names = ", ".join(str(name) for name in attempted_tools)
+                    self._telemetry.increment("agent_retries_suppressed_total", labels)
+                    raise _RetrySuppressedAfterSideEffectError(
+                        "invocation retry suppressed after side-effect tool execution: "
+                        f"{tool_names}"
+                    ) from exc
                 if deadline.expired:
                     raise
                 try:
@@ -539,6 +560,8 @@ class AdkRuntime(AgentRuntime):
         request: AgentRequest,
         trace_id: str,
         deadline: _InvocationDeadline,
+        *,
+        side_effect_state: dict[str, Any] | None = None,
     ) -> AgentResponse:
         definition: MicroAgentDefinition = agent._internal["definition"]
         model_provider: ModelProvider = agent._internal["model_provider"]
@@ -667,6 +690,7 @@ class AdkRuntime(AgentRuntime):
                     deadline=deadline,
                     skip_side_effect_approval=True,
                     side_effects=agent._internal.get("tool_side_effects"),
+                    side_effect_state=side_effect_state,
                 )
             else:
                 self._audit(
@@ -782,6 +806,7 @@ class AdkRuntime(AgentRuntime):
                 labels,
                 deadline=deadline,
                 side_effects=agent._internal.get("tool_side_effects"),
+                side_effect_state=side_effect_state,
             )
             all_tool_results.extend(tool_results)
             for result in tool_results:
@@ -934,6 +959,7 @@ class AdkRuntime(AgentRuntime):
         deadline: _InvocationDeadline | None = None,
         skip_side_effect_approval: bool = False,
         side_effects: dict[str, str] | None = None,
+        side_effect_state: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for tool_request in tool_requests:
@@ -1075,6 +1101,10 @@ class AdkRuntime(AgentRuntime):
                 parent_span_id=parent_span_id,
             )
             tool_start = time.monotonic()
+            if side_effect != "read_only" and side_effect_state is not None:
+                attempted_tools = side_effect_state.setdefault("attempted_tools", [])
+                if tool_name not in attempted_tools:
+                    attempted_tools.append(tool_name)
             try:
                 timeout = tool.metadata.timeout_seconds or _DEFAULT_TOOL_TIMEOUT_SECONDS
                 if deadline is None:
@@ -1096,17 +1126,27 @@ class AdkRuntime(AgentRuntime):
                 error = str(exc)
 
             if registry is not None and operation is not None:
-                await _maybe_await(
-                    registry.record(
-                        operation,
-                        OperationResult(
-                            operation_id=operation.operation_id,
-                            status="failed" if error else "success",
-                            output=output,
-                            error=error,
-                        ),
+                try:
+                    await _maybe_await(
+                        registry.record(
+                            operation,
+                            OperationResult(
+                                operation_id=operation.operation_id,
+                                status="failed" if error else "success",
+                                output=output,
+                                error=error,
+                            ),
+                        )
                     )
-                )
+                except Exception as exc:  # noqa: BLE001 — write outcome is unknown
+                    self._telemetry.increment(
+                        "operation_record_errors_total", {**labels, "tool": tool_name}
+                    )
+                    span.add_event("operation.unknown_outcome", {"tool": tool_name})
+                    self._telemetry.finish_span(span)
+                    raise _RetrySuppressedAfterSideEffectError(
+                        f"operation result for side-effect tool '{tool_name}' is unknown"
+                    ) from exc
 
             tool_latency = round((time.monotonic() - tool_start) * 1000, 2)
             span.set_attribute("latency_ms", tool_latency)

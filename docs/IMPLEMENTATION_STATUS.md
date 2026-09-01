@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 522 collected | 437 pass in the default test job plus two expected optional-dependency skips; 85 integration/E2E/optional tests are deselected there, plus three Redis service tests, 16 Google ADK tests, and five OpenTelemetry tests when optional extras are installed |
+| Tests | 523 collected | Full local run: 523 passed, 2 skipped; default selector: 437 passed, 2 skipped, 86 deselected. CI separately runs the Redis-backed integration, Google ADK, and OpenTelemetry jobs when their extras/services are available |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -130,6 +130,8 @@ Implemented:
 - tool declarations classify side effects as `read_only`, `idempotent`, or
   `unsafe`; both runtimes enforce the classification, defaulting legacy and
   discovered tools to `unsafe`
+- the custom runtime suppresses whole-invocation retries after a non-read-only
+  tool starts, including failures while recording its operation result
 
 Current custom-runtime capability matrix:
 
@@ -147,10 +149,9 @@ Gaps:
 - policy references cannot yet resolve from external policy *stores*; the
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
-- retrying the complete invocation can replay side effects
-- unknown write outcomes, retry budgets/backoff, circuit breaking, and crash /
-  replay recovery are not yet implemented; classification is an enforcement
-  contract, not automatic retry behavior
+- retry budgets/backoff, circuit breaking, and crash / replay reconciliation
+  are not yet implemented; side-effect suppression is intentionally
+  conservative and does not infer that a write completed
 
 ### Models and tools
 

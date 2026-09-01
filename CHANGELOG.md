@@ -45,7 +45,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   idempotency claims, while idempotent and unsafe tools retain policy and
   operation-registry handling. Operation objects carry the mapped retry
   classification into registry and audit hooks for downstream dispatch and
-  audit decisions.
+  audit decisions. The custom runtime suppresses whole-invocation retries once
+  a non-read-only tool starts, preventing a later model or operation-record
+  failure from replaying an unknown write outcome.
 
 ### Bootstrap
 
