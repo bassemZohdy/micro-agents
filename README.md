@@ -183,7 +183,7 @@ state, or A2A task interoperability.
 | Area | Current state | Production gap |
 |---|---|---|
 | Definition | Typed loader, generated schema, semantic uniqueness/format checks, runtime contract enforcement, deployment endpoint overlays, and a v1alpha1 compatibility fixture | versioned policy for a future API release |
-| Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests | external production state and native ADK confirmation continuation |
+| Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests and native confirmation continuations | external production state |
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
@@ -224,7 +224,7 @@ git diff --exit-code docs/schemas/
 The current base suite contains 507 collected tests: 429 in the default
 development selection and 78 integration tests (five also tagged E2E). The
 Redis extra adds three live integration tests in the Redis-enabled CI job, and the
-optional Google ADK adapter adds 14 tests when that extra is installed. CI runs
+optional Google ADK adapter adds 15 tests when that extra is installed. CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release
 tags repeat the quality gates, validate the tag against the package version,

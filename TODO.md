@@ -88,7 +88,7 @@ shutdown either drains within its deadline or cancels remaining work safely.
       instead of converting `approval_required` into a permanent denial:
       invocations pause with a continuation id and resume on approve/deny;
       hard policy denials still apply to approved requests.
-- [ ] Map approval continuation onto the Google ADK adapter's native
+- [x] Map approval continuation onto the Google ADK adapter's native
       tool-confirmation mechanism.
 - [x] Make policy decisions and audit events durable and redacted: an
       `AuditSink` SPI records policy denials, approval decisions, and

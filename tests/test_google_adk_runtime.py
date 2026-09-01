@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from micro_agent.core import AgentRequest
+from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.models import (
     FakeModelConfig,
@@ -133,6 +133,70 @@ async def test_adk_tool_call_preserves_result_and_provider_tool_id():
         assert provider.calls == 2
         assert provider.messages[1][-1]["role"] == "tool"
         assert provider.messages[1][-1]["tool_call_id"]
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_approval_continuation_uses_native_confirmation_flow():
+    from micro_agent.security import AgentPolicy
+
+    provider = SequencedProvider()
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=provider,
+            policy=AgentPolicy(approval_required=True),
+        )
+    )
+    agent = await runtime.create(_definition(include_tool=True))
+    try:
+        await runtime.start(agent)
+        pending = await runtime.invoke(
+            agent,
+            AgentRequest(input={"message": "run"}, session_id="approval-session"),
+        )
+        assert pending.status == "approval_required"
+        assert pending.session_id == "approval-session"
+        continuation_id = pending.metadata["continuation_id"]
+        assert continuation_id
+        assert pending.metadata["pending_tools"] == ["echo"]
+        assert provider.calls == 1
+
+        with pytest.raises(ContinuationNotFoundError):
+            await runtime.invoke(
+                agent,
+                AgentRequest(
+                    input={},
+                    session_id="different-session",
+                    continuation_id=continuation_id,
+                    approval_decision="approve",
+                ),
+            )
+
+        resumed = await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={},
+                session_id="approval-session",
+                continuation_id=continuation_id,
+                approval_decision="approve",
+            ),
+        )
+        assert resumed.status == "success"
+        assert resumed.output["content"] == "completed by ADK"
+        assert resumed.output["tool_results"][0]["output"] == {"echoed": "from-adk"}
+        assert provider.calls == 2
+
+        with pytest.raises(ContinuationNotFoundError):
+            await runtime.invoke(
+                agent,
+                AgentRequest(
+                    input={},
+                    session_id="approval-session",
+                    continuation_id=continuation_id,
+                    approval_decision="approve",
+                ),
+            )
     finally:
         await runtime.close()
 
