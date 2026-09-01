@@ -6,11 +6,12 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 
 | Method and path | Purpose | Current limitation |
 |---|---|---|
-| `POST /v1/invoke` | invoke the agent | no authentication; declared contracts are enforced |
+| `POST /v1/invoke` | invoke the agent | authentication is applied when configured/required; declared contracts are enforced |
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
 | `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy; configured model, state, and declared MCP providers are probed before startup readiness |
 | `GET /v1/capabilities` | runtime/skill metadata | reports the runtime capability matrix, not end-to-end readiness |
-| `GET /.well-known/agent.json` | preliminary card | not the A2A v1 standard path or card |
+| `GET /.well-known/agent-card.json` | standard A2A agent card | served from the official SDK card model |
+| `POST /` | A2A JSON-RPC `message/send` | available when `spec.interoperability.a2a.enabled` is true; non-streaming tasks only |
 
 ## Invoke request
 
@@ -84,9 +85,11 @@ failures use stable detail codes and deliberately generic messages:
 | required model, state, or other dependency unavailable | 503 | `dependency_unavailable` |
 | unexpected runtime failure | 500 | `internal_error` |
 
-The 401 mapping is ready for an authentication middleware integration; the
-default application does not authenticate callers yet. Exception text is not
-returned in any of these responses.
+When an authenticator is configured, `/v1/invoke` and an enabled A2A RPC route
+verify the bearer credential before invoking the agent. Health and card routes
+remain public. If the definition requires caller identity, app creation fails
+without an authenticator. Exception text is not returned in any of these
+responses.
 
 An exhausted request or definition deadline returns HTTP 504:
 
@@ -124,11 +127,14 @@ whether the instance can serve traffic. The readiness endpoint returns HTTP
 
 ## A2A
 
-The existing discovery route is preliminary. The target A2A v1.0.1 route is:
+The standard card route is:
 
 ```text
 GET /.well-known/agent-card.json
 ```
 
-The target card uses `supportedInterfaces`; full A2A also requires a standard
-message/task binding. See [Standards](STANDARDS.md).
+When enabled in the definition, the official SDK also mounts JSON-RPC at `/`
+and handles `message/send` with submitted → working → completed/failed task
+states. Streaming, push notifications, durable task state, and cancellation
+are not yet implemented. Requests may declare `x-a2a-version`; unsupported
+versions receive a stable 400 response.

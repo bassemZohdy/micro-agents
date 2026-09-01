@@ -146,7 +146,9 @@ official-SDK client integration test.
       injection, response limits, and redaction to the real client.
 - [x] Add official-SDK interoperability tests with a real MCP server over
       stdio and Streamable HTTP.
-- [ ] Add automatic reconnect behavior for dropped server connections.
+- [x] Add bounded automatic reconnect behavior for dropped server connections;
+      explicit shutdown never reconnects and exhausted attempts surface an
+      unhealthy client state.
 
 Acceptance: a YAML-only MCP declaration discovers and invokes a real SDK-backed
 server through the executable bootstrap.

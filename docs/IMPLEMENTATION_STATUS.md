@@ -1,8 +1,8 @@
 # Implementation Status
 
-Last audited: 2026-08-31  
-Documentation-audit baseline: `87d1779eb54878ac73cea7730694d25b83400882`
-Cleanup verification baseline: `bd077fa005c2c5b5d12f9020b57d36121f09fa4d`
+Last audited: 2026-09-01
+Documentation-audit baseline: `b1dc40a66d51a4c73201958b17d2d75ee2a62f38`
+Cleanup verification baseline: `b1dc40a66d51a4c73201958b17d2d75ee2a62f38`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 474 collected | 401 selected by the default test job (including the fourteen optional Google ADK adapter tests and the authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); the remaining 73 run in the integration/e2e jobs |
+| Tests | 463 collected | 389 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 74 run in the integration job, with four also tagged E2E |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -165,11 +165,12 @@ Implemented:
   timeouts, graceful close; stdio models local command/args, Streamable HTTP
   is the standard transport, SSE is legacy compatibility only; interop tests
   run real FastMCP servers over stdio and Streamable HTTP
+- bounded automatic reconnect after unexpected transport termination, with
+  exponential backoff, explicit shutdown suppression, and a terminal error
+  state after attempts are exhausted
 
 Gaps:
 
-- no automatic reconnect for dropped server connections; reconnection
-  currently requires a runtime restart
 - notifications are consumed by the SDK session but not surfaced as events
 - tests exercise loopback HTTP and local stdio servers, not remote
   production deployments
@@ -278,7 +279,8 @@ Gaps:
 
 Implemented:
 
-- FastAPI invoke, liveness, readiness, capability, and preliminary card routes
+- FastAPI invoke, liveness, readiness, capability, and official A2A card/task
+  routes
 - active injected dependency probes
 - generated HTTP request IDs and non-success unhealthy readiness
 - input/output contract checks at the core boundary and HTTP 422 diagnostics

@@ -24,7 +24,10 @@ instead of being silently ignored.
 # Google ADK is intentionally optional.  The dedicated ADK CI job installs its
 # type-bearing package; the default typecheck job must still validate this
 # module when those imports are unavailable.
-# mypy: disable_error_code="import-not-found,misc"
+# Google ADK is an optional dependency and currently ships without type
+# metadata. Keep strict checking for the adapter itself while treating the
+# dynamically imported SDK surface as an untyped boundary.
+# mypy: disable_error_code="import-not-found,import-untyped,misc"
 
 from __future__ import annotations
 

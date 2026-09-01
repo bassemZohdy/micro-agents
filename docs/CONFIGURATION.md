@@ -156,6 +156,12 @@ credential provider at connect time — an Authorization header for HTTP
 servers, and an environment variable named after the reference for stdio
 child processes — and are never stored on config objects or logs.
 
+The SDK client automatically reconnects after an unexpected transport drop.
+Each new connection renegotiates the MCP protocol and capabilities. The retry
+budget is bounded (three attempts by default) with exponential backoff; an
+explicit runtime shutdown suppresses reconnects, and an exhausted budget keeps
+the dependency unhealthy so readiness does not report a recovered server.
+
 ## Workload identity
 
 The runtime resolves its own workload identity once per process for audit
