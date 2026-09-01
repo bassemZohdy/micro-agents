@@ -137,6 +137,7 @@ class CapabilitiesResponse:
 
 ROUTES = {
     "POST /v1/invoke": "Invoke the agent",
+    "GET /metrics": "Prometheus operational metrics",
     "GET /health/live": "Liveness check",
     "GET /health/ready": "Readiness check",
     "GET /v1/capabilities": "Agent capabilities",
@@ -594,6 +595,13 @@ def create_app(
                 ],
             },
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        """Expose the in-memory operational series for a Prometheus scraper."""
+        exporter = getattr(telemetry.metrics, "prometheus_text", None)
+        content = exporter() if callable(exporter) else ""
+        return Response(content=content, media_type="text/plain; version=0.0.4")
 
     @app.get("/v1/capabilities", response_model=CapabilitiesResponseModel)
     async def capabilities() -> CapabilitiesResponseModel:

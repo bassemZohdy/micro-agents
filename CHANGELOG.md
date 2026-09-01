@@ -27,10 +27,14 @@ All notable changes to the Micro-Agents project are documented in this file.
 ### Observability
 
 - Added an opt-in OpenTelemetry bridge for traces and metrics with W3C
-  trace-context propagation on HTTP requests. Content attributes are omitted
-  by default, attribute values are bounded, and metric labels use a bounded
-  cardinality policy. Existing in-memory telemetry remains available when
-  the optional `otel` extra is not installed.
+  trace-context propagation on HTTP, model, MCP, tool, and A2A paths.
+  Content attributes are omitted by default, attribute values and metric label
+  cardinality are bounded, and OpenAI/MCP outbound requests inject the active
+  carrier per call. Existing in-memory telemetry remains available when the
+  optional `otel` extra is not installed.
+- Added normalized `model_tokens_total` and optional USD
+  `model_cost_usd_total` conventions plus a public Prometheus-compatible
+  `/metrics` endpoint for the in-memory operational series.
 
 ### Bootstrap
 

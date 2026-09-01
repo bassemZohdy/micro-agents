@@ -140,6 +140,7 @@ def build_runtime(
         mcp_manager,
         credential_provider,
         endpoint_overrides=resolved.mcp_endpoints,
+        telemetry=telemetry,
     )
     tool_registry = _build_tool_registry(definition)
     _validate_tool_bindings(definition, tool_registry, mcp)
@@ -151,6 +152,7 @@ def build_runtime(
         resolved,
         fake_model_config=fake_model_config,
         allow_native_google=runtime_name == "google-adk",
+        telemetry=telemetry,
     )
     if runtime_name == "google-adk":
         _validate_google_adk_bindings(definition, resolved)
@@ -465,6 +467,7 @@ def _build_mcp_manager(
     injected: McpConnectionManager | None,
     credential_provider: CredentialProvider,
     endpoint_overrides: dict[str, str] | None = None,
+    telemetry: Telemetry | None = None,
 ) -> McpConnectionManager | None:
     """Construct the MCP client for declared servers; an injected manager wins.
 
@@ -496,7 +499,7 @@ def _build_mcp_manager(
         return injected
     from micro_agent.mcp.sdk_client import sdk_available, sdk_client_factory
 
-    factory = sdk_client_factory() if sdk_available() else None
+    factory = sdk_client_factory(telemetry=telemetry) if sdk_available() else None
     return McpConnectionManager(
         client_factory=factory,
         credential_resolver=credential_provider.resolve,
@@ -559,6 +562,7 @@ def _build_model_provider(
     *,
     fake_model_config: FakeModelConfig | None = None,
     allow_native_google: bool = False,
+    telemetry: Telemetry | None = None,
 ) -> ModelProvider | None:
     provider_name = (config.model_provider or "").strip().lower()
     endpoint = config.model_endpoint
@@ -597,6 +601,7 @@ def _build_model_provider(
                 model_id=config.model_id,
                 api_key=config.model_api_key,
                 timeout_seconds=float(config.model_timeout_seconds or 30),
+                telemetry=telemetry,
             )
         )
 

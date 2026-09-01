@@ -29,6 +29,7 @@ operated independently.
   telemetry seams (including optional Redis-backed shared memory, session, and
   operation-registry providers)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
+- Prometheus-compatible operational metrics at `/metrics`
 - container and Kubernetes/OpenShift-oriented deployment examples
 
 The planned **Micro-Agent Cloud** workstream is separate from the standalone
@@ -125,6 +126,7 @@ The service binds to `0.0.0.0:8080` by default.
 ```bash
 curl http://localhost:8080/health/live
 curl http://localhost:8080/health/ready
+curl http://localhost:8080/metrics
 curl http://localhost:8080/v1/capabilities
 curl -X POST http://localhost:8080/v1/invoke \
   -H 'Content-Type: application/json' \
@@ -190,7 +192,7 @@ state, or A2A task interoperability.
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
 | State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
-| Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, safe content defaults, and bounded labels | outbound carrier instrumentation and operational dashboards/alerts |
+| Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, and bounded labels | cost/token conventions and operational dashboards/alerts |
 | Operations | container, package/release gates, versioned OpenAPI, request-size guard, opt-in CORS, rate-limit hook, and sample manifests | production bootstrap and OpenShift hardening |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
@@ -221,11 +223,12 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current base suite contains 508 collected tests: 430 in the default
-development selection and 78 integration tests (five also tagged E2E). The
-Redis extra adds three live integration tests in the Redis-enabled CI job, the
-optional Google ADK adapter adds 15 tests, and the optional OpenTelemetry extra
-adds three integration tests when those extras are installed. CI runs
+The current suite collects 518 tests: 433 pass in the default development
+selection (plus two expected optional-dependency skips), while 83
+integration/E2E/optional tests are deselected by that job. The Redis extra adds
+three live integration tests in the Redis-enabled CI job, the optional Google
+ADK adapter adds 15 tests, and the optional OpenTelemetry extra adds five
+integration tests when those extras are installed. CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release
 tags repeat the quality gates, validate the tag against the package version,

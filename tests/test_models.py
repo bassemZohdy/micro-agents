@@ -206,6 +206,45 @@ class TestOpenAICompatProvider:
         assert not client.is_closed
         await client.aclose()
 
+    @pytest.mark.otel
+    @pytest.mark.asyncio
+    async def test_injects_w3c_context_on_chat_completion(self):
+        pytest.importorskip("opentelemetry.sdk")
+        import httpx
+        from opentelemetry.sdk.trace import TracerProvider
+
+        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
+        from micro_agent.observability import Telemetry
+
+        captured: dict[str, str | None] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["traceparent"] = request.headers.get("traceparent")
+            return httpx.Response(200, json={"choices": []})
+
+        client = httpx.AsyncClient(
+            base_url="https://llm.example.test/v1", transport=httpx.MockTransport(handler)
+        )
+        tracer_provider = TracerProvider()
+        telemetry = Telemetry(otel_tracer=tracer_provider.get_tracer("model-test"))
+        provider = OpenAICompatProvider(
+            OpenAICompatConfig(
+                endpoint="https://llm.example.test/v1",
+                model_id="test-model",
+                http_client=client,
+                telemetry=telemetry,
+            )
+        )
+        span = telemetry.start_span("model.generate")
+        try:
+            await provider.generate(_model_config(), messages=[])
+        finally:
+            telemetry.finish_span(span)
+            await provider.aclose()
+
+        assert captured["traceparent"] is not None
+        assert captured["traceparent"].startswith("00-")
+
     def test_capabilities_report_tool_use(self):
         import httpx
 

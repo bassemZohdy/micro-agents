@@ -338,6 +338,7 @@ No factor exists as a purely philosophical statement.
 Acceptance requires executable evidence at the relevant boundary. Schema
 validation is not runtime portability, a fake client is not wire-protocol
 interoperability, and a shared SQLite file is not an external multi-replica
-state service. The optional OpenTelemetry path now exports standard
-spans/metrics and bridges HTTP trace context; outbound carrier instrumentation
-and production dashboards still require deployment configuration.
+state service. The optional OpenTelemetry path now exports standard spans/metrics
+and bridges HTTP, model, MCP, tool, and A2A trace context. Token/cost
+conventions and a Prometheus-compatible `/metrics` surface are provided;
+production dashboards and alerts still require deployment configuration.

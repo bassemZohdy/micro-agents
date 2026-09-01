@@ -80,6 +80,7 @@ class TestRoutes:
 
     def test_routes_exist(self):
         assert "POST /v1/invoke" in ROUTES
+        assert "GET /metrics" in ROUTES
         assert "GET /health/live" in ROUTES
         assert "GET /health/ready" in ROUTES
         assert "GET /v1/capabilities" in ROUTES

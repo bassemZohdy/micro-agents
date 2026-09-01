@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-01
-Documentation-audit baseline: `a2f0e64c71fc7bbddf4ed9ac961c11bf5da01bf4`
-Cleanup verification baseline: `a2f0e64c71fc7bbddf4ed9ac961c11bf5da01bf4`
+Documentation-audit baseline: `76cbd0a129c85b511da12b03553a320ec6744a06`
+Cleanup verification baseline: `76cbd0a129c85b511da12b03553a320ec6744a06`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 508 base collected | 430 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, HTTP policy hooks, MCP SDK interop, and wire-protocol tests); 78 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests, 15 Google ADK tests, and three OpenTelemetry tests when optional extras are installed |
+| Tests | 518 collected | 433 pass in the default test job plus two expected optional-dependency skips; 83 integration/E2E/optional tests are deselected there, plus three Redis service tests, 15 Google ADK tests, and five OpenTelemetry tests when optional extras are installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -254,8 +254,10 @@ Implemented:
   exposing ADK types through the SPI
 - optional OpenTelemetry SDK integration emits standard spans and metrics
   through the existing facade, preserves deterministic in-memory test
-  collectors, bridges W3C HTTP context, and suppresses content attributes by
-  default with bounded labels
+  collectors, bridges W3C HTTP context through HTTP, model, MCP, tool, and A2A
+  paths, and suppresses content attributes by default with bounded labels;
+  token/cost metric conventions and a Prometheus-compatible `/metrics` route
+  are documented
 - durable, redacted audit events through an `AuditSink` SPI (stdout JSONL
   default, optional file sink) covering policy denials, approval decisions,
   and authentication failures
@@ -354,9 +356,9 @@ Gaps:
 
 - no response streaming implementation; runtimes currently advertise
   `streaming: false`
-- outbound model/MCP carrier instrumentation and operational dashboards/alerts
-  are not yet provided; the optional facade currently handles HTTP context and
-  in-process runtime spans/metrics
+- production dashboards and alerts remain deployment-owned; `/metrics` exposes
+  the in-memory operational series and the OTel SDK remains configurable through
+  standard exporter/provider settings
 
 ### Packaging, release, and deployment
 

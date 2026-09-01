@@ -19,6 +19,7 @@ from micro_agent.models.model import (
     ModelResponse,
     ProviderCapabilities,
 )
+from micro_agent.observability import Telemetry
 
 
 @dataclass
@@ -41,6 +42,7 @@ class OpenAICompatConfig:
     verify_tls: bool = True
     proxy: str | None = None
     http_client: httpx.AsyncClient | None = None
+    telemetry: Telemetry | None = None
 
 
 class OpenAICompatProvider(ModelProvider):
@@ -98,8 +100,13 @@ class OpenAICompatProvider(ModelProvider):
         tools: list[dict[str, Any]] | None = None,
     ) -> ModelResponse:
         """Generate a response via POST /chat/completions."""
+        headers: dict[str, str] = {}
+        if self._config.telemetry is not None:
+            self._config.telemetry.inject_context(headers)
         response = await self._client.post(
-            f"{self._endpoint}/chat/completions", json=self._payload(config, messages, tools)
+            f"{self._endpoint}/chat/completions",
+            json=self._payload(config, messages, tools),
+            headers=headers or None,
         )
         response.raise_for_status()
         data = response.json()
