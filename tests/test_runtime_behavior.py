@@ -13,6 +13,7 @@ from micro_agent.models import (
     FakeModelConfig,
     FakeModelProvider,
     ModelConfig,
+    ModelResponse,
     OpenAICompatConfig,
     OpenAICompatProvider,
 )
@@ -279,6 +280,30 @@ class TestRuntimeSemantics:
         agent = await runtime.create(_definition(error_policy="retry"))
         response = await runtime.invoke(agent, AgentRequest(input={}))
         assert response.output["content"] == "recovered"
+
+    @pytest.mark.asyncio
+    async def test_error_policy_retry_is_suppressed_after_side_effect_tool(self):
+        class FailsAfterToolProvider(FakeModelProvider):
+            def __init__(self) -> None:
+                super().__init__(FakeModelConfig(response="unused"))
+                self.calls = 0
+
+            async def generate(self, config, messages, tools=None):
+                self.calls += 1
+                if self.calls == 1:
+                    return ModelResponse(
+                        tool_requests=[{"name": "echo", "arguments": {"message": "write-attempt"}}]
+                    )
+                raise RuntimeError("transient model error after tool execution")
+
+        provider = FailsAfterToolProvider()
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = await runtime.create(_definition(error_policy="retry"))
+        with pytest.raises(RuntimeError, match="retry suppressed after side-effect"):
+            await runtime.invoke(agent, AgentRequest(input={}))
+        # A whole-invocation retry would issue a third model call and could
+        # replay the already executed non-read-only tool.
+        assert provider.calls == 2
 
 
 class TestSessionsAndMemory:
