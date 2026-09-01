@@ -9,6 +9,7 @@ from micro_agent.security import (
     AgentPolicy,
     OperationRegistry,
     RedisOperationRegistry,
+    UserContext,
     build_security_context,
 )
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -357,10 +358,34 @@ class TestOperationRegistry:
         definition = _definition()
         agent_a = await runtime_a.create(definition)
         agent_b = await runtime_b.create(definition)
-        first = await runtime_a.invoke(agent_a, AgentRequest(input={}, request_id="r1"))
-        second = await runtime_b.invoke(agent_b, AgentRequest(input={}, request_id="r2"))
+        tenant_a = UserContext(user_id="alice", tenant_id="tenant-a")
+        first = await runtime_a.invoke(
+            agent_a, AgentRequest(input={}, request_id="r1", user_context=tenant_a)
+        )
+        second = await runtime_b.invoke(
+            agent_b, AgentRequest(input={}, request_id="r2", user_context=tenant_a)
+        )
         assert first.output["tool_results"][0].get("was_deduplicated") is not True
         assert second.output["tool_results"][0]["was_deduplicated"] is True
         assert second.output["tool_results"][0]["output"] == {"echoed": "hi"}
+        runtime_c = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=OneShotToolProvider(
+                    FakeModelConfig(response="done", tool_requests=[request])
+                ),
+                operation_registry=RedisOperationRegistry(client=FakeRedis(backend)),
+            )
+        )
+        agent_c = await runtime_c.create(definition)
+        third = await runtime_c.invoke(
+            agent_c,
+            AgentRequest(
+                input={},
+                request_id="r3",
+                user_context=UserContext(user_id="bob", tenant_id="tenant-b"),
+            ),
+        )
+        assert third.output["tool_results"][0].get("was_deduplicated") is not True
         await runtime_a.close()
         await runtime_b.close()
+        await runtime_c.close()

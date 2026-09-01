@@ -6,6 +6,7 @@ import inspect
 import json
 from dataclasses import replace
 from typing import Any
+from urllib.parse import quote
 
 from micro_agent.security.side_effects import (
     Operation,
@@ -56,8 +57,10 @@ class RedisOperationRegistry(OperationRegistryProtocol):
         else:
             self._client = client
 
-    def _key(self, idempotency_key: str) -> str:
-        return f"{self._prefix}{idempotency_key}"
+    def _key(self, idempotency_key: str, tenant_id: str | None = None) -> str:
+        if tenant_id is None:
+            return f"{self._prefix}{idempotency_key}"
+        return f"{self._prefix}tenant:{quote(tenant_id, safe='')}:{idempotency_key}"
 
     @staticmethod
     def _text(value: Any) -> str:
@@ -89,14 +92,17 @@ class RedisOperationRegistry(OperationRegistryProtocol):
             was_deduplicated=bool(data.get("was_deduplicated", False)),
         )
 
-    async def _get_result(self, idempotency_key: str) -> OperationResult | None:
-        raw = await self._client.get(self._key(idempotency_key))
+    async def _get_result(
+        self, idempotency_key: str, tenant_id: str | None = None
+    ) -> OperationResult | None:
+        redis_key = self._key(idempotency_key, tenant_id)
+        raw = await self._client.get(redis_key)
         if raw is None:
             return None
         try:
             return self._decode(raw)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            await self._client.delete(self._key(idempotency_key))
+            await self._client.delete(redis_key)
             return None
 
     async def claim(self, operation: Operation) -> tuple[bool, OperationResult | None]:
@@ -105,7 +111,7 @@ class RedisOperationRegistry(OperationRegistryProtocol):
         if not key:
             return True, None
 
-        redis_key = self._key(key)
+        redis_key = self._key(key, operation.tenant_id)
         reservation = OperationResult(operation_id=operation.operation_id, status="in_progress")
         claimed = await self._client.set(
             redis_key,
@@ -116,7 +122,7 @@ class RedisOperationRegistry(OperationRegistryProtocol):
         if claimed:
             return True, None
 
-        prior = await self._get_result(key)
+        prior = await self._get_result(key, operation.tenant_id)
         if prior is None:
             # A key can expire between SET NX and GET. Retry once so a caller
             # does not receive a false duplicate after the reservation TTL.
@@ -128,7 +134,7 @@ class RedisOperationRegistry(OperationRegistryProtocol):
             )
             if claimed:
                 return True, None
-            prior = await self._get_result(key)
+            prior = await self._get_result(key, operation.tenant_id)
         if prior is None:
             prior = OperationResult(status="in_progress")
         return False, replace(prior, was_deduplicated=True)
@@ -137,11 +143,13 @@ class RedisOperationRegistry(OperationRegistryProtocol):
         """Return whether the key is currently reserved or completed."""
         if not operation.idempotency_key:
             return False
-        return await self._get_result(operation.idempotency_key) is not None
+        return await self._get_result(operation.idempotency_key, operation.tenant_id) is not None
 
-    async def find_by_idempotency_key(self, key: str) -> OperationResult | None:
+    async def find_by_idempotency_key(
+        self, key: str, tenant_id: str | None = None
+    ) -> OperationResult | None:
         """Return a reservation or completed result for ``key``."""
-        return await self._get_result(key)
+        return await self._get_result(key, tenant_id)
 
     async def record(self, operation: Operation, result: OperationResult) -> None:
         """Complete a reservation while retaining the idempotency TTL.
@@ -153,10 +161,11 @@ class RedisOperationRegistry(OperationRegistryProtocol):
         key = operation.idempotency_key
         if not key:
             return
-        current = await self._get_result(key)
+        redis_key = self._key(key, operation.tenant_id)
+        current = await self._get_result(key, operation.tenant_id)
         if current is None or current.operation_id != operation.operation_id:
             return
-        await self._client.set(self._key(key), self._encode(result), ex=self._ttl_seconds)
+        await self._client.set(redis_key, self._encode(result), ex=self._ttl_seconds)
 
     async def health_check(self) -> bool:
         """Return whether Redis answers a ping probe."""

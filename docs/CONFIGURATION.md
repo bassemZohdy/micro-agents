@@ -51,10 +51,11 @@ The custom runtime can share operation reservations and completed results across
 replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`. Redis (`redis://` or
 `rediss://`) is supported when the optional client is installed. Reservations
 use an atomic `SET ... NX` claim and completed results expire after the provider
-TTL (one day by default). The registry is intentionally scoped to operation
-keys, not tenant/version semantics; optimistic versioning and tenant isolation
-remain open backlog work. The Google ADK runtime rejects this binding until its
-distributed idempotency mapping is implemented.
+TTL (one day by default). When a verified tenant identity is present, operation
+keys are namespaced by that tenant; unverified/local calls retain the legacy
+provider-wide namespace. Optimistic versioning and tenant isolation for
+session/memory records remain open backlog work. The Google ADK runtime rejects
+this binding until its distributed idempotency mapping is implemented.
 
 ```bash
 pip install 'micro-agents[redis]'

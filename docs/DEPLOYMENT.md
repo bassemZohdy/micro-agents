@@ -84,8 +84,9 @@ independently scheduled pods. Install the optional Redis extra and configure
 `persistence: external` sessions. Set
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` (or `rediss://...`) for
 distributed operation reservations/results in the custom runtime. The Redis
-registry is not yet tenant-isolated or version-aware, and Google ADK rejects
-the binding until its mapping is implemented.
+registry scopes operation keys by verified tenant when available but is not
+version-aware; session/memory records still need tenant isolation. Google ADK
+rejects the binding until its mapping is implemented.
 
 ## Production checklist
 
