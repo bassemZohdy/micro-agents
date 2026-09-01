@@ -8,7 +8,7 @@ from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
 from micro_agent.security import AgentPolicy
-from micro_agent.session import InMemorySessionProvider, SqliteSessionProvider
+from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime
 from runtimes.google_adk import GoogleAdkRuntime
 
@@ -260,6 +260,32 @@ def test_external_session_persistence_fails_before_runtime_creation(monkeypatch)
     monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "https://sessions.example.test")
     with pytest.raises(BootstrapError, match="external session provider"):
         build_runtime(_definition(provider="fake", session={"persistence": "external"}))
+
+
+@pytest.mark.asyncio
+async def test_external_redis_session_persistence_is_constructed(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        def pipeline(self, *, transaction: bool = False):
+            del transaction
+            raise AssertionError("bootstrap test should not issue Redis commands")
+
+    fake_client = FakeRedisClient()
+    monkeypatch.setattr(
+        "micro_agent.session.redis._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: fake_client),
+    )
+    monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "rediss://sessions.example.test/0")
+    bootstrap = build_runtime(
+        _definition(provider="fake", session={"persistence": "external", "ttl_seconds": 60})
+    )
+    try:
+        provider = bootstrap.runtime._config.session_provider
+        assert isinstance(provider, RedisSessionProvider)
+        assert provider._endpoint == "rediss://sessions.example.test/0"
+    finally:
+        await bootstrap.runtime.close()
 
 
 @pytest.mark.asyncio

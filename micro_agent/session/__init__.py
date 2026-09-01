@@ -1,5 +1,6 @@
 """Micro-Agent Session — conversational/runtime context."""
 
+from micro_agent.session.redis import RedisSessionProvider
 from micro_agent.session.session import (
     InMemorySessionProvider,
     SessionContext,
@@ -10,6 +11,7 @@ from micro_agent.session.sqlite import SqliteSessionProvider
 
 __all__ = [
     "InMemorySessionProvider",
+    "RedisSessionProvider",
     "SessionContext",
     "SessionMetadata",
     "SessionProvider",

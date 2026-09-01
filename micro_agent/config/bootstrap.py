@@ -13,7 +13,8 @@ Constructed from configuration:
 - an MCP connection manager for declared MCP servers (a deployment may inject
   a manager that owns a real wire-protocol client factory),
 - telemetry with the configured log level,
-- built-in memory and in-memory/SQLite session providers,
+- built-in memory and in-memory/SQLite session providers, or an optional Redis
+  external session provider,
 - a knowledge provider for declared knowledge sources (injected, or the
   built-in in-memory retriever whose startup health check fails fast until a
   deployment supplies documents),
@@ -54,7 +55,12 @@ from micro_agent.observability.audit import AuditSink
 from micro_agent.runtime import AgentRuntime
 from micro_agent.security import AgentPolicy, CredentialProvider, EnvironmentCredentialProvider
 from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
-from micro_agent.session import InMemorySessionProvider, SessionProvider, SqliteSessionProvider
+from micro_agent.session import (
+    InMemorySessionProvider,
+    RedisSessionProvider,
+    SessionProvider,
+    SqliteSessionProvider,
+)
 from micro_agent.tools import Tool, builtin_tool_registry
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
@@ -317,10 +323,10 @@ def _build_session_provider(
 ) -> SessionProvider | None:
     """Construct the configured session provider, or fail before readiness.
 
-    ``memory`` and ``sqlite`` are the providers included in this distribution.
-    ``external`` is intentionally rejected until a deployment supplies an
-    external provider implementation; silently ignoring that declaration would
-    make a supposedly persistent agent lose state.
+    ``memory`` and ``sqlite`` are the providers included in the base
+    distribution. ``external`` accepts a Redis endpoint when the optional
+    ``redis`` extra is installed; unsupported endpoints fail before runtime
+    creation rather than silently falling back to local state.
     """
     session = definition.spec.dependencies.session
     endpoint = config.session_endpoint
@@ -350,8 +356,17 @@ def _build_session_provider(
     # so a future persistence mode cannot silently fall through.
     if not endpoint:
         raise BootstrapError("session.persistence 'external' requires MICRO_AGENT_SESSION_ENDPOINT")
+    if endpoint.startswith(("redis://", "rediss://")):
+        try:
+            return RedisSessionProvider(
+                endpoint=endpoint,
+                ttl_seconds=session.ttl_seconds,
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
     raise BootstrapError(
-        "session.persistence 'external' is declared, but no external session provider is configured"
+        "external session provider supports redis:// or rediss:// endpoints; "
+        "install the 'redis' extra and configure MICRO_AGENT_SESSION_ENDPOINT"
     )
 
 
