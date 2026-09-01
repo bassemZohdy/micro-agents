@@ -34,6 +34,23 @@ class MemoryPolicy:
     max_entries: int | None = None
     ttl_seconds: int | None = None
 
+    def __post_init__(self) -> None:
+        """Reject values that would make retention or eviction ambiguous."""
+        if not isinstance(self.auto_store, bool):
+            raise ValueError("auto_store must be a boolean")
+        if self.max_entries is not None and (
+            isinstance(self.max_entries, bool)
+            or not isinstance(self.max_entries, int)
+            or self.max_entries < 1
+        ):
+            raise ValueError("max_entries must be a positive integer")
+        if self.ttl_seconds is not None and (
+            isinstance(self.ttl_seconds, bool)
+            or not isinstance(self.ttl_seconds, int)
+            or self.ttl_seconds < 0
+        ):
+            raise ValueError("ttl_seconds must be a non-negative integer")
+
 
 # ---------------------------------------------------------------------------
 # Memory Provider Interface
@@ -96,17 +113,30 @@ class InMemoryMemoryProvider(MemoryProvider):
         stored = self._stored_at.get(k)
         if stored is None:
             return False
-        return (now or monotonic()) - stored >= self.policy.ttl_seconds
+        reference = monotonic() if now is None else now
+        return reference - stored >= self.policy.ttl_seconds
+
+    def _purge_expired(self, now: float | None = None) -> None:
+        """Remove expired entries before reads, writes, and capacity checks."""
+        if self.policy.ttl_seconds is None:
+            return
+        reference = monotonic() if now is None else now
+        for key in tuple(self._entries):
+            if self._is_expired(key, reference):
+                self._entries.pop(key, None)
+                self._stored_at.pop(key, None)
 
     def _evict_if_full(self) -> None:
         if self.policy.max_entries is None:
             return
+        self._purge_expired()
         while len(self._entries) >= self.policy.max_entries:
             oldest = next(iter(self._entries))
             del self._entries[oldest]
             self._stored_at.pop(oldest, None)
 
     async def store(self, entry: MemoryEntry) -> None:
+        self._purge_expired()
         k = self._key(entry.key, entry.scope)
         # Re-storing an existing key must not evict itself.
         if k not in self._entries:
@@ -117,11 +147,9 @@ class InMemoryMemoryProvider(MemoryProvider):
     async def search(
         self, query: str, scope: str | None = None, limit: int = 10
     ) -> list[MemoryEntry]:
-        now = monotonic()
+        self._purge_expired()
         results = []
-        for k, entry in self._entries.items():
-            if self._is_expired(k, now):
-                continue
+        for entry in self._entries.values():
             if scope and entry.scope != scope:
                 continue
             if query.lower() in str(entry.value).lower():
@@ -131,14 +159,12 @@ class InMemoryMemoryProvider(MemoryProvider):
         return results
 
     async def get(self, key: str, scope: str | None = None) -> MemoryEntry | None:
+        self._purge_expired()
         k = self._key(key, scope)
-        if k in self._entries and self._is_expired(k):
-            del self._entries[k]
-            self._stored_at.pop(k, None)
-            return None
         return self._entries.get(k)
 
     async def delete(self, key: str, scope: str | None = None) -> bool:
+        self._purge_expired()
         k = self._key(key, scope)
         if k in self._entries:
             del self._entries[k]
@@ -147,11 +173,9 @@ class InMemoryMemoryProvider(MemoryProvider):
         return False
 
     async def list_entries(self, scope: str | None = None) -> list[MemoryEntry]:
-        now = monotonic()
+        self._purge_expired()
         results = []
-        for k, entry in self._entries.items():
-            if self._is_expired(k, now):
-                continue
+        for entry in self._entries.values():
             if scope is None or entry.scope == scope:
                 results.append(entry)
         return results

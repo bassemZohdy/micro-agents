@@ -190,7 +190,7 @@ and the transcript can be replayed from session storage.
 - [ ] Add a concurrency-safe PostgreSQL or Redis session provider.
 - [ ] Add production memory and operational/idempotency providers.
 - [ ] Add optimistic concurrency/versioning and tenant isolation.
-- [ ] Purge expired in-memory entries consistently and validate memory policy
+- [x] Purge expired in-memory entries consistently and validate memory policy
       bounds.
 - [ ] Add locking or clearly restrict the SQLite provider to single-process
       development use.
