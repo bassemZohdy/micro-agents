@@ -37,6 +37,7 @@ from micro_agent.models import (
     ModelProvider,
 )
 from micro_agent.observability import AuditSink, Telemetry
+from micro_agent.resilience import CircuitBreaker, Retryability, classify_retry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
@@ -67,6 +68,7 @@ class _ApprovalPausedError(Exception):
 
 
 class _RetrySuppressedAfterSideEffectError(RuntimeError):
+    retryable = False
     """Prevent replaying an invocation after a non-read-only tool ran."""
 
 
@@ -207,6 +209,7 @@ class AdkRuntime(AgentRuntime):
         )
         self._approval_store = self._config.approval_store or InMemoryApprovalStore()
         self._workload_identity = resolve_workload_identity()
+        self._circuits: dict[str, CircuitBreaker] = {}
         self._knowledge_refs: list[KnowledgeSource] = []
         self._started = False
 
@@ -492,6 +495,11 @@ class AdkRuntime(AgentRuntime):
         )
         retry_deadline = _InvocationDeadline.from_seconds(semantics.retry_budget_seconds)
         side_effect_state: dict[str, Any] = {"attempted_tools": []}
+        breaker = self._circuit_for(definition)
+        if breaker is not None:
+            # Reject before any work while the circuit is open; after the
+            # cooldown this allows one probe invocation.
+            breaker.check(agent=definition.metadata.name)
 
         async def run_once() -> AgentResponse:
             return await self._invoke_inner(
@@ -512,6 +520,8 @@ class AdkRuntime(AgentRuntime):
                 request_id=request.request_id,
                 session_id=request.session_id,
             )
+            if breaker is not None and breaker.record_failure() == "open":
+                self._telemetry.increment("circuit_breaker_trips_total", labels)
             raise
         except _ApprovalPausedError as paused:
             # A pause is not an error: retry/fallback policies must not apply.
@@ -546,6 +556,8 @@ class AdkRuntime(AgentRuntime):
                 session_id=request.session_id,
                 error=str(exc),
             )
+            if breaker is not None and breaker.record_failure() == "open":
+                self._telemetry.increment("circuit_breaker_trips_total", labels)
             if semantics.error_policy is ErrorPolicy.RETRY:
                 if isinstance(exc, _RetrySuppressedAfterSideEffectError):
                     raise
@@ -558,6 +570,10 @@ class AdkRuntime(AgentRuntime):
                         f"{tool_names}"
                     ) from exc
                 retry_error: Exception = exc
+                if classify_retry(retry_error) is Retryability.NON_RETRYABLE:
+                    # Deterministic failures (denials, contract violations,
+                    # authentication) cannot succeed on retry — fail now.
+                    raise retry_error from exc
                 for retry_index in range(semantics.retry_max_attempts):
                     if side_effect_state.get("attempted_tools", []):
                         tool_names = ", ".join(
@@ -568,6 +584,8 @@ class AdkRuntime(AgentRuntime):
                             "invocation retry suppressed after side-effect tool execution: "
                             f"{tool_names}"
                         ) from retry_error
+                    if classify_retry(retry_error) is Retryability.NON_RETRYABLE:
+                        raise retry_error from exc
                     delay = semantics.retry_backoff_seconds * (2**retry_index)
                     if semantics.retry_jitter_seconds:
                         delay += random.uniform(0, semantics.retry_jitter_seconds)
@@ -603,6 +621,8 @@ class AdkRuntime(AgentRuntime):
         latency_ms = round((time.monotonic() - start_time) * 1000, 2)
         self._telemetry.increment("agent_invocations_total", labels)
         self._telemetry.record("agent_invocation_latency_ms", latency_ms, labels)
+        if breaker is not None:
+            breaker.record_success()
         return response
 
     async def _invoke_inner(
@@ -968,6 +988,22 @@ class AdkRuntime(AgentRuntime):
     def _audit(self, event: str, **fields: Any) -> None:
         if self._config.audit is not None:
             self._config.audit.record(event, **fields)
+
+    def _circuit_for(self, definition: MicroAgentDefinition) -> CircuitBreaker | None:
+        """Per-agent breaker from declared runtime semantics (None = disabled)."""
+        semantics = definition.spec.runtime
+        if semantics.circuit_breaker_failures is None or (
+            semantics.circuit_breaker_cooldown_seconds is None
+        ):
+            return None
+        breaker = self._circuits.get(definition.metadata.name)
+        if breaker is None:
+            breaker = CircuitBreaker(
+                semantics.circuit_breaker_failures,
+                semantics.circuit_breaker_cooldown_seconds,
+            )
+            self._circuits[definition.metadata.name] = breaker
+        return breaker
 
     def _resolve_tools(self, definition: MicroAgentDefinition) -> tuple[dict[str, Tool], list[str]]:
         """Resolve definition-declared tools against the configured/built-in registry."""

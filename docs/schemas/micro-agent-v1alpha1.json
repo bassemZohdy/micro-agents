@@ -695,6 +695,34 @@
           "description": "Optional wall-clock budget for retry delays and attempts.",
           "title": "Retry Budget Seconds"
         },
+        "circuit_breaker_failures": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Consecutive invocation failures that open the circuit; unset disables circuit breaking.",
+          "title": "Circuit Breaker Failures"
+        },
+        "circuit_breaker_cooldown_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How long an open circuit rejects calls before allowing one probe invocation.",
+          "title": "Circuit Breaker Cooldown Seconds"
+        },
         "capabilities": {
           "description": "Declared runtime capabilities.",
           "items": {

@@ -245,8 +245,17 @@ state through an external service under concurrent load.
       classification.
   - [x] Bound retry attempts and retry wall-clock budget with exponential
         backoff and optional jitter.
-  - [ ] Add circuit breaking and an explicit retryable-error taxonomy.
-- [ ] Test crash/replay and partial-failure scenarios.
+  - [x] Add circuit breaking and an explicit retryable-error taxonomy:
+      deterministic failures (denials, contract violations, authentication,
+      timeouts) fail immediately without consuming retry attempts, transient
+      transport failures retry, exceptions may declare retryability, and a
+      per-agent circuit breaker (definition-declared threshold and cooldown)
+      opens after consecutive failures, rejects with the stable 503 contract,
+      and probes after the cooldown.
+- [x] Test crash/replay and partial-failure scenarios: a crash after a
+      side-effect execution suppresses the retry, and replay on a fresh
+      runtime sharing the idempotency registry and session store deduplicates
+      the executed tool without re-running it.
 
 ### P1.9 Deployment and supply-chain hardening
 

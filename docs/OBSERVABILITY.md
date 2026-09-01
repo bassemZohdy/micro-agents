@@ -45,6 +45,7 @@ names the tool.
 | `tool_calls_total` | counter | `agent`, `tool` | Tool executions |
 | `tool_latency_ms` | gauge | `agent`, `tool` | Latest tool execution latency |
 | `policy_denials_total` | counter | `agent`, `tool` | Deterministic policy denials (tool, side effect) |
+| `circuit_breaker_trips_total` | counter | `agent` | Circuit breaker transitions to open after consecutive failures |
 | `approval_requests_total` | counter | `tool` | Tool executions paused awaiting an approval decision |
 | `operation_record_errors_total` | counter | `agent`, `tool` | Idempotency-store write failures (outcome unknown — inspect, do not blindly retry) |
 | `http_request_latency_ms` | gauge | `route`, `method` | Latest HTTP request latency |
@@ -99,6 +100,7 @@ Alert on symptoms users feel; keep thresholds environment-specific.
 | Policy denials spike | `rate(policy_denials_total[5m]) > 0.1 * clamp_min(rate(tool_calls_total[5m]), 1e-9)` | Model attempting denied operations repeatedly |
 | Retry suppression | `increase(agent_retries_suppressed_total[10m]) > 0` | Side-effect outcomes unknown — manual inspection advised |
 | Idempotency write failures | `increase(operation_record_errors_total[10m]) > 0` | Deduplication state cannot be persisted |
+| Circuit trips | `increase(circuit_breaker_trips_total[10m]) > 0` | Repeated invocation failures — dependency likely down (calls fail fast with 503 while open) |
 | HTTP latency regression | `http_request_latency_ms{route="/v1/invoke"} > 5000` for 10m | Latest request latency beyond a bound (latest-value gauge) |
 | Scrape absence | `up == 0` for 3m | The service stopped exporting |
 

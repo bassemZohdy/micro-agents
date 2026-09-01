@@ -4,6 +4,23 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Runtime
+
+- Added a retryable-error taxonomy and circuit breaking: deterministic
+  failures (policy denials, contract violations, authentication, timeouts)
+  now fail immediately instead of consuming bounded-retry attempts; transient
+  transport failures retry; exceptions may declare retryability explicitly.
+  A per-agent circuit breaker, configured through the definition
+  (`circuit_breaker_failures`, `circuit_breaker_cooldown_seconds`), opens
+  after consecutive failures, rejects calls with the stable 503 contract
+  without invoking the model, and probes after the cooldown (success closes
+  the circuit, failure reopens it). Trips are counted on
+  `circuit_breaker_trips_total` and documented in OBSERVABILITY.md.
+- Added crash/replay and partial-failure coverage: a crash after a
+  side-effect execution suppresses retries, and replay on a fresh runtime
+  sharing the idempotency registry and session store deduplicates the
+  executed tool without re-running it.
+
 ### Documentation
 
 - Added docs/OBSERVABILITY.md: the complete operational-metric inventory

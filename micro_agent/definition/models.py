@@ -434,6 +434,21 @@ class RuntimeSemantics(BaseModel, extra="forbid"):
         gt=0,
         description="Optional wall-clock budget for retry delays and attempts.",
     )
+    circuit_breaker_failures: int | None = Field(
+        None,
+        ge=1,
+        description=(
+            "Consecutive invocation failures that open the circuit; "
+            "unset disables circuit breaking."
+        ),
+    )
+    circuit_breaker_cooldown_seconds: float | None = Field(
+        None,
+        gt=0,
+        description=(
+            "How long an open circuit rejects calls before allowing one probe invocation."
+        ),
+    )
     capabilities: list[str] = Field(
         default_factory=list, description="Declared runtime capabilities."
     )
