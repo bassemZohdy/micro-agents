@@ -12,6 +12,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   endpoint overrides fail fast, and explicit environment variables retain
   precedence. Added a canonical v1alpha1 compatibility fixture and migration
   guidance for future definition API versions.
+- Hardened the in-memory memory provider: invalid retention bounds now fail at
+  construction, and expired entries are purged consistently before reads,
+  writes, and capacity eviction so stale data cannot displace live entries.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

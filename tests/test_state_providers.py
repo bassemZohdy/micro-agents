@@ -75,6 +75,18 @@ class TestSessionLifecycle:
 class TestMemoryPolicyEnforcement:
     """MemoryPolicy enforcement: max_entries, ttl_seconds, auto_store."""
 
+    def test_policy_rejects_invalid_bounds(self):
+        with pytest.raises(ValueError, match="max_entries"):
+            MemoryPolicy(max_entries=0)
+        with pytest.raises(ValueError, match="ttl_seconds"):
+            MemoryPolicy(ttl_seconds=-1)
+
+    def test_policy_rejects_boolean_numeric_bounds(self):
+        with pytest.raises(ValueError, match="max_entries"):
+            MemoryPolicy(max_entries=True)
+        with pytest.raises(ValueError, match="ttl_seconds"):
+            MemoryPolicy(ttl_seconds=False)
+
     @pytest.mark.asyncio
     async def test_max_entries_evicts_oldest(self):
         provider = InMemoryMemoryProvider(policy=MemoryPolicy(max_entries=2))
@@ -84,6 +96,19 @@ class TestMemoryPolicyEnforcement:
         assert await provider.get("a") is None
         assert await provider.get("b") is not None
         assert await provider.get("c") is not None
+
+    @pytest.mark.asyncio
+    async def test_expired_entries_are_purged_before_capacity_eviction(self):
+        provider = InMemoryMemoryProvider(policy=MemoryPolicy(max_entries=2, ttl_seconds=60))
+        await provider.store(MemoryEntry(key="expired", value="old"))
+        provider._stored_at["agent:expired"] -= 120
+        await provider.store(MemoryEntry(key="live-1", value="one"))
+        await provider.store(MemoryEntry(key="live-2", value="two"))
+
+        assert await provider.get("expired") is None
+        assert await provider.get("live-1") is not None
+        assert await provider.get("live-2") is not None
+        assert len(provider._entries) == 2
 
     @pytest.mark.asyncio
     async def test_restore_does_not_evict_itself(self):
@@ -102,6 +127,15 @@ class TestMemoryPolicyEnforcement:
         assert await provider.get("a") is None
         assert await provider.list_entries() == []
         assert await provider.search("1") == []
+
+    @pytest.mark.asyncio
+    async def test_read_operations_remove_expired_entries_without_matching_key(self):
+        provider = InMemoryMemoryProvider(policy=MemoryPolicy(ttl_seconds=60))
+        await provider.store(MemoryEntry(key="expired", value="old"))
+        provider._stored_at["agent:expired"] -= 120
+
+        assert await provider.get("missing") is None
+        assert provider._entries == {}
 
     @pytest.mark.asyncio
     async def test_no_policy_keeps_entries(self):

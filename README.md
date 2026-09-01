@@ -176,7 +176,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
-| State | definition-wired in-memory memory/session and SQLite session bindings, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
+| State | definition-wired in-memory memory/session and SQLite session bindings, validated memory retention bounds, expired-entry purging, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -209,7 +209,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 470 collected tests: 394 in the default development
+The current suite contains 474 collected tests: 398 in the default development
 selection, 76 integration tests (five also tagged E2E), plus 14 tests for the
 optional Google ADK adapter when that extra is installed. CI runs lint, typing,
 schema, unit, integration, E2E, package, container, separate
