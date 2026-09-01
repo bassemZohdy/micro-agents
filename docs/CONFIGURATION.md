@@ -212,6 +212,11 @@ still cannot be mapped under Google ADK — external (SQLite or remote)
 session state and model credential references — fail fast; they are not
 silently ignored.
 
+OpenAI-compatible model endpoints preserve any path prefix in the configured
+URL. For example, `https://llm.example.com/v1` is probed at
+`/v1/models` and invoked at `/v1/chat/completions`; the provider also sends the
+resolved `model_id` while the logical `ref` remains unchanged.
+
 ## Definition versus deployment configuration
 
 The logical definition owns portable agent semantics. Deployment configuration

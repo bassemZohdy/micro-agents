@@ -1,18 +1,20 @@
 """Acceptance tests: real network service and multi-replica shared sessions."""
 
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
 import pytest
 import uvicorn
+from fastapi import FastAPI, Request
 
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.interoperability import create_app
 from micro_agent.interoperability.a2a import a2a_well_known_path
-from micro_agent.models import FakeModelConfig
-from micro_agent.session import SqliteSessionProvider
+from micro_agent.models import FakeModelConfig, OpenAICompatConfig, OpenAICompatProvider
+from micro_agent.session import InMemorySessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]
@@ -84,6 +86,166 @@ class TestRealNetworkService:
                 assert card.status_code == 200
                 assert card.json()["name"] == "net-agent"
         finally:
+            server.should_exit = True
+            await task
+
+
+class TestLiveOpenAICompatTranscript:
+    """M13 acceptance: a live provider round-trips and replays tool history."""
+
+    @pytest.mark.asyncio
+    async def test_multiturn_tool_call_replays_from_session_storage(self):
+        app = FastAPI()
+        requests: list[list[dict]] = []
+
+        @app.get("/v1/models")
+        async def models() -> dict[str, list[object]]:
+            return {"data": []}
+
+        @app.post("/v1/chat/completions")
+        async def completions(request: Request) -> dict:
+            payload = await request.json()
+            messages = payload["messages"]
+            assert payload["model"] == "live-model"
+            requests.append(messages)
+            user_message = next(
+                message for message in reversed(messages) if message.get("role") == "user"
+            )
+            user_payload = json.loads(user_message["content"])
+
+            if user_payload.get("message") == "replay":
+                assistant_tool_call = next(
+                    message for message in messages if message.get("tool_calls")
+                )
+                assert assistant_tool_call["tool_calls"][0]["id"] == "call_live_1"
+                assert any(
+                    message.get("role") == "tool" and message.get("tool_call_id") == "call_live_1"
+                    for message in messages
+                )
+                return {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "role": "assistant",
+                                "content": "transcript replayed",
+                            },
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 4, "completion_tokens": 2},
+                }
+
+            if any(message.get("role") == "tool" for message in messages):
+                return {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "role": "assistant",
+                                "content": "live tool complete",
+                            },
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 4, "completion_tokens": 2},
+                }
+
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_live_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "echo",
+                                        "arguments": '{"message":"live"}',
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 1},
+            }
+
+        server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error"))
+        task = asyncio.get_running_loop().create_task(server.serve())
+        runtime: AdkRuntime | None = None
+        agent = None
+        try:
+            while not server.started:
+                await asyncio.sleep(0.02)
+            port = server.servers[0].sockets[0].getsockname()[1]
+            endpoint = f"http://127.0.0.1:{port}/v1"
+            definition = load_definition_from_dict(
+                {
+                    "apiVersion": "microagents.io/v1alpha1",
+                    "kind": "MicroAgent",
+                    "metadata": {"name": "live-openai-agent", "version": "1.0.0"},
+                    "spec": {
+                        "behavior": {"instructions": "Use the echo tool."},
+                        "dependencies": {
+                            "model": {
+                                "ref": "live-model",
+                                "model_id": "live-model",
+                                "provider": "openai-compatible",
+                                "endpoint": endpoint,
+                            },
+                            "tools": [{"name": "echo", "source": "native"}],
+                            "session": {"ttl_seconds": 3600},
+                        },
+                    },
+                }
+            )
+            provider = OpenAICompatProvider(
+                OpenAICompatConfig(endpoint=endpoint, model_id="live-model", trust_env=False)
+            )
+            sessions = InMemorySessionProvider()
+            runtime = AdkRuntime(
+                AdkRuntimeConfig(model_provider=provider, session_provider=sessions)
+            )
+            agent = DefaultMicroAgent(definition, runtime)
+            await agent.initialize()
+            await agent.start()
+
+            from micro_agent.core import AgentRequest
+
+            first = await agent.invoke(
+                AgentRequest(input={"message": "first"}, session_id="live-session")
+            )
+            assert first.status == "success"
+            assert first.output["content"] == "live tool complete"
+
+            second = await agent.invoke(
+                AgentRequest(input={"message": "replay"}, session_id="live-session")
+            )
+            assert second.status == "success"
+            assert second.output["content"] == "transcript replayed"
+            assert len(requests) == 3
+            replay_request = requests[-1]
+            assert any(message.get("tool_calls") for message in replay_request)
+            assert any(
+                message.get("role") == "tool" and message.get("tool_call_id") == "call_live_1"
+                for message in replay_request
+            )
+
+            session = await sessions.get("live-session")
+            assert session is not None
+            assert any(message.get("tool_calls") for message in session.messages)
+            assert any(
+                message.get("role") == "tool" and message.get("tool_call_id") == "call_live_1"
+                for message in session.messages
+            )
+        finally:
+            if agent is not None:
+                await agent.stop()
+                await agent.shutdown()
+            if runtime is not None:
+                await runtime.close()
             server.should_exit = True
             await task
 

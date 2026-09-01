@@ -538,6 +538,11 @@ class AdkRuntime(AgentRuntime):
         )
 
         session = None
+        # Keep the tail length so completed invocations can persist the full
+        # turn (including assistant tool calls and tool results) without
+        # duplicating the prior session history.  The system prompt is never
+        # persisted.
+        history_tail_length = 0
         if session_provider is not None and session_id:
             session = await deadline.run(session_provider.get(session_id))
             if session is None:
@@ -550,14 +555,18 @@ class AdkRuntime(AgentRuntime):
             {"role": "system", "content": self._system_prompt(definition, skills)}
         ]
         if session is not None:
-            messages.extend(session.messages[-_MAX_SESSION_HISTORY_MESSAGES:])
+            history_tail = session.messages[-_MAX_SESSION_HISTORY_MESSAGES:]
+            history_tail_length = len(history_tail)
+            messages.extend(history_tail)
         messages.append({"role": "user", "content": json.dumps(input_payload, default=str)})
 
         model_ref = definition.spec.dependencies.model
         model_config = ModelConfig(
             ref=model_ref.ref if model_ref else "default",
             provider=model_ref.provider if model_ref else None,
+            model_id=model_ref.model_id if model_ref else None,
             endpoint=model_ref.endpoint if model_ref else None,
+            credential_ref=model_ref.credential_ref if model_ref else None,
             generation=model_ref.generation if model_ref else {},
             timeout_seconds=model_ref.timeout_seconds if model_ref else None,
         )
@@ -725,10 +734,12 @@ class AdkRuntime(AgentRuntime):
                 )
 
         if session is not None:
-            session.messages.append(
-                {"role": "user", "content": json.dumps(input_payload, default=str)}
-            )
-            session.messages.append({"role": "assistant", "content": response.content})
+            # Persist the complete current turn so the next invocation can
+            # replay provider-required assistant tool calls alongside their
+            # matching tool results.  Only messages after the prior history
+            # tail are new; the system prompt remains runtime-only.
+            turn_start = 1 + history_tail_length
+            session.messages.extend(dict(message) for message in messages[turn_start:])
             await deadline.run(
                 session_provider.update(session, ttl_seconds=session_ttl)  # type: ignore[union-attr]
             )

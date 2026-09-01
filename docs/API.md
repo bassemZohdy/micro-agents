@@ -37,6 +37,15 @@ deployment gateway should apply the same limit and reject chunked requests
 that exceed it; applications can choose a smaller limit with the
 `max_request_bytes` factory argument.
 
+## OpenAI-compatible model calls
+
+When the selected model provider is OpenAI-compatible, the configured endpoint
+is treated as a base URL and its path prefix is retained. An endpoint ending in
+`/v1` therefore receives `GET /v1/models` during readiness and
+`POST /v1/chat/completions` during invocation. Session-backed invocations retain
+the complete conversation turn, including assistant `tool_calls` and matching
+tool results, so later turns can replay the provider-required transcript.
+
 `request_id` is optional. When it is omitted or empty, the service generates a
 UUID and returns the same value in the response.
 

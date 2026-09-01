@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 463 collected | 389 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 74 run in the integration job, with four also tagged E2E |
+| Tests | 464 collected | 389 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 75 run in the integration job, with five also tagged E2E |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -68,6 +68,9 @@ Implemented:
 - one invocation deadline budget shared across model, tool/MCP, session, and
   memory operations; request deadlines are enforced and cancellation propagates
   into the active provider call
+- complete conversation turns are persisted for session-backed invocations,
+  including assistant `tool_calls` and matching tool results, so subsequent
+  model requests can replay provider-required tool transcripts
 - required runtime capabilities are checked at startup against an explicit
   capability matrix and are surfaced by `GET /v1/capabilities`
 - configured model, session, memory, and declared MCP dependencies are probed
@@ -141,13 +144,17 @@ Implemented (additions):
 - explicit proxy/TLS configuration and injectable HTTP clients for the
   OpenAI-compatible provider
 - provider capability reporting with tool-use negotiation enforced at startup
+- endpoint path prefixes (for example `/v1`) are preserved when constructing
+  `/models` and `/chat/completions` requests, and the declared provider model ID
+  is passed through the runtime
+- live loopback acceptance coverage completes a multi-turn tool call and
+  replays its transcript from session storage
 
 Gaps:
 
 - broader provider credentials and endpoints are not yet supported
 - only `echo` resolves from the built-in map; the residency example's native
   tools remain unresolved
-- no live OpenAI-compatible end-to-end acceptance run against a real server
 
 ### MCP
 
