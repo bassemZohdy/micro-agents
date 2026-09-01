@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 474 collected | 398 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 run in the integration job, with five also tagged E2E |
+| Tests | 476 collected | 400 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 run in the integration job, with five also tagged E2E |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -279,6 +279,9 @@ Implemented:
 - `MemoryPolicy` validates retention bounds; expired in-memory entries are
   purged before reads, writes, and capacity eviction so stale entries cannot
   consume capacity or evict live data
+- SQLite operations use an explicit per-provider async lock and bounded
+  SQLite busy timeout; the provider is documented and tested as a
+  single-process development store
 - in-memory keyword knowledge retriever, constructed from declared knowledge
   sources and health-checked at startup in both runtimes
 
@@ -288,7 +291,6 @@ Gaps:
   providers; external state endpoints are rejected until a provider is wired
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
-- SQLite access lacks explicit async serialization around one connection
 - no production memory, knowledge, session, or idempotency provider
 
 ### HTTP, health, and observability

@@ -15,6 +15,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Hardened the in-memory memory provider: invalid retention bounds now fail at
   construction, and expired entries are purged consistently before reads,
   writes, and capacity eviction so stale data cannot displace live entries.
+- Serialized SQLite session-provider operations with an explicit async lock,
+  added a bounded busy timeout, made close idempotent, and documented SQLite
+  as a single-process development store rather than a production multi-replica
+  backend.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

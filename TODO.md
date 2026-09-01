@@ -192,7 +192,7 @@ and the transcript can be replayed from session storage.
 - [ ] Add optimistic concurrency/versioning and tenant isolation.
 - [x] Purge expired in-memory entries consistently and validate memory policy
       bounds.
-- [ ] Add locking or clearly restrict the SQLite provider to single-process
+- [x] Add locking or clearly restrict the SQLite provider to single-process
       development use.
 - [ ] Close providers during shutdown and probe them for readiness.
 

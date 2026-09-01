@@ -76,9 +76,11 @@ the restricted security context constraints used by the target cluster.
 ## Multi-replica warning
 
 The sample declares two replicas but the CLI constructs no external session or
-memory provider. `SqliteSessionProvider` is a local development reference and
-is not the recommended shared store for independently scheduled pods. An
-`external` persistence declaration fails fast until a real provider is wired.
+memory provider. `SqliteSessionProvider` is a single-process development
+reference: its operations are serialized per provider, but it is not a
+production multi-replica store. Use PostgreSQL, Redis, or another external
+provider before scaling independently scheduled pods. An `external`
+persistence declaration fails fast until a real provider is wired.
 
 ## Production checklist
 
