@@ -970,19 +970,28 @@ class AdkRuntime(AgentRuntime):
             registry = self._config.operation_registry
             operation = None
             if registry is not None:
-                operation = _new_operation(tool_name, arguments)
+                bound_identity = get_invocation_identity()
+                tenant_id = (
+                    bound_identity.user.tenant_id
+                    if bound_identity is not None and bound_identity.user is not None
+                    else None
+                )
+                operation = _new_operation(tool_name, arguments, tenant_id=tenant_id)
                 claim = getattr(registry, "claim", None)
                 if callable(claim):
                     claimed, prior = await _maybe_await(claim(operation))
                 else:
                     duplicate = await _maybe_await(registry.is_duplicate(operation))
-                    prior = (
-                        await _maybe_await(
-                            registry.find_by_idempotency_key(operation.idempotency_key or "")
-                        )
-                        if duplicate
-                        else None
-                    )
+                    if duplicate:
+                        find_result = registry.find_by_idempotency_key
+                        if operation.tenant_id is None:
+                            prior = await _maybe_await(find_result(operation.idempotency_key or ""))
+                        else:
+                            prior = await _maybe_await(
+                                find_result(operation.idempotency_key or "", operation.tenant_id)
+                            )
+                    else:
+                        prior = None
                     claimed = not duplicate
                 if not claimed:
                     results.append(
@@ -1097,11 +1106,14 @@ def _validate_tool_arguments(tool: Tool, arguments: Any) -> str | None:
     return None
 
 
-def _new_operation(tool_name: str, arguments: dict[str, Any]) -> Operation:
+def _new_operation(
+    tool_name: str, arguments: dict[str, Any], *, tenant_id: str | None = None
+) -> Operation:
     """Build an Operation for a tool call; arguments may carry an idempotency key."""
     key = arguments.get("idempotency_key")
     return Operation(
         name=tool_name,
         arguments=arguments,
         idempotency_key=str(key) if key else None,
+        tenant_id=tenant_id,
     )

@@ -149,9 +149,10 @@ references fail before startup rather than being silently ignored. Install
 `MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for shared memory, and
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` for distributed operation
 deduplication. Redis writes use transactional pipelines and key TTLs so
-independently scaled processes share state. The operation registry currently
-does not provide tenant isolation or optimistic versioning, and the Google ADK
-runtime rejects the idempotency binding until its mapping is implemented.
+independently scaled processes share state. Redis operation keys are scoped by
+the verified tenant when one is available; session/memory records and
+optimistic versioning remain open, and the Google ADK runtime rejects the
+idempotency binding until its mapping is implemented.
 
 For an OpenAI-compatible endpoint, keep credentials out of the definition:
 
@@ -186,7 +187,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
-| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with scoped records, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | optimistic versioning, tenant isolation, and Google ADK idempotency mapping |
+| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with tenant-scoped claims, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | optimistic versioning, tenant isolation for session/memory records, and Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -219,7 +220,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current base suite contains 491 collected tests: 414 in the default
+The current base suite contains 493 collected tests: 416 in the default
 development selection and 77 integration tests (five also tagged E2E). The
 Redis extra adds three live integration tests in the Redis-enabled CI job, and the
 optional Google ADK adapter adds 14 tests when that extra is installed. CI runs

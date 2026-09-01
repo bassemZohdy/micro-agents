@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 491 base collected | 414 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 77 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests when the `redis` extra is installed |
+| Tests | 493 base collected | 416 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 77 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests when the `redis` extra is installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -281,9 +281,10 @@ Gaps:
   database-backed audit arrives with production state providers
 - the approval store is process-local; production approval state arrives
   with production state providers
-- Redis operation idempotency is available in the custom runtime, but claims
-  are not yet tenant-isolated or optimistic-versioned; late completion is
-  owner-checked and the Google ADK adapter rejects the binding
+- Redis operation idempotency is available in the custom runtime, with claims
+  scoped by verified tenant when present but without optimistic versioning;
+  late completion is owner-checked and the Google ADK adapter rejects the
+  binding
 
 ### State and knowledge
 
@@ -311,8 +312,9 @@ Gaps:
   unsupported idempotency schemes are rejected
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
-- no production knowledge provider; Redis memory/session/idempotency support
-  does not yet provide optimistic versioning or tenant isolation
+- no production knowledge provider; Redis memory/session support does not yet
+  provide optimistic versioning or tenant isolation, while operation claims
+  use verified-tenant namespaces when available
 
 ### HTTP, health, and observability
 

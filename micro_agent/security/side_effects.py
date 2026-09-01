@@ -31,6 +31,7 @@ class Operation:
 
     operation_id: str = field(default_factory=lambda: str(uuid4()))
     idempotency_key: str | None = None
+    tenant_id: str | None = None
     name: str = ""
     arguments: dict[str, Any] = field(default_factory=dict)
     retry_classification: RetryClassification = RetryClassification.SAFE
@@ -61,6 +62,11 @@ class OperationRegistry:
         self._completed: dict[str, OperationResult] = {}
         self._in_progress: dict[str, str] = {}
 
+    @staticmethod
+    def _storage_key(idempotency_key: str, tenant_id: str | None = None) -> str:
+        """Keep legacy unscoped keys stable while isolating tenant keys."""
+        return idempotency_key if tenant_id is None else f"{tenant_id}\x1f{idempotency_key}"
+
     def claim(self, operation: Operation) -> tuple[bool, OperationResult | None]:
         """Atomically claim an idempotent operation in this process.
 
@@ -71,32 +77,37 @@ class OperationRegistry:
         key = operation.idempotency_key
         if not key:
             return True, None
-        prior = self._completed.get(key)
+        storage_key = self._storage_key(key, operation.tenant_id)
+        prior = self._completed.get(storage_key)
         if prior is not None:
             return False, prior
-        if key in self._in_progress:
+        if storage_key in self._in_progress:
             return False, OperationResult(
-                operation_id=self._in_progress[key],
+                operation_id=self._in_progress[storage_key],
                 status="in_progress",
             )
-        self._in_progress[key] = operation.operation_id
+        self._in_progress[storage_key] = operation.operation_id
         return True, None
 
     def record(self, operation: Operation, result: OperationResult) -> None:
         """Record a completed operation."""
-        key = operation.idempotency_key or operation.operation_id
-        self._completed[key] = result
+        key = operation.idempotency_key
+        storage_key = self._storage_key(key, operation.tenant_id) if key else operation.operation_id
+        self._completed[storage_key] = result
         if operation.idempotency_key:
-            self._in_progress.pop(operation.idempotency_key, None)
+            self._in_progress.pop(storage_key, None)
 
-    def find_by_idempotency_key(self, key: str) -> OperationResult | None:
+    def find_by_idempotency_key(
+        self, key: str, tenant_id: str | None = None
+    ) -> OperationResult | None:
         """Find a previously completed operation by idempotency key."""
-        return self._completed.get(key)
+        return self._completed.get(self._storage_key(key, tenant_id))
 
     def is_duplicate(self, operation: Operation) -> bool:
         """Check if an operation has already been completed."""
         if operation.idempotency_key:
-            return operation.idempotency_key in self._completed
+            storage_key = self._storage_key(operation.idempotency_key, operation.tenant_id)
+            return storage_key in self._completed
         return False
 
     def health_check(self) -> bool:
@@ -120,7 +131,7 @@ class OperationRegistryProtocol(Protocol):
         """Return whether an operation already has a stored result."""
 
     def find_by_idempotency_key(
-        self, key: str
+        self, key: str, tenant_id: str | None = None
     ) -> OperationResult | None | Awaitable[OperationResult | None]:
         """Return a prior operation result when present."""
 

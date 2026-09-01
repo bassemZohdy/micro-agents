@@ -37,6 +37,10 @@ class TestOperation:
         assert op.idempotency_key == "key-123"
         assert op.name == "payment"
 
+    def test_tenant_is_optional(self):
+        op = Operation(idempotency_key="key-123", tenant_id="tenant-a")
+        assert op.tenant_id == "tenant-a"
+
     def test_requires_approval(self):
         op = Operation(requires_approval=True)
         assert op.requires_approval is True
@@ -130,6 +134,32 @@ class TestRedisOperationRegistry:
         assert await registry.health_check() is True
         await registry.aclose()
         assert client.closed is False
+
+    @pytest.mark.asyncio
+    async def test_tenant_scopes_same_idempotency_key(self):
+        backend = FakeRedisBackend()
+        tenant_a = RedisOperationRegistry(client=FakeRedis(backend))
+        tenant_b = RedisOperationRegistry(client=FakeRedis(backend))
+        operation_a = Operation(idempotency_key="payment-1", tenant_id="tenant-a")
+        operation_b = Operation(idempotency_key="payment-1", tenant_id="tenant-b")
+
+        try:
+            assert await tenant_a.claim(operation_a) == (True, None)
+            assert await tenant_b.claim(operation_b) == (True, None)
+            await tenant_a.record(
+                operation_a,
+                OperationResult(operation_id=operation_a.operation_id, output={"tenant": "a"}),
+            )
+            tenant_b_result = await tenant_b.find_by_idempotency_key("payment-1", "tenant-b")
+            assert tenant_b_result is not None
+            assert tenant_b_result.status == "in_progress"
+            assert tenant_b_result.operation_id == operation_b.operation_id
+            assert (await tenant_a.find_by_idempotency_key("payment-1", "tenant-a")).output == {
+                "tenant": "a"
+            }
+        finally:
+            await tenant_a.aclose()
+            await tenant_b.aclose()
 
     def test_endpoint_and_ttl_are_validated(self):
         with pytest.raises(ValueError, match="Redis session endpoint"):
