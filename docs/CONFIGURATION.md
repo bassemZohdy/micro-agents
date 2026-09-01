@@ -29,6 +29,7 @@ the service becomes ready.
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite or Redis (`redis://`/`rediss://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's Redis-backed distributed operation registry; unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
+| `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
 in-memory provider when `MICRO_AGENT_MEMORY_ENDPOINT` is `memory://` or
@@ -58,6 +59,13 @@ tenant boundary. Reads return a versioned snapshot (starting at version 1),
 and writing a stale snapshot raises `StateConflictError`; zero-version writes
 retain the legacy unconditional behavior. The Google ADK runtime rejects this
 binding until its distributed idempotency mapping is implemented.
+
+HTTP CORS is disabled unless `MICRO_AGENT_CORS_ORIGINS` is set. The executable
+passes this allowlist to `create_app`; application embedders can use the same
+policy with `create_app(cors_origins=[...])`. The default policy never enables
+credentials. Rate limiting is intentionally an injected `RateLimiter` hook,
+not an environment-selected local counter; deployments should provide a
+shared gateway or datastore implementation to `create_app(rate_limiter=...)`.
 
 ```bash
 pip install 'micro-agents[redis]'

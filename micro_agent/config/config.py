@@ -41,6 +41,7 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     auth_audience: str | None = None
     audit_sink: str | None = None
     audit_file: str | None = None
+    cors_origins: list[str] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -115,6 +116,7 @@ class ResolvedConfig:
     auth_audience: str | None = None
     audit_sink: str = "stdout"
     audit_file: str | None = None
+    cors_origins: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -199,6 +201,8 @@ def resolve_config(
             config.audit_sink = env_config.audit_sink
         if env_config.audit_file:
             config.audit_file = env_config.audit_file
+        if env_config.cors_origins:
+            config.cors_origins = list(env_config.cors_origins)
         config.extra.update(env_config.extra)
 
     # Layer 3b: Environment variable overrides
@@ -257,6 +261,10 @@ def resolve_config(
     env_audit_file = _read_env("audit_file")
     if env_audit_file:
         config.audit_file = env_audit_file
+
+    env_cors_origins = _read_env("cors_origins")
+    if env_cors_origins is not None:
+        config.cors_origins = [origin.strip() for origin in env_cors_origins.split(",")]
 
     # Layer 4: Secret bindings
     if env_config and env_config.model_api_key_ref:
@@ -318,6 +326,45 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                 path="audit_file",
             )
         )
+
+    if any(not origin.strip() for origin in config.cors_origins):
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message="MICRO_AGENT_CORS_ORIGINS must not contain empty origins",
+                path="cors_origins",
+            )
+        )
+    elif "*" in config.cors_origins and len(config.cors_origins) > 1:
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message="MICRO_AGENT_CORS_ORIGINS cannot mix '*' with explicit origins",
+                path="cors_origins",
+            )
+        )
+    else:
+        from urllib.parse import urlsplit
+
+        for origin in config.cors_origins:
+            parsed = urlsplit(origin.strip())
+            if origin == "*":
+                continue
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                diagnostics.append(
+                    ConfigDiagnostic(
+                        level="error",
+                        message=("CORS origins must be absolute http(s) origins without a path"),
+                        path="cors_origins",
+                    )
+                )
+                break
 
     auth_mode = (config.auth or "").strip().lower()
     if auth_mode not in ("", "none", "oidc"):

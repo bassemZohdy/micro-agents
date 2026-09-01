@@ -138,12 +138,18 @@ jobs:
           docker run --rm -d --name micro-agent-smoke \
             -p 8080:8080 \
             -e MICRO_AGENT_MODEL_PROVIDER=fake \
+            -e MICRO_AGENT_CORS_ORIGINS=https://console.example \
             -v "$PWD/examples/notification-agent.yaml:/etc/micro-agent/agent.yaml:ro" \
             micro-agent:ci
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/health/live > /dev/null; then
               curl -sf http://localhost:8080/health/ready
               curl -sf http://localhost:8080/v1/capabilities
+              curl -sf -H 'Origin: https://console.example' \
+                -D /tmp/micro-agent-headers http://localhost:8080/v1/capabilities > /dev/null
+              grep -i '^access-control-allow-origin: https://console.example' \
+                /tmp/micro-agent-headers
+              grep -i '^x-micro-agent-api-version: v1' /tmp/micro-agent-headers
               exit 0
             fi
             sleep 1

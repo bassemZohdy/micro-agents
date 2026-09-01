@@ -49,6 +49,14 @@ class TestResolveConfig:
         config = resolve_config()
         assert config.idempotency_endpoint == "redis://redis.example.test/0"
 
+    def test_cors_origins_environment_override(self, monkeypatch):
+        monkeypatch.setenv(
+            "MICRO_AGENT_CORS_ORIGINS",
+            "https://console.example, https://admin.example",
+        )
+        config = resolve_config()
+        assert config.cors_origins == ["https://console.example", "https://admin.example"]
+
     def test_environment_log_level_override(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_LOG_LEVEL", "DEBUG")
         config = resolve_config()
@@ -111,6 +119,14 @@ class TestValidateConfig:
         assert any("ISSUER" in d.message for d in missing_issuer)
         missing_audience = validate_config(ResolvedConfig(auth="oidc", auth_issuer="https://i"))
         assert any("AUDIENCE" in d.message for d in missing_audience)
+
+    def test_invalid_cors_origins_error(self):
+        invalid_url = validate_config(ResolvedConfig(cors_origins=["console.example"]))
+        assert any(d.level == "error" and d.path == "cors_origins" for d in invalid_url)
+        mixed_wildcard = validate_config(
+            ResolvedConfig(cors_origins=["*", "https://console.example"])
+        )
+        assert any(d.level == "error" and d.path == "cors_origins" for d in mixed_wildcard)
 
     def test_environment_auth_overrides(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_AUTH", "oidc")

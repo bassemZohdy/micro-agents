@@ -67,6 +67,20 @@ Before using this outside a disposable namespace:
   gateway; this is required for chunked requests and protects work before it
   reaches the application
 
+### HTTP policy hooks
+
+The executable keeps CORS disabled unless an explicit allowlist is supplied:
+
+```bash
+export MICRO_AGENT_CORS_ORIGINS='https://console.example,https://admin.example'
+```
+
+Use `*` only as the sole value, and do not treat it as a credentialed browser
+policy. Rate limiting is an injected `RateLimiter` integration point on
+`create_app()`; use a gateway or shared datastore implementation for replica-
+wide limits. The native API is versioned under `/v1` and publishes the
+OpenAPI document at `/v1/openapi.json`.
+
 ## OpenShift
 
 The current fixed `USER 1000` image and `runAsUser: 1000` pod settings do not
