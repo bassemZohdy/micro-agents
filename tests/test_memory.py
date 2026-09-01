@@ -7,7 +7,9 @@ from micro_agent.memory import (
     MemoryEntry,
     MemoryPolicy,
     MemoryProvider,
+    RedisMemoryProvider,
 )
+from tests.fake_redis import FakeRedis, FakeRedisBackend
 
 
 class TestMemoryEntry:
@@ -103,3 +105,47 @@ class TestInMemoryMemoryProvider:
         assert len(all_entries) == 2
         user_entries = await provider.list_entries(scope="user")
         assert len(user_entries) == 1
+
+
+class TestRedisMemoryProvider:
+    """Redis memory shares scoped entries and retention policy across clients."""
+
+    @pytest.mark.asyncio
+    async def test_replicas_share_scoped_entries(self):
+        backend = FakeRedisBackend()
+        replica_a = RedisMemoryProvider(client=FakeRedis(backend))
+        replica_b = RedisMemoryProvider(client=FakeRedis(backend))
+
+        await replica_a.store(MemoryEntry(key="pref", value="dark_mode", scope="user"))
+        await replica_a.store(MemoryEntry(key="rule", value="agent-only", scope="agent"))
+
+        assert (await replica_b.get("pref", scope="user")).value == "dark_mode"
+        assert await replica_b.get("pref", scope="agent") is None
+        assert len(await replica_b.search("mode", scope="user")) == 1
+        assert len(await replica_b.list_entries(scope="agent")) == 1
+
+    @pytest.mark.asyncio
+    async def test_capacity_evicts_oldest_and_ttl_zero_is_not_retained(self):
+        backend = FakeRedisBackend()
+        provider = RedisMemoryProvider(
+            client=FakeRedis(backend),
+            policy=MemoryPolicy(max_entries=2),
+        )
+        await provider.store(MemoryEntry(key="a", value="one"))
+        await provider.store(MemoryEntry(key="b", value="two"))
+        await provider.store(MemoryEntry(key="c", value="three"))
+        assert await provider.get("a") is None
+        assert await provider.get("b") is not None
+        assert await provider.get("c") is not None
+
+        expiring = RedisMemoryProvider(
+            client=FakeRedis(backend),
+            policy=MemoryPolicy(ttl_seconds=0),
+        )
+        await expiring.store(MemoryEntry(key="expired", value="old"))
+        assert await expiring.get("expired") is None
+        assert all(entry.key != "expired" for entry in await expiring.list_entries())
+
+    def test_endpoint_must_be_redis_url(self):
+        with pytest.raises(ValueError, match="Redis session endpoint"):
+            RedisMemoryProvider("https://memory.example.test", client=FakeRedis(FakeRedisBackend()))

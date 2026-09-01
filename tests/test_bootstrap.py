@@ -5,7 +5,7 @@ import pytest
 from micro_agent.config import BootstrapError, EnvironmentOverlay, build_runtime
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
-from micro_agent.memory import InMemoryMemoryProvider
+from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
 from micro_agent.security import AgentPolicy
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
@@ -324,6 +324,30 @@ def test_external_memory_endpoint_fails_before_runtime_creation(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_MEMORY_ENDPOINT", "https://memory.example.test")
     with pytest.raises(BootstrapError, match="external memory"):
         build_runtime(_definition(provider="fake", memory={"ref": "agent-memory"}))
+
+
+@pytest.mark.asyncio
+async def test_external_redis_memory_is_constructed(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        pass
+
+    fake_client = FakeRedisClient()
+    monkeypatch.setattr(
+        "micro_agent.memory.redis._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: fake_client),
+    )
+    monkeypatch.setenv("MICRO_AGENT_MEMORY_ENDPOINT", "redis://memory.example.test/0")
+    bootstrap = build_runtime(
+        _definition(provider="fake", memory={"ref": "agent-memory", "scope": "agent"})
+    )
+    try:
+        provider = bootstrap.runtime._config.memory_provider
+        assert isinstance(provider, RedisMemoryProvider)
+        assert provider._endpoint == "redis://memory.example.test/0"
+    finally:
+        await bootstrap.runtime.close()
 
 
 def test_state_endpoint_without_definition_is_not_silently_ignored(monkeypatch):

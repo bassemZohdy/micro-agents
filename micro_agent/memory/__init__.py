@@ -6,10 +6,12 @@ from micro_agent.memory.memory import (
     MemoryPolicy,
     MemoryProvider,
 )
+from micro_agent.memory.redis import RedisMemoryProvider
 
 __all__ = [
     "InMemoryMemoryProvider",
     "MemoryEntry",
     "MemoryPolicy",
     "MemoryProvider",
+    "RedisMemoryProvider",
 ]

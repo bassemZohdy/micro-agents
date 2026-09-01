@@ -13,8 +13,8 @@ Constructed from configuration:
 - an MCP connection manager for declared MCP servers (a deployment may inject
   a manager that owns a real wire-protocol client factory),
 - telemetry with the configured log level,
-- built-in memory and in-memory/SQLite session providers, or an optional Redis
-  external session provider,
+- built-in memory, optional Redis memory, and in-memory/SQLite session providers,
+  or an optional Redis external session provider,
 - a knowledge provider for declared knowledge sources (injected, or the
   built-in in-memory retriever whose startup health check fails fast until a
   deployment supplies documents),
@@ -42,7 +42,12 @@ from micro_agent.config.config import (
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.knowledge import InMemoryKnowledgeRetriever, KnowledgeRetriever
 from micro_agent.mcp import McpConnectionManager
-from micro_agent.memory import InMemoryMemoryProvider, MemoryPolicy, MemoryProvider
+from micro_agent.memory import (
+    InMemoryMemoryProvider,
+    MemoryPolicy,
+    MemoryProvider,
+    RedisMemoryProvider,
+)
 from micro_agent.models import (
     FakeModelConfig,
     FakeModelProvider,
@@ -412,12 +417,17 @@ def _build_memory_provider(
             )
         return None
 
-    if endpoint and endpoint not in {"memory://", "inmemory://"}:
-        raise BootstrapError(
-            "memory dependency requires memory:// or inmemory://; external memory "
-            "providers are not configured"
-        )
-    return InMemoryMemoryProvider(MemoryPolicy())
+    if not endpoint or endpoint in {"memory://", "inmemory://"}:
+        return InMemoryMemoryProvider(MemoryPolicy())
+    if endpoint.startswith(("redis://", "rediss://")):
+        try:
+            return RedisMemoryProvider(endpoint=endpoint, policy=MemoryPolicy())
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
+    raise BootstrapError(
+        "external memory provider supports redis:// or rediss:// endpoints; "
+        "install the 'redis' extra and configure MICRO_AGENT_MEMORY_ENDPOINT"
+    )
 
 
 def _build_mcp_manager(

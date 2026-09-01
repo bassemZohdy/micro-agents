@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 480 base collected | 404 selected by the default test job (including Redis-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 baseline integration tests run in the integration job, with five also tagged E2E, plus one Redis service test when the `redis` extra is installed |
+| Tests | 484 base collected | 408 selected by the default test job (including Redis memory/session-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 baseline integration tests run in the integration job, with five also tagged E2E, plus two Redis service tests when the `redis` extra is installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -50,10 +50,10 @@ Gaps:
 
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
   built-in memory and SQLite/in-memory session bindings plus optional Redis
-  external session bindings, the built-in tool
+  external memory/session bindings, the built-in tool
   registry, the MCP connection manager, the knowledge provider, the
   credential provider, and telemetry are constructed from configuration;
-  external memory and idempotency providers remain unsupported and fail fast
+  external idempotency providers remain unsupported and fail fast
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 - only `microagents.io/v1alpha1` is currently supported; a future API version
@@ -120,6 +120,9 @@ Implemented:
   endpoints, updates session documents and their active index in transactional
   pipelines, enforces expiry with Redis key TTLs, cleans stale index members,
   exposes a health probe, and closes only clients it owns
+- the optional Redis memory provider stores scoped JSON records in a shared
+  namespace, applies `MemoryPolicy` TTL/capacity retention, purges stale index
+  members, exposes a health probe, and closes only clients it owns
 
 Current custom-runtime capability matrix:
 
@@ -282,7 +285,8 @@ Implemented:
 
 - in-memory session and memory providers
 - SQLite session provider
-- optional Redis session provider for shared `persistence: external` state
+- optional Redis memory provider for declared shared memory and Redis session
+  provider for shared `persistence: external` state
 - `MemoryPolicy` validates retention bounds; expired in-memory entries are
   purged before reads, writes, and capacity eviction so stale entries cannot
   consume capacity or evict live data
@@ -294,13 +298,13 @@ Implemented:
 
 Gaps:
 
-- bootstrap constructs in-memory memory, in-memory/SQLite sessions, and Redis
-  external sessions; external memory and idempotency endpoints are rejected
-  until providers are wired
+- bootstrap constructs in-memory or Redis memory, in-memory/SQLite sessions,
+  and Redis external sessions; external idempotency endpoints are rejected
+  until a provider is wired
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
-- no production memory, knowledge, or idempotency provider; Redis session
-  support does not make memory or idempotency state distributed
+- no production knowledge or idempotency provider; Redis memory/session support
+  does not yet provide optimistic versioning or tenant isolation
 
 ### HTTP, health, and observability
 

@@ -15,9 +15,9 @@ The image:
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
 from the mounted definition and environment. It constructs local memory/session
-providers, an optional Redis-backed external session provider, the official MCP
-SDK client for declared servers, knowledge and credential providers, policy,
-telemetry, and audit sinks from configuration.
+providers, optional Redis-backed external memory/session providers, the official
+MCP SDK client for declared servers, knowledge and credential providers,
+policy, telemetry, and audit sinks from configuration.
 Startup probes the configured model, state providers, knowledge sources, and
 declared MCP servers before readiness. Unsupported external state bindings and
 unavailable credentials fail before readiness.
@@ -77,11 +77,12 @@ the restricted security context constraints used by the target cluster.
 ## Multi-replica warning
 
 The sample declares two replicas. SQLite remains a single-process development
-reference, while `persistence: external` with a Redis endpoint provides shared
-session state across independently scheduled pods. Install the optional Redis
-extra and configure `MICRO_AGENT_SESSION_ENDPOINT=redis://...` (or `rediss://...`)
-before scaling. Memory and idempotency state are still process-local until their
-production providers are implemented.
+reference, while Redis endpoints provide shared memory and session state across
+independently scheduled pods. Install the optional Redis extra and configure
+`MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for declared memory plus
+`MICRO_AGENT_SESSION_ENDPOINT=redis://...` (or `rediss://...`) for
+`persistence: external` sessions. Idempotency state is still process-local
+until its production provider is implemented.
 
 ## Production checklist
 

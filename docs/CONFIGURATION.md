@@ -25,14 +25,17 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
-| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for the built-in memory provider; external endpoints fail fast |
+| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory or Redis (`redis://`/`rediss://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite or Redis (`redis://`/`rediss://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
-in-memory provider. `MICRO_AGENT_MEMORY_ENDPOINT` may be `memory://` or
-`inmemory://`; other endpoints are rejected until an external memory provider
-is installed. Session persistence `memory` constructs an in-memory provider.
+in-memory provider when `MICRO_AGENT_MEMORY_ENDPOINT` is `memory://` or
+`inmemory://` (or unset). A `redis://` or `rediss://` endpoint selects the
+optional Redis memory provider, which stores scoped JSON records in a shared
+namespace, enforces `MemoryPolicy` TTL/capacity limits, and cleans expired
+records. Other endpoints fail fast until a matching provider is installed.
+Session persistence `memory` constructs an in-memory provider.
 Persistence `sqlite` accepts `MICRO_AGENT_SESSION_ENDPOINT` as
 `sqlite:///absolute/path` (or a plain SQLite path) and defaults to `:memory:`
 for development. Persistence `external` accepts `redis://` or `rediss://`
