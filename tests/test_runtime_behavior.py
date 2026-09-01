@@ -282,6 +282,51 @@ class TestRuntimeSemantics:
         assert response.output["content"] == "recovered"
 
     @pytest.mark.asyncio
+    async def test_error_policy_retry_honors_attempt_budget_and_backoff(self):
+        class RecoveringAfterTwoFailures(FakeModelProvider):
+            def __init__(self) -> None:
+                super().__init__(FakeModelConfig(response="recovered"))
+                self.calls = 0
+
+            async def generate(self, config, messages, tools=None):
+                self.calls += 1
+                if self.calls < 3:
+                    raise RuntimeError(f"transient model error {self.calls}")
+                return await super().generate(config, messages, tools=tools)
+
+        provider = RecoveringAfterTwoFailures()
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = await runtime.create(
+            _definition(
+                error_policy="retry",
+                retry_max_attempts=2,
+                retry_backoff_seconds=0.001,
+                retry_jitter_seconds=0,
+            )
+        )
+        response = await runtime.invoke(agent, AgentRequest(input={}))
+        assert response.output["content"] == "recovered"
+        assert provider.calls == 3
+
+    @pytest.mark.asyncio
+    async def test_error_policy_retry_budget_stops_before_next_attempt(self):
+        provider = FakeModelProvider(
+            FakeModelConfig(should_error=True, error_message="transient failure")
+        )
+        runtime = AdkRuntime(AdkRuntimeConfig(model_provider=provider))
+        agent = await runtime.create(
+            _definition(
+                error_policy="retry",
+                retry_max_attempts=3,
+                retry_backoff_seconds=0.02,
+                retry_budget_seconds=0.005,
+            )
+        )
+        with pytest.raises(TimeoutError, match="retry budget exceeded"):
+            await runtime.invoke(agent, AgentRequest(input={}))
+        assert len(provider.invocations) == 1
+
+    @pytest.mark.asyncio
     async def test_error_policy_retry_is_suppressed_after_side_effect_tool(self):
         class FailsAfterToolProvider(FakeModelProvider):
             def __init__(self) -> None:

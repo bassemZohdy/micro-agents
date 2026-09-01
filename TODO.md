@@ -240,6 +240,9 @@ state through an external service under concurrent load.
 - [x] Do not retry an entire invocation after an unknown write outcome.
 - [ ] Add backoff, jitter, retry budgets, circuit breaking, and error
       classification.
+  - [x] Bound retry attempts and retry wall-clock budget with exponential
+        backoff and optional jitter.
+  - [ ] Add circuit breaking and an explicit retryable-error taxonomy.
 - [ ] Test crash/replay and partial-failure scenarios.
 
 ### P1.9 Deployment and supply-chain hardening

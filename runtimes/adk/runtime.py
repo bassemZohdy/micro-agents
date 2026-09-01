@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import random
 import time
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
@@ -67,6 +68,31 @@ class _ApprovalPausedError(Exception):
 
 class _RetrySuppressedAfterSideEffectError(RuntimeError):
     """Prevent replaying an invocation after a non-read-only tool ran."""
+
+
+async def _wait_for_retry(
+    delay_seconds: float,
+    invocation_deadline: _InvocationDeadline,
+    retry_deadline: _InvocationDeadline,
+) -> None:
+    """Sleep for a retry delay without exceeding either invocation budget."""
+    if delay_seconds <= 0:
+        if invocation_deadline.expired or retry_deadline.expired:
+            raise TimeoutError("retry budget exceeded")
+        return
+    remaining = [
+        value
+        for value in (invocation_deadline.remaining(), retry_deadline.remaining())
+        if value is not None
+    ]
+    if remaining:
+        allowed = min(remaining)
+        if allowed <= 0:
+            raise TimeoutError("retry budget exceeded")
+        if delay_seconds > allowed:
+            await asyncio.sleep(allowed)
+            raise TimeoutError("retry budget exceeded")
+    await asyncio.sleep(delay_seconds)
 
 
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
@@ -464,6 +490,7 @@ class AdkRuntime(AgentRuntime):
             semantics.timeout_seconds,
             request.timeout_seconds,
         )
+        retry_deadline = _InvocationDeadline.from_seconds(semantics.retry_budget_seconds)
         side_effect_state: dict[str, Any] = {"attempted_tools": []}
 
         async def run_once() -> AgentResponse:
@@ -530,13 +557,37 @@ class AdkRuntime(AgentRuntime):
                         "invocation retry suppressed after side-effect tool execution: "
                         f"{tool_names}"
                     ) from exc
-                if deadline.expired:
-                    raise
-                try:
-                    response = await run_once()
-                except Exception as retry_exc:
-                    self._telemetry.increment("agent_invocation_errors_total", labels)
-                    raise retry_exc from exc
+                retry_error: Exception = exc
+                for retry_index in range(semantics.retry_max_attempts):
+                    if side_effect_state.get("attempted_tools", []):
+                        tool_names = ", ".join(
+                            str(name) for name in side_effect_state["attempted_tools"]
+                        )
+                        self._telemetry.increment("agent_retries_suppressed_total", labels)
+                        raise _RetrySuppressedAfterSideEffectError(
+                            "invocation retry suppressed after side-effect tool execution: "
+                            f"{tool_names}"
+                        ) from retry_error
+                    delay = semantics.retry_backoff_seconds * (2**retry_index)
+                    if semantics.retry_jitter_seconds:
+                        delay += random.uniform(0, semantics.retry_jitter_seconds)
+                    await _wait_for_retry(delay, deadline, retry_deadline)
+                    self._telemetry.increment("agent_retries_total", labels)
+                    try:
+                        response = await run_once()
+                    except TimeoutError:
+                        raise
+                    except _ApprovalPausedError:
+                        raise
+                    except _RetrySuppressedAfterSideEffectError:
+                        raise
+                    except Exception as retry_exc:
+                        self._telemetry.increment("agent_invocation_errors_total", labels)
+                        retry_error = retry_exc
+                        continue
+                    break
+                else:
+                    raise retry_error from exc
             elif semantics.error_policy is ErrorPolicy.FALLBACK:
                 response = AgentResponse(
                     output={},

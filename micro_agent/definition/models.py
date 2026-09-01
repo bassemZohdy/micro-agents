@@ -411,6 +411,29 @@ class RuntimeSemantics(BaseModel, extra="forbid"):
         description="Whether invocations wait for capacity or are rejected.",
     )
     error_policy: ErrorPolicy = Field(ErrorPolicy.FAIL, description="Error handling policy.")
+    retry_max_attempts: int = Field(
+        1,
+        ge=0,
+        le=10,
+        description="Maximum retries after the initial failure (when error_policy is retry).",
+    )
+    retry_backoff_seconds: float = Field(
+        0.0,
+        ge=0,
+        le=60,
+        description="Base delay before retries; each retry doubles the delay.",
+    )
+    retry_jitter_seconds: float = Field(
+        0.0,
+        ge=0,
+        le=60,
+        description="Maximum random delay added to each retry backoff.",
+    )
+    retry_budget_seconds: float | None = Field(
+        None,
+        gt=0,
+        description="Optional wall-clock budget for retry delays and attempts.",
+    )
     capabilities: list[str] = Field(
         default_factory=list, description="Declared runtime capabilities."
     )

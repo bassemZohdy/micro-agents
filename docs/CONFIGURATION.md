@@ -407,6 +407,27 @@ shorten the definition-level budget. The shortest request, definition, model,
 and tool timeout is shared with session, memory, and MCP operations; a retry
 cannot reset the remaining deadline.
 
+When `error_policy: retry` is selected, retries are bounded by
+`retry_max_attempts` (one retry by default), `retry_budget_seconds` (optional),
+and the invocation deadline. `retry_backoff_seconds` is the base delay and is
+doubled for each retry; `retry_jitter_seconds` adds a bounded random delay to
+reduce synchronized retry storms. Defaults preserve the historical immediate
+single retry:
+
+```yaml
+spec:
+  runtime:
+    error_policy: retry
+    retry_max_attempts: 2
+    retry_backoff_seconds: 0.25
+    retry_jitter_seconds: 0.1
+    retry_budget_seconds: 5
+```
+
+Retries are attempted only for failures before a non-read-only tool starts.
+The runtime still lacks a circuit breaker and configurable error taxonomy;
+those remain explicit backlog items.
+
 When `behavior.input_contract` or `behavior.output_contract` declares
 parameters, the runtime validates required fields, JSON-compatible types, and
 unknown fields at the invocation boundary. An empty contract remains
