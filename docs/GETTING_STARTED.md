@@ -47,10 +47,12 @@ process-local. `persistence: sqlite` uses `MICRO_AGENT_SESSION_ENDPOINT` when
 set (for example, `sqlite:///tmp/sessions.db`) and otherwise defaults to an
 in-memory SQLite database for development. A declared `memory` dependency uses
 the built-in in-memory provider. External state endpoints fail before startup
-until a matching provider is configured. For shared sessions across processes,
-install `micro-agents[redis]`, set `persistence: external`, and bind
-`MICRO_AGENT_SESSION_ENDPOINT` to a `redis://` or `rediss://` endpoint; the
-Redis provider uses transactional writes and key TTLs.
+until a matching provider is configured. For shared memory or sessions across
+processes, install `micro-agents[redis]` and bind the relevant endpoint to a
+`redis://` or `rediss://` URL; use `MICRO_AGENT_MEMORY_ENDPOINT` for declared
+memory and `MICRO_AGENT_SESSION_ENDPOINT` for external sessions. The Redis
+providers use transactional writes and key TTLs. Set `persistence: external`
+for shared sessions.
 
 For environment-specific model or MCP locations, keep this definition
 unchanged and pass a typed `EnvironmentOverlay` to `build_runtime()`; see the

@@ -10,6 +10,7 @@ import pytest
 
 redis = pytest.importorskip("redis.asyncio")
 
+from micro_agent.memory import MemoryEntry, RedisMemoryProvider  # noqa: E402
 from micro_agent.session import RedisSessionProvider  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -44,5 +45,26 @@ async def test_redis_provider_shares_and_expires_sessions() -> None:
     finally:
         await asyncio.gather(*(provider_a.delete(session_id) for session_id in session_ids))
         await provider_a.delete("expires-now")
+        await client_a.aclose()
+        await client_b.aclose()
+
+
+@pytest.mark.asyncio
+async def test_redis_memory_provider_shares_entries() -> None:
+    endpoint = os.getenv("MICRO_AGENT_REDIS_URL", "redis://localhost:6379/0")
+    namespace = f"micro-agent-memory-test-{uuid4().hex}"
+    client_a = redis.from_url(endpoint, decode_responses=True)
+    client_b = redis.from_url(endpoint, decode_responses=True)
+    provider_a = RedisMemoryProvider(endpoint, namespace=namespace, client=client_a)
+    provider_b = RedisMemoryProvider(endpoint, namespace=namespace, client=client_b)
+    try:
+        await provider_a.store(MemoryEntry(key="preference", value="dark mode", scope="user"))
+        shared = await provider_b.get("preference", scope="user")
+        assert shared is not None
+        assert shared.value == "dark mode"
+        assert len(await provider_b.search("dark", scope="user")) == 1
+        assert await provider_a.health_check() is True
+    finally:
+        await provider_a.delete("preference", scope="user")
         await client_a.aclose()
         await client_b.aclose()

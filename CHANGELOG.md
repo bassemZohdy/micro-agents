@@ -28,6 +28,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 - MCP Streamable HTTP clients now disable ambient proxy environment variables
   by default, keeping loopback/inter-service traffic on the configured endpoint
   unless an explicit transport policy is added.
+- Added an optional Redis-backed memory provider. Redis memory stores scoped
+  JSON records in a shared namespace, enforces `MemoryPolicy` TTL and capacity
+  limits, purges stale index members, exposes a health probe, and closes only
+  clients owned by the provider. `MICRO_AGENT_MEMORY_ENDPOINT=redis://...`
+  selects it when `micro-agents[redis]` is installed.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured
