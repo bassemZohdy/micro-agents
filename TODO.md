@@ -194,10 +194,10 @@ and the transcript can be replayed from session storage.
   - [x] Add a distributed operational/idempotency provider for the custom
         runtime using Redis atomic claims, TTLs, health probes, and lifecycle
         close behavior.
-- [ ] Add optimistic concurrency/versioning and tenant isolation.
+- [x] Add optimistic concurrency/versioning and tenant isolation.
   - [x] Scope Redis operation-registry keys by verified tenant identity when
         available.
-  - [ ] Add tenant-scoped records and optimistic versions to session and memory
+  - [x] Add tenant-scoped records and optimistic versions to session and memory
         providers, including conflict handling for concurrent updates.
 - [x] Purge expired in-memory entries consistently and validate memory policy
       bounds.

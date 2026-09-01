@@ -5,6 +5,10 @@ from __future__ import annotations
 import asyncio
 
 
+class WatchError(RuntimeError):
+    """Redis WATCH conflict raised by the test double."""
+
+
 class FakeRedisBackend:
     """State shared by independent fake Redis clients."""
 
@@ -18,6 +22,22 @@ class FakeRedisPipeline:
     def __init__(self, client: FakeRedis) -> None:
         self._client = client
         self._commands: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+        self._watched: dict[str, str | None] = {}
+
+    async def watch(self, *keys: str) -> None:
+        for key in keys:
+            self._client._purge(key)
+            self._watched[key] = self._client.backend.values.get(key)
+
+    async def get(self, key: str) -> str | None:
+        return await self._client.get(key)
+
+    def multi(self) -> FakeRedisPipeline:
+        return self
+
+    async def reset(self) -> None:
+        self._watched.clear()
+        self._commands.clear()
 
     def __getattr__(self, name: str):
         def enqueue(*args: object, **kwargs: object) -> FakeRedisPipeline:
@@ -27,6 +47,12 @@ class FakeRedisPipeline:
         return enqueue
 
     async def execute(self) -> list[object]:
+        for key, expected in self._watched.items():
+            self._client._purge(key)
+            if self._client.backend.values.get(key) != expected:
+                self._watched.clear()
+                self._commands.clear()
+                raise WatchError("watched key changed")
         results: list[object] = []
         for name, args, kwargs in self._commands:
             result = getattr(self._client, name)(*args, **kwargs)

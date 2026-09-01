@@ -15,7 +15,7 @@ import math
 from datetime import datetime, timedelta
 from types import ModuleType
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 from micro_agent.session.session import (
@@ -25,6 +25,7 @@ from micro_agent.session.session import (
     _iso,
     _utc_now,
 )
+from micro_agent.state import StateConflictError
 
 
 def _import_redis() -> ModuleType:
@@ -83,8 +84,10 @@ class RedisSessionProvider(SessionProvider):
         else:
             self._client = client
 
-    def _key(self, session_id: str) -> str:
-        return f"{self._prefix}{session_id}"
+    def _key(self, session_id: str, tenant_id: str | None = None) -> str:
+        if tenant_id is None:
+            return f"{self._prefix}{session_id}"
+        return f"{self._prefix}tenant:{quote(tenant_id, safe='')}:{session_id}"
 
     def _expiry(self, ttl_seconds: int | None, now: datetime) -> str | None:
         ttl = ttl_seconds if ttl_seconds is not None else self._ttl_seconds
@@ -115,6 +118,8 @@ class RedisSessionProvider(SessionProvider):
             raise ValueError("Redis session payload is not an object")
         created_at = str(data.get("created_at") or _iso(_utc_now()))
         expires_at = data.get("expires_at")
+        tenant_id = data.get("tenant_id")
+        version = int(data.get("version") or 1)
         metadata = dict(data.get("metadata") or {})
         metadata["created_at"] = created_at
         if expires_at is not None:
@@ -122,6 +127,8 @@ class RedisSessionProvider(SessionProvider):
         return (
             SessionContext(
                 session_id=str(data["session_id"]),
+                tenant_id=str(tenant_id) if tenant_id is not None else None,
+                version=version,
                 messages=list(data.get("messages") or []),
                 metadata=metadata,
                 caller_context=dict(data.get("caller_context") or {}),
@@ -144,6 +151,8 @@ class RedisSessionProvider(SessionProvider):
         return json.dumps(
             {
                 "session_id": session.session_id,
+                "tenant_id": session.tenant_id,
+                "version": session.version or 1,
                 "messages": session.messages,
                 "metadata": metadata,
                 "caller_context": session.caller_context,
@@ -153,10 +162,11 @@ class RedisSessionProvider(SessionProvider):
             default=str,
         )
 
-    async def _remove(self, session_id: str) -> None:
+    async def _remove(self, session_id: str, tenant_id: str | None = None) -> None:
+        key = self._key(session_id, tenant_id)
         pipeline = self._client.pipeline(transaction=True)
-        pipeline.delete(self._key(session_id))
-        pipeline.zrem(self._index_key, self._key(session_id))
+        pipeline.delete(key)
+        pipeline.zrem(self._index_key, key)
         await pipeline.execute()
 
     async def _store(
@@ -164,7 +174,7 @@ class RedisSessionProvider(SessionProvider):
     ) -> None:
         now = _utc_now()
         ttl = self._remaining_ttl(expires_at, now)
-        key = self._key(session.session_id)
+        key = self._key(session.session_id, session.tenant_id)
         pipeline = self._client.pipeline(transaction=True)
         if ttl == 0:
             pipeline.delete(key)
@@ -180,21 +190,25 @@ class RedisSessionProvider(SessionProvider):
         await pipeline.execute()
 
     async def create(
-        self, session_id: str | None = None, ttl_seconds: int | None = None
+        self,
+        session_id: str | None = None,
+        ttl_seconds: int | None = None,
+        *,
+        tenant_id: str | None = None,
     ) -> SessionContext:
         sid = session_id or str(uuid4())
         now = _utc_now()
         created_at = _iso(now)
         expires_at = self._expiry(ttl_seconds, now)
-        context = SessionContext(session_id=sid)
+        context = SessionContext(session_id=sid, tenant_id=tenant_id, version=1)
         context.metadata["created_at"] = created_at
         if expires_at is not None:
             context.metadata["expires_at"] = expires_at
         await self._store(context, created_at, expires_at)
         return context
 
-    async def get(self, session_id: str) -> SessionContext | None:
-        key = self._key(session_id)
+    async def get(self, session_id: str, *, tenant_id: str | None = None) -> SessionContext | None:
+        key = self._key(session_id, tenant_id)
         raw = await self._client.get(key)
         if raw is None:
             # The Redis TTL may have removed the document while its index
@@ -204,7 +218,7 @@ class RedisSessionProvider(SessionProvider):
         try:
             context, _created_at, expires_at = self._decode(raw)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            await self._remove(session_id)
+            await self._remove(session_id, tenant_id)
             return None
         if expires_at is not None:
             try:
@@ -212,34 +226,106 @@ class RedisSessionProvider(SessionProvider):
             except ValueError:
                 expired = False
             if expired:
-                await self._remove(session_id)
+                await self._remove(session_id, tenant_id)
                 return None
         return context
 
-    async def update(self, session: SessionContext, ttl_seconds: int | None = None) -> None:
-        key = self._key(session.session_id)
-        existing = await self._client.get(key)
-        created_at = str(session.metadata.get("created_at") or _iso(_utc_now()))
-        existing_expires: str | None = None
-        if existing is not None:
-            try:
-                _existing_context, existing_created_at, existing_expires = self._decode(existing)
-            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-                existing_expires = None
+    async def update(
+        self,
+        session: SessionContext,
+        ttl_seconds: int | None = None,
+        *,
+        expected_version: int | None = None,
+    ) -> None:
+        key = self._key(session.session_id, session.tenant_id)
+        expected = expected_version if expected_version is not None else session.version
+
+        def prepare(existing: Any) -> tuple[str, str | None, int]:
+            created_at = str(session.metadata.get("created_at") or _iso(_utc_now()))
+            existing_expires: str | None = None
+            actual_version = 0
+            if existing is not None:
+                try:
+                    existing_context, existing_created_at, existing_expires = self._decode(existing)
+                    actual_version = existing_context.version or 1
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    existing_expires = None
+                else:
+                    if "created_at" not in session.metadata:
+                        created_at = existing_created_at
+            if actual_version == 0:
+                if expected not in (0, None):
+                    raise StateConflictError("session", session.session_id, expected, 0)
+                new_version = 1
             else:
-                if "created_at" not in session.metadata:
-                    created_at = existing_created_at
-        expires_at = (
-            self._expiry(ttl_seconds, _utc_now()) if ttl_seconds is not None else existing_expires
-        )
-        if expires_at is not None:
-            session.metadata["expires_at"] = expires_at
-        await self._store(session, created_at, expires_at)
+                if expected and expected != actual_version:
+                    raise StateConflictError(
+                        "session", session.session_id, expected, actual_version
+                    )
+                new_version = actual_version + 1
+            expires_at = (
+                self._expiry(ttl_seconds, _utc_now())
+                if ttl_seconds is not None
+                else existing_expires
+            )
+            return created_at, expires_at, new_version
 
-    async def delete(self, session_id: str) -> None:
-        await self._remove(session_id)
+        for _attempt in range(3):
+            pipeline = self._client.pipeline(transaction=True)
+            watch = getattr(pipeline, "watch", None)
+            if not callable(watch):
+                existing = await self._client.get(key)
+                created_at, expires_at, new_version = prepare(existing)
+                session.version = new_version
+                if expires_at is not None:
+                    session.metadata["expires_at"] = expires_at
+                await self._store(session, created_at, expires_at)
+                return
+            try:
+                watched = watch(key)
+                if inspect.isawaitable(watched):
+                    await watched
+                existing = pipeline.get(key)
+                if inspect.isawaitable(existing):
+                    existing = await existing
+                created_at, expires_at, new_version = prepare(existing)
+                session.version = new_version
+                if expires_at is not None:
+                    session.metadata["expires_at"] = expires_at
+                pipeline.multi()
+                ttl = self._remaining_ttl(expires_at, _utc_now())
+                if ttl == 0:
+                    pipeline.delete(key)
+                    pipeline.zrem(self._index_key, key)
+                else:
+                    payload = self._encode(session, created_at, expires_at)
+                    if ttl is None:
+                        pipeline.set(key, payload)
+                    else:
+                        pipeline.set(key, payload, ex=ttl)
+                    score = (
+                        0.0
+                        if expires_at is None
+                        else datetime.fromisoformat(expires_at).timestamp()
+                    )
+                    pipeline.zadd(self._index_key, {key: score})
+                await pipeline.execute()
+                return
+            except Exception as exc:
+                if exc.__class__.__name__ != "WatchError":
+                    raise
+            finally:
+                reset = getattr(pipeline, "reset", None)
+                if callable(reset):
+                    result = reset()
+                    if inspect.isawaitable(result):
+                        await result
+        raise StateConflictError("session", session.session_id, expected or 0, -1)
 
-    async def list_active(self) -> list[SessionMetadata]:
+    async def delete(self, session_id: str, *, tenant_id: str | None = None) -> None:
+        await self._remove(session_id, tenant_id)
+
+    async def list_active(self, *, tenant_id: str | None = None) -> list[SessionMetadata]:
         members = await self._client.zrange(self._index_key, 0, -1)
         if not members:
             return []
@@ -257,6 +343,8 @@ class RedisSessionProvider(SessionProvider):
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 stale.append(key)
                 continue
+            if tenant_id is not None and context.tenant_id != tenant_id:
+                continue
             if expires_at is not None:
                 try:
                     if now >= datetime.fromisoformat(expires_at):
@@ -267,6 +355,8 @@ class RedisSessionProvider(SessionProvider):
             active.append(
                 SessionMetadata(
                     session_id=context.session_id,
+                    tenant_id=context.tenant_id,
+                    version=context.version,
                     created_at=created_at,
                     expires_at=expires_at,
                 )

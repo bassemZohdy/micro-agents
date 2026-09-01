@@ -83,17 +83,18 @@ independently scheduled pods. Install the optional Redis extra and configure
 `MICRO_AGENT_SESSION_ENDPOINT=redis://...` (or `rediss://...`) for
 `persistence: external` sessions. Set
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` (or `rediss://...`) for
-distributed operation reservations/results in the custom runtime. The Redis
-registry scopes operation keys by verified tenant when available but is not
-version-aware; session/memory records still need tenant isolation. Google ADK
-rejects the binding until its mapping is implemented.
+distributed operation reservations/results in the custom runtime. Operation,
+session, and memory records scope keys by verified tenant when available and
+use optimistic versions for updates; stale snapshots fail with a
+`StateConflictError`. SQLite remains a single-process development store.
+Google ADK rejects the binding until its mapping is implemented.
 
 ## Production checklist
 
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
 - [ ] authenticated HTTP and enabled A2A standards endpoints
-- [ ] external session, memory, and idempotency state with tenant isolation and
+- [x] external session, memory, and idempotency state with tenant isolation and
       optimistic versioning
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation

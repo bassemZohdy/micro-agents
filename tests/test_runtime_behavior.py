@@ -22,6 +22,7 @@ from micro_agent.observability import (
     OperationRegistry,
     Telemetry,
 )
+from micro_agent.security import UserContext
 from micro_agent.session import InMemorySessionProvider
 from micro_agent.tools import Tool, ToolInputSchema, ToolMetadata, ToolOutputSchema, ToolResult
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -345,6 +346,50 @@ class TestSessionsAndMemory:
         agent = await runtime.create(_definition())
         await runtime.invoke(agent, AgentRequest(input={}, request_id="req-2"))
         assert await memory_provider.list_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_tenant_context_scopes_session_and_memory(self):
+        session_provider = InMemorySessionProvider()
+        memory_provider = InMemoryMemoryProvider(policy=MemoryPolicy(auto_store=True))
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(
+                session_provider=session_provider,
+                memory_provider=memory_provider,
+                memory_policy=memory_provider.policy,
+            )
+        )
+        agent = await runtime.create(_definition())
+        await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={"tenant": "a"},
+                request_id="tenant-a-request",
+                session_id="shared-session",
+                user_context=UserContext(user_id="alice", tenant_id="tenant-a"),
+            ),
+        )
+        await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={"tenant": "b"},
+                request_id="tenant-b-request",
+                session_id="shared-session",
+                user_context=UserContext(user_id="bob", tenant_id="tenant-b"),
+            ),
+        )
+
+        session_a = await session_provider.get("shared-session", tenant_id="tenant-a")
+        session_b = await session_provider.get("shared-session", tenant_id="tenant-b")
+        assert session_a is not None and session_b is not None
+        assert session_a.tenant_id == "tenant-a"
+        assert session_b.tenant_id == "tenant-b"
+        assert await session_provider.get("shared-session") is None
+        assert {
+            entry.tenant_id for entry in await memory_provider.list_entries(tenant_id="tenant-a")
+        } == {"tenant-a"}
+        assert {
+            entry.tenant_id for entry in await memory_provider.list_entries(tenant_id="tenant-b")
+        } == {"tenant-b"}
 
 
 class TestTelemetryWiring:

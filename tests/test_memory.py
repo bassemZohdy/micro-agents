@@ -8,6 +8,7 @@ from micro_agent.memory import (
     MemoryPolicy,
     MemoryProvider,
     RedisMemoryProvider,
+    StateConflictError,
 )
 from tests.fake_redis import FakeRedis, FakeRedisBackend
 
@@ -106,6 +107,20 @@ class TestInMemoryMemoryProvider:
         user_entries = await provider.list_entries(scope="user")
         assert len(user_entries) == 1
 
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_and_version_conflict(self):
+        provider = InMemoryMemoryProvider()
+        await provider.store(MemoryEntry(key="pref", value="a", tenant_id="tenant-a"))
+        await provider.store(MemoryEntry(key="pref", value="b", tenant_id="tenant-b"))
+        assert await provider.get("pref") is None
+        stale = await provider.get("pref", tenant_id="tenant-a")
+        current = await provider.get("pref", tenant_id="tenant-a")
+        current.value = "updated"
+        await provider.store(current)
+        assert current.version == 2
+        with pytest.raises(StateConflictError, match="version conflict"):
+            await provider.store(stale)
+
 
 class TestRedisMemoryProvider:
     """Redis memory shares scoped entries and retention policy across clients."""
@@ -123,6 +138,21 @@ class TestRedisMemoryProvider:
         assert await replica_b.get("pref", scope="agent") is None
         assert len(await replica_b.search("mode", scope="user")) == 1
         assert len(await replica_b.list_entries(scope="agent")) == 1
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_and_version_conflict(self):
+        backend = FakeRedisBackend()
+        provider = RedisMemoryProvider(client=FakeRedis(backend))
+        await provider.store(MemoryEntry(key="pref", value="a", tenant_id="tenant-a"))
+        await provider.store(MemoryEntry(key="pref", value="b", tenant_id="tenant-b"))
+        assert await provider.get("pref") is None
+        stale = await provider.get("pref", tenant_id="tenant-a")
+        current = await provider.get("pref", tenant_id="tenant-a")
+        current.value = "updated"
+        await provider.store(current)
+        assert current.version == 2
+        with pytest.raises(StateConflictError, match="version conflict"):
+            await provider.store(stale)
 
     @pytest.mark.asyncio
     async def test_capacity_evicts_oldest_and_ttl_zero_is_not_retained(self):

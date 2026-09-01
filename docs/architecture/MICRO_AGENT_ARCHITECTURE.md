@@ -272,9 +272,10 @@ policy validation
 The custom reference runtime can back these operation reservations and results
 with Redis by setting `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`; the local registry
 remains the dependency-free default. The shared provider uses atomic claims and
-TTL expiry, scopes keys by verified tenant when available, and leaves
-optimistic versioning plus session/memory tenant isolation to the remaining
-backlog work.
+TTL expiry, and scopes keys by verified tenant when available. Session and
+memory snapshots carry monotonically increasing versions; providers reject
+stale non-zero-version writes while retaining a zero-version compatibility
+path.
 
 ---
 

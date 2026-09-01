@@ -308,9 +308,10 @@ policy validation before side-effect execution
 
 The custom runtime's optional Redis operation registry shares claims and
 completed results across replicas (`MICRO_AGENT_IDEMPOTENCY_ENDPOINT`) and
-expires them with a provider TTL. Keys are scoped by verified tenant when
-available; optimistic versioning and tenant isolation for session/memory state
-remain open, and the Google ADK adapter rejects the binding until mapped.
+expires them with a provider TTL. Operation, session, and memory keys are
+scoped by verified tenant when available; snapshots carry optimistic versions
+and stale non-zero-version writes are rejected. The Google ADK adapter rejects
+the binding until mapped.
 
 ### Factor 20 — Standard Interoperability
 

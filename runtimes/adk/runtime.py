@@ -76,6 +76,18 @@ async def _maybe_await(value: _T | Awaitable[_T]) -> _T:
     return value
 
 
+def _call_with_supported_kwargs(method: Any, *args: Any, **kwargs: Any) -> Any:
+    """Call an optional provider extension without breaking legacy providers."""
+    try:
+        parameters = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return method(*args, **kwargs)
+    if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
+        return method(*args, **kwargs)
+    supported = {name: value for name, value in kwargs.items() if name in parameters}
+    return method(*args, **supported)
+
+
 @dataclass(frozen=True)
 class _InvocationDeadline:
     """Absolute monotonic deadline shared by every invocation operation."""
@@ -552,6 +564,11 @@ class AdkRuntime(AgentRuntime):
         )
 
         bound_identity = get_invocation_identity()
+        tenant_id = (
+            bound_identity.user.tenant_id
+            if bound_identity is not None and bound_identity.user is not None
+            else None
+        )
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
@@ -573,10 +590,17 @@ class AdkRuntime(AgentRuntime):
         # persisted.
         history_tail_length = 0
         if session_provider is not None and session_id:
-            session = await deadline.run(session_provider.get(session_id))
+            session = await deadline.run(
+                _call_with_supported_kwargs(session_provider.get, session_id, tenant_id=tenant_id)
+            )
             if session is None:
                 session = await deadline.run(
-                    session_provider.create(session_id, ttl_seconds=session_ttl)
+                    _call_with_supported_kwargs(
+                        session_provider.create,
+                        session_id,
+                        ttl_seconds=session_ttl,
+                        tenant_id=tenant_id,
+                    )
                 )
 
         inner_start = time.monotonic()
@@ -778,7 +802,8 @@ class AdkRuntime(AgentRuntime):
             and (self._config.memory_policy or MemoryPolicy()).auto_store
         ):
             await deadline.run(
-                memory_provider.store(
+                _call_with_supported_kwargs(
+                    memory_provider.store,
                     MemoryEntry(
                         key=f"invocation:{request.request_id or uuid4()}",
                         value={
@@ -786,7 +811,8 @@ class AdkRuntime(AgentRuntime):
                             "output": response.content,
                         },
                         scope=memory_scope,
-                    )
+                        tenant_id=tenant_id,
+                    ),
                 )
             )
 

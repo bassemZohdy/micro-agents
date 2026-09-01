@@ -7,6 +7,7 @@ from micro_agent.memory.memory import (
     MemoryProvider,
 )
 from micro_agent.memory.redis import RedisMemoryProvider
+from micro_agent.state import ConcurrencyConflictError, StateConflictError
 
 __all__ = [
     "InMemoryMemoryProvider",
@@ -14,4 +15,6 @@ __all__ = [
     "MemoryPolicy",
     "MemoryProvider",
     "RedisMemoryProvider",
+    "ConcurrencyConflictError",
+    "StateConflictError",
 ]
