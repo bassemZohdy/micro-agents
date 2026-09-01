@@ -48,6 +48,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   audit decisions. The custom runtime suppresses whole-invocation retries once
   a non-read-only tool starts, preventing a later model or operation-record
   failure from replaying an unknown write outcome.
+- Added definition-level retry controls: bounded retry attempts and wall-clock
+  budgets, exponential backoff, and optional jitter. Defaults preserve the
+  existing single immediate retry; circuit breaking and a configurable
+  retryable-error taxonomy remain open follow-up work.
 
 ### Bootstrap
 

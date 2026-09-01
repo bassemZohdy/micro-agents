@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 523 collected | Full local run: 523 passed, 2 skipped; default selector: 437 passed, 2 skipped, 86 deselected. CI separately runs the Redis-backed integration, Google ADK, and OpenTelemetry jobs when their extras/services are available |
+| Tests | 526 collected | Full local run: 526 passed, 2 skipped; default selector: 438 passed, 2 skipped, 88 deselected. CI separately runs the Redis-backed integration, Google ADK, and OpenTelemetry jobs when their extras/services are available |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -132,6 +132,9 @@ Implemented:
   discovered tools to `unsafe`
 - the custom runtime suppresses whole-invocation retries after a non-read-only
   tool starts, including failures while recording its operation result
+- retry attempts are bounded by definition-level attempt and wall-clock
+  budgets, with exponential backoff and optional jitter; defaults preserve one
+  immediate retry
 
 Current custom-runtime capability matrix:
 
@@ -150,7 +153,8 @@ Gaps:
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
 - retry budgets/backoff, circuit breaking, and crash / replay reconciliation
-  are not yet implemented; side-effect suppression is intentionally
+  are not yet fully implemented: circuit breaking and an explicit retryable
+  error taxonomy remain open, while side-effect suppression is intentionally
   conservative and does not infer that a write completed
 
 ### Models and tools

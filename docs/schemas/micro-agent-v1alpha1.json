@@ -657,6 +657,44 @@
           "$ref": "#/$defs/ErrorPolicy",
           "default": "fail"
         },
+        "retry_max_attempts": {
+          "default": 1,
+          "description": "Maximum retries after the initial failure (when error_policy is retry).",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Retry Max Attempts",
+          "type": "integer"
+        },
+        "retry_backoff_seconds": {
+          "default": 0.0,
+          "description": "Base delay before retries; each retry doubles the delay.",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Retry Backoff Seconds",
+          "type": "number"
+        },
+        "retry_jitter_seconds": {
+          "default": 0.0,
+          "description": "Maximum random delay added to each retry backoff.",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Retry Jitter Seconds",
+          "type": "number"
+        },
+        "retry_budget_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional wall-clock budget for retry delays and attempts.",
+          "title": "Retry Budget Seconds"
+        },
         "capabilities": {
           "description": "Declared runtime capabilities.",
           "items": {

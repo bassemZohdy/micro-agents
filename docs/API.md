@@ -133,6 +133,9 @@ Operation objects carry the mapped retry classification (`safe`, `idempotent`,
 or `unsafe`) into registry and audit hooks for downstream dispatch decisions.
 The custom runtime suppresses whole-invocation retries after a non-read-only
 tool starts, so a later model failure cannot replay an unknown write outcome.
+Before any side effect, `error_policy: retry` uses the definition's bounded
+attempt count, exponential backoff, optional jitter, and retry wall-clock
+budget; the default remains one immediate retry for compatibility.
 Keys are tenant-scoped when a verified tenant identity is available (local or
 unverified calls retain the legacy provider-wide namespace). Session and memory
 records carry the same optional `tenant_id` boundary and a monotonically
