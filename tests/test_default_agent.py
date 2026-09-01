@@ -23,7 +23,13 @@ from micro_agent.definition import (
     InputContract,
     load_definition_from_dict,
 )
-from micro_agent.interoperability import create_app, serialize_response
+from micro_agent.interoperability import (
+    API_VERSION,
+    API_VERSION_HEADER,
+    RateLimitDecision,
+    create_app,
+    serialize_response,
+)
 from micro_agent.interoperability.a2a import a2a_well_known_path
 from micro_agent.observability import HealthChecker, HealthStatus
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
@@ -87,6 +93,27 @@ class TimeoutRuntime(ControlledRuntime):
 
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
         raise TimeoutError("invocation deadline exceeded")
+
+
+class DenyRateLimiter:
+    """Synchronous limiter used to verify the HTTP integration contract."""
+
+    def check(self, request):
+        return RateLimitDecision(allowed=False, retry_after_seconds=7, limit=10, remaining=0)
+
+
+class FailingRateLimiter:
+    """Limiter failure must become a generic dependency response."""
+
+    def check(self, request):
+        raise RuntimeError("backend credentials must not leak")
+
+
+class AsyncAllowRateLimiter:
+    """Asynchronous boolean responses are supported by the limiter hook."""
+
+    async def check(self, request):
+        return True
 
 
 class ErrorRuntime(ControlledRuntime):
@@ -567,6 +594,102 @@ class TestHTTPServer:
             data = resp.json()
             assert data["status"] == "success"
             assert UUID(data["request_id"])
+            assert resp.headers[API_VERSION_HEADER] == API_VERSION
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_cors_preflight_uses_explicit_allowlist(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, cors_origins=["https://console.example"])
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.options(
+                "/v1/invoke",
+                headers={
+                    "Origin": "https://console.example",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type",
+                },
+            )
+            assert resp.status_code == 200
+            assert resp.headers["access-control-allow-origin"] == "https://console.example"
+            assert resp.headers[API_VERSION_HEADER] == API_VERSION
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_cors_allowlist_rejects_mixed_wildcard(self, agent):
+        with pytest.raises(ValueError, match="cannot mix"):
+            create_app(agent, cors_origins=["*", "https://console.example"])
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_returns_stable_429(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, rate_limiter=DenyRateLimiter())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 429
+            assert resp.headers["retry-after"] == "7"
+            assert resp.headers["x-ratelimit-limit"] == "10"
+            assert resp.headers["x-ratelimit-remaining"] == "0"
+            assert resp.json()["detail"] == {
+                "code": "rate_limited",
+                "message": "Rate limit exceeded",
+                "retry_after_seconds": 7,
+            }
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_failure_does_not_leak_details(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, rate_limiter=FailingRateLimiter())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 503
+            assert resp.json()["detail"] == {
+                "code": "rate_limiter_unavailable",
+                "message": "Rate limiter unavailable",
+            }
+            assert "backend credentials" not in resp.text
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_accepts_async_boolean(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, rate_limiter=AsyncAllowRateLimiter())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/v1/invoke", json={"input": {}})
+            assert resp.status_code == 200
+        await agent.stop()
+        await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_streaming_request_rejected_when_runtime_lacks_capability(self, agent):
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/invoke",
+                headers={"Accept": "text/event-stream"},
+                json={"input": {}},
+            )
+            assert resp.status_code == 406
+            assert resp.json()["detail"] == {
+                "code": "streaming_unsupported",
+                "message": "Streaming is not supported by this runtime",
+            }
         await agent.stop()
         await agent.shutdown()
 
@@ -733,6 +856,12 @@ class TestHTTPServer:
             assert data["agent_name"] == "test-agent"
             assert len(data["skills"]) == 1
             assert data["capabilities"]["checkpointing"] is False
+            assert resp.headers[API_VERSION_HEADER] == API_VERSION
+            versioned_openapi = await client.get("/v1/openapi.json")
+            assert versioned_openapi.status_code == 200
+            assert versioned_openapi.json()["info"]["title"] == "test-agent"
+            legacy_openapi = await client.get("/openapi.json")
+            assert legacy_openapi.status_code == 200
         await agent.stop()
         await agent.shutdown()
 

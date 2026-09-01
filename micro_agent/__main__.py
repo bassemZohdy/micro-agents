@@ -62,6 +62,7 @@ async def run(args: argparse.Namespace) -> None:
         telemetry=telemetry,
         authenticator=build_authenticator(bootstrap.resolved),
         audit_sink=build_audit_sink(bootstrap.resolved),
+        cors_origins=bootstrap.resolved.cors_origins or None,
     )
 
     config = uvicorn.Config(

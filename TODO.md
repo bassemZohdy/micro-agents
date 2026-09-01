@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `283be4f` on 2026-09-01. Completed work is removed rather
+Baseline audited: `a2f0e64` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -218,9 +218,10 @@ state through an external service under concurrent load.
 - [x] Map authorization, timeout, dependency, and internal errors to stable
       response contracts without leaking exception details.
 - [x] Add a default request-size guard.
-- [ ] Add CORS policy, rate-limiting integration points, and streaming only
-      when runtime-supported.
-- [ ] Document and version the public API.
+- [x] Add an opt-in CORS policy and rate-limiting integration point; reject
+      streaming negotiation when the selected runtime does not advertise it.
+- [x] Document and version the public API, including versioned OpenAPI routes
+      and a compatibility alias for the legacy OpenAPI URL.
 
 ### P1.7 OpenTelemetry and operational observability
 

@@ -4,6 +4,17 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### HTTP and API compatibility
+
+- Versioned the native OpenAPI surface under `/v1` and added an API-version
+  response header while retaining `/openapi.json` as a compatibility alias.
+  CORS is disabled by default but supports explicit allowlists through
+  `create_app()` or `MICRO_AGENT_CORS_ORIGINS`.
+- Added an injectable synchronous/asynchronous `RateLimiter` hook with stable
+  429/503 contracts, retry guidance, and optional rate-limit headers. Requests
+  asking for `text/event-stream` are rejected when the selected runtime does
+  not advertise streaming; no unsupported streaming capability is claimed.
+
 ### Bootstrap
 
 - Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,

@@ -5,10 +5,11 @@ Exposes a Micro-Agent as an independent network service.
 
 from __future__ import annotations
 
+import inspect
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -140,11 +141,110 @@ ROUTES = {
     "GET /v1/capabilities": "Agent capabilities",
 }
 
+API_VERSION = "v1"
+API_VERSION_HEADER = "X-Micro-Agent-API-Version"
+STREAMING_MEDIA_TYPE = "text/event-stream"
 DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 
 # Routes that require a verified caller identity when an authenticator is
 # configured. Health probes and the A2A discovery card stay public by design.
 AUTHENTICATED_PATHS = frozenset({"/v1/invoke"})
+
+
+@dataclass(frozen=True)
+class RateLimitDecision:
+    """Result returned by an injected HTTP rate limiter.
+
+    ``retry_after_seconds`` is exposed as ``Retry-After`` when a request is
+    rejected.  ``limit`` and ``remaining`` are optional hints for clients;
+    the framework does not implement a storage or windowing algorithm.
+    """
+
+    allowed: bool
+    retry_after_seconds: int = 1
+    limit: int | None = None
+    remaining: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.retry_after_seconds < 0:
+            raise ValueError("retry_after_seconds must be non-negative")
+        if self.limit is not None and self.limit < 1:
+            raise ValueError("limit must be greater than zero")
+        if self.remaining is not None and self.remaining < 0:
+            raise ValueError("remaining must be non-negative")
+
+
+RateLimitCheckResult = RateLimitDecision | bool | Awaitable[RateLimitDecision | bool]
+
+
+class RateLimiter(Protocol):
+    """Optional request-level rate limiting integration point.
+
+    Implementations may be synchronous or asynchronous and should key limits
+    using verified request identity where available.  No default limiter is
+    installed, so deployments opt in to their chosen distributed policy.
+    """
+
+    def check(self, request: Request) -> RateLimitCheckResult:
+        """Return whether this request may proceed."""
+
+
+def _validate_cors_origins(origins: Sequence[str] | None) -> list[str]:
+    """Validate and normalize an explicit CORS allowlist."""
+    if not origins:
+        return []
+    normalized = [origin.strip() for origin in origins]
+    if any(not origin for origin in normalized):
+        raise ValueError("cors_origins must not contain empty origins")
+    if "*" in normalized and len(normalized) > 1:
+        raise ValueError("cors_origins cannot mix '*' with explicit origins")
+    if "*" in normalized:
+        return normalized
+    from urllib.parse import urlsplit
+
+    for origin in normalized:
+        parsed = urlsplit(origin)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("cors_origins entries must be absolute http(s) origins without a path")
+    return normalized
+
+
+async def _resolve_rate_limit(result: RateLimitCheckResult) -> RateLimitDecision:
+    """Normalize sync/async limiter responses into a validated decision."""
+    value: Any = result
+    if inspect.isawaitable(value):
+        value = await value
+    if isinstance(value, bool):
+        return RateLimitDecision(allowed=value)
+    if not isinstance(value, RateLimitDecision):
+        raise TypeError("rate limiter must return bool or RateLimitDecision")
+    return value
+
+
+def _accepts_streaming(request: Request) -> bool:
+    """Return whether the client explicitly requests an event stream."""
+    accept = request.headers.get("accept", "")
+    for media_range in accept.split(","):
+        parts = [part.strip() for part in media_range.split(";")]
+        if not parts or parts[0].lower() != STREAMING_MEDIA_TYPE:
+            continue
+        quality = 1.0
+        for parameter in parts[1:]:
+            name, separator, value = parameter.partition("=")
+            if separator and name.strip().lower() == "q":
+                try:
+                    quality = float(value.strip())
+                except ValueError:
+                    quality = 0.0
+        if quality > 0:
+            return True
+    return False
 
 
 def serialize_response(data: Any) -> str:
@@ -169,6 +269,8 @@ def create_app(
     max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
     authenticator: Authenticator | None = None,
     audit_sink: AuditSink | None = None,
+    cors_origins: Sequence[str] | None = None,
+    rate_limiter: RateLimiter | None = None,
 ) -> FastAPI:
     """Create a FastAPI application for a Micro-Agent.
 
@@ -178,6 +280,7 @@ def create_app(
     """
     if max_request_bytes < 1:
         raise ValueError("max_request_bytes must be greater than zero")
+    allowed_cors_origins = _validate_cors_origins(cors_origins)
 
     identity_requirements = agent.definition.spec.security.identity_requirements
     if identity_requirements.get("require_caller_identity") and authenticator is None:
@@ -192,7 +295,26 @@ def create_app(
         title=agent.definition.metadata.name,
         version=agent.definition.metadata.version,
         description=agent.definition.metadata.description or "",
+        openapi_url=f"/{API_VERSION}/openapi.json",
+        docs_url=f"/{API_VERSION}/docs",
+        redoc_url=f"/{API_VERSION}/redoc",
     )
+    if allowed_cors_origins:
+        from starlette.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_cors_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-A2A-Version",
+                "X-Request-ID",
+            ],
+            expose_headers=[API_VERSION_HEADER, "Retry-After"],
+        )
     checker = health_checker or HealthChecker()
     telemetry = telemetry or Telemetry()
     telemetry.logger.set_context(
@@ -311,10 +433,56 @@ def create_app(
                 )
         return await call_next(request)
 
+    @app.middleware("http")
+    async def add_api_version_header(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Advertise the wire API version on every response."""
+        response = await call_next(request)
+        response.headers[API_VERSION_HEADER] = API_VERSION
+        return response
+
     @app.post("/v1/invoke", response_model=InvokeResponseModel)
     async def invoke(request: InvokeRequestModel, http_request: Request) -> InvokeResponseModel:
         telemetry.increment("http_requests_total", {"route": "/v1/invoke", "method": "POST"})
         identity: AuthenticatedIdentity | None = getattr(http_request.state, "identity", None)
+        if _accepts_streaming(http_request) and not agent.runtime_capabilities.streaming:
+            telemetry.increment("http_streaming_rejections_total", {"route": "/v1/invoke"})
+            raise HTTPException(
+                status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                detail={
+                    "code": "streaming_unsupported",
+                    "message": "Streaming is not supported by this runtime",
+                },
+            )
+        if rate_limiter is not None:
+            try:
+                decision = await _resolve_rate_limit(rate_limiter.check(http_request))
+            except Exception as exc:  # noqa: BLE001 — stable integration failure contract
+                telemetry.increment("http_rate_limit_failures_total", {"route": "/v1/invoke"})
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail={
+                        "code": "rate_limiter_unavailable",
+                        "message": "Rate limiter unavailable",
+                    },
+                ) from exc
+            if not decision.allowed:
+                telemetry.increment("http_rate_limit_rejections_total", {"route": "/v1/invoke"})
+                headers = {"Retry-After": str(decision.retry_after_seconds)}
+                if decision.limit is not None:
+                    headers["X-RateLimit-Limit"] = str(decision.limit)
+                if decision.remaining is not None:
+                    headers["X-RateLimit-Remaining"] = str(decision.remaining)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers=headers,
+                    detail={
+                        "code": "rate_limited",
+                        "message": "Rate limit exceeded",
+                        "retry_after_seconds": decision.retry_after_seconds,
+                    },
+                )
         agent_request = AgentRequest(
             input=request.input,
             session_id=request.session_id,
@@ -437,5 +605,10 @@ def create_app(
             skills=skills,
             capabilities=caps.as_dict(),
         )
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def legacy_openapi() -> JSONResponse:
+        """Keep the pre-versioned OpenAPI URL as a compatibility alias."""
+        return JSONResponse(app.openapi())
 
     return app

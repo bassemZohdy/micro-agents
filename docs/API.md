@@ -1,6 +1,10 @@
 # HTTP API
 
-The current API is pre-release and unversioned beyond the `/v1` path.
+The native HTTP API is versioned as `v1`. Native resource paths use the
+`/v1/` prefix, the generated OpenAPI document is available at
+`/v1/openapi.json`, and every response advertises
+`X-Micro-Agent-API-Version: v1`. The old `/openapi.json` URL remains a
+read-only compatibility alias; new clients should use the versioned URL.
 
 ## Endpoints
 
@@ -10,6 +14,9 @@ The current API is pre-release and unversioned beyond the `/v1` path.
 | `GET /health/live` | process liveness | always healthy unless changed programmatically |
 | `GET /health/ready` | dependency readiness | returns 200 when ready and 503 when unhealthy; configured model, state, and declared MCP providers are probed before startup readiness |
 | `GET /v1/capabilities` | runtime/skill metadata | reports the runtime capability matrix, not end-to-end readiness |
+| `GET /v1/openapi.json` | versioned OpenAPI document | describes the native HTTP and A2A routes |
+| `GET /v1/docs` | Swagger UI | interactive documentation for the versioned API |
+| `GET /v1/redoc` | ReDoc | alternative documentation for the versioned API |
 | `GET /.well-known/agent-card.json` | standard A2A agent card | served from the official SDK card model |
 | `POST /` | A2A JSON-RPC `message/send` | available when `spec.interoperability.a2a.enabled` is true; non-streaming tasks only |
 
@@ -37,6 +44,51 @@ deployment gateway should apply the same limit and reject chunked requests
 that exceed it; applications can choose a smaller limit with the
 `max_request_bytes` factory argument.
 
+### CORS
+
+CORS is disabled by default. Deployments that serve a browser client can pass
+an explicit allowlist to `create_app(cors_origins=[...])`, or set the
+comma-separated `MICRO_AGENT_CORS_ORIGINS` environment variable for the
+executable bootstrap. Entries must be absolute `http` or `https` origins;
+`*` is allowed as the sole entry. Credentials are never enabled by this
+default policy, so browser authentication should use a same-site gateway or a
+deployment-specific middleware with an explicit credential policy.
+
+Only `GET`, `POST`, and `OPTIONS` are allowed cross-origin. The API version and
+retry headers are exposed to browser clients.
+
+### Rate limiting
+
+The framework does not choose a rate-limit algorithm or local counter. Pass a
+deployment-owned `RateLimiter` implementation to
+`create_app(rate_limiter=...)`. Its `check(request)` method may be synchronous
+or asynchronous and returns either a boolean or `RateLimitDecision`:
+
+```python
+from micro_agent.interoperability import RateLimitDecision, create_app
+
+
+class DistributedLimiter:
+    async def check(self, request):
+        allowed, remaining = await reserve_from_gateway(request)
+        return RateLimitDecision(
+            allowed=allowed,
+            retry_after_seconds=5,
+            limit=100,
+            remaining=remaining,
+        )
+
+
+app = create_app(agent, rate_limiter=DistributedLimiter())
+```
+
+Rejected requests return HTTP 429 with `detail.code: rate_limited`, a
+`Retry-After` header, and optional `X-RateLimit-Limit` /
+`X-RateLimit-Remaining` headers. Limiter failures return the generic
+`rate_limiter_unavailable` HTTP 503 contract. Health and discovery routes are
+not rate-limited by this hook. Use a shared gateway or datastore for limits
+across replicas.
+
 ## OpenAI-compatible model calls
 
 When the selected model provider is OpenAI-compatible, the configured endpoint
@@ -54,6 +106,13 @@ invocation. The runtime uses the shortest of the request deadline, the
 definition's overall timeout, and each model/tool timeout. Cancellation of any
 in-flight model, tool (including MCP adapters), session, or memory operation
 releases its resources and propagates to that provider.
+
+The current invoke wire format is JSON only. A request with
+`Accept: text/event-stream` receives HTTP 406 and `detail.code:
+streaming_unsupported` when the selected runtime advertises
+`streaming: false`. The default and current built-in runtimes advertise
+`streaming: false`; no streaming response endpoint is claimed until an adapter
+implements it.
 
 ## Distributed operation idempotency
 

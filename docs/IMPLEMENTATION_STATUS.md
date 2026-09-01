@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-01
-Documentation-audit baseline: `283be4f94d08913169e931efb151f3c5e3c0a1c2`
-Cleanup verification baseline: `283be4f94d08913169e931efb151f3c5e3c0a1c2`
+Documentation-audit baseline: `a2f0e64c71fc7bbddf4ed9ac961c11bf5da01bf4`
+Cleanup verification baseline: `a2f0e64c71fc7bbddf4ed9ac961c11bf5da01bf4`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 499 base collected | 421 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 78 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests when the `redis` extra is installed |
+| Tests | 507 base collected | 429 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, HTTP policy hooks, MCP SDK interop, and wire-protocol tests); 78 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests when the `redis` extra is installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -337,11 +337,21 @@ Implemented:
   `continuation_not_found` contract; `approval_required` responses carry a
   continuation id and pending tool names
 - configurable `Content-Length` request-size guard (1 MiB default)
+- versioned `/v1/openapi.json`, `/v1/docs`, and `/v1/redoc` routes with an
+  `X-Micro-Agent-API-Version` response header; `/openapi.json` remains a
+  compatibility alias
+- opt-in CORS allowlists from `create_app()` or `MICRO_AGENT_CORS_ORIGINS`,
+  with credentials disabled by default
+- injected synchronous/asynchronous `RateLimiter` hook with stable 429/503
+  contracts and retry/rate-limit headers
+- streaming negotiation rejects `text/event-stream` when the selected runtime
+  does not advertise streaming; no unsupported stream is claimed
 - structured logger, in-memory metrics, and in-memory span tree
 
 Gaps:
 
-- no response streaming
+- no response streaming implementation; runtimes currently advertise
+  `streaming: false`
 - telemetry is not OpenTelemetry and does not propagate standard trace context
 
 ### Packaging, release, and deployment

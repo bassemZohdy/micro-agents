@@ -191,7 +191,7 @@ state, or A2A task interoperability.
 | State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
-| Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
+| Operations | container, package/release gates, versioned OpenAPI, request-size guard, opt-in CORS, rate-limit hook, and sample manifests | production bootstrap and OpenShift hardening |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.
@@ -221,7 +221,7 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current base suite contains 499 collected tests: 421 in the default
+The current base suite contains 507 collected tests: 429 in the default
 development selection and 78 integration tests (five also tagged E2E). The
 Redis extra adds three live integration tests in the Redis-enabled CI job, and the
 optional Google ADK adapter adds 14 tests when that extra is installed. CI runs
