@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `f2eab76` on 2026-09-01. Completed work is removed rather
+Baseline audited: `283be4f` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -188,16 +188,18 @@ and the transcript can be replayed from session storage.
 ### P1.5 Production state providers
 
 - [x] Add a concurrency-safe PostgreSQL or Redis session provider (Redis).
-- [ ] Add production memory and operational/idempotency providers.
+- [x] Add production memory and operational/idempotency providers.
   - [x] Add Redis-backed production memory with scoped records and retention
         policy enforcement.
-  - [ ] Add a distributed operational/idempotency provider.
+  - [x] Add a distributed operational/idempotency provider for the custom
+        runtime using Redis atomic claims, TTLs, health probes, and lifecycle
+        close behavior.
 - [ ] Add optimistic concurrency/versioning and tenant isolation.
 - [x] Purge expired in-memory entries consistently and validate memory policy
       bounds.
 - [x] Add locking or clearly restrict the SQLite provider to single-process
       development use.
-- [ ] Close providers during shutdown and probe them for readiness.
+- [x] Close providers during shutdown and probe them for readiness.
 
 Acceptance: two independent service processes share session and idempotency
 state through an external service under concurrent load.
@@ -229,7 +231,7 @@ state through an external service under concurrent load.
 
 - [ ] Classify tools as read-only, idempotent, or unsafe instead of treating
       every tool as a side effect.
-- [ ] Persist idempotency records atomically with status and expiry.
+- [x] Persist Redis idempotency records atomically with status and expiry.
 - [ ] Do not retry an entire invocation after an unknown write outcome.
 - [ ] Add backoff, jitter, retry budgets, circuit breaking, and error
       classification.

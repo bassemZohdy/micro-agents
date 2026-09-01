@@ -269,6 +269,12 @@ approval
 policy validation
 ```
 
+The custom reference runtime can back these operation reservations and results
+with Redis by setting `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`; the local registry
+remains the dependency-free default. The shared provider uses atomic claims and
+TTL expiry, while tenant isolation and optimistic versioning remain deployment
+responsibilities until their backlog work is complete.
+
 ---
 
 ## 13. Cloud-Native Principles

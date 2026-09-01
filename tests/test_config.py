@@ -44,6 +44,11 @@ class TestResolveConfig:
         config = resolve_config()
         assert config.model_endpoint == "https://env.example.com"
 
+    def test_idempotency_endpoint_environment_override(self, monkeypatch):
+        monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://redis.example.test/0")
+        config = resolve_config()
+        assert config.idempotency_endpoint == "redis://redis.example.test/0"
+
     def test_environment_log_level_override(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_LOG_LEVEL", "DEBUG")
         config = resolve_config()
@@ -158,12 +163,14 @@ class TestEnvironmentOverlay:
             mcp_endpoints={"rules": "https://staging-mcp.example.com"},
             memory_endpoint="memory://",
             session_endpoint="sqlite:///tmp/staging.db",
+            idempotency_endpoint="redis://staging-redis.example.com/0",
         )
         config = overlay.to_environment_config()
         assert config.model_endpoint == "https://staging-model.example.com/v1"
         assert config.mcp_endpoints == {"rules": "https://staging-mcp.example.com"}
         assert config.memory_endpoint == "memory://"
         assert config.session_endpoint == "sqlite:///tmp/staging.db"
+        assert config.idempotency_endpoint == "redis://staging-redis.example.com/0"
 
     def test_overlay_rejects_non_http_endpoints(self):
         with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):

@@ -15,6 +15,7 @@ Constructed from configuration:
 - telemetry with the configured log level,
 - built-in memory, optional Redis memory, and in-memory/SQLite session providers,
   or an optional Redis external session provider,
+- an optional Redis operation registry for distributed idempotency,
 - a knowledge provider for declared knowledge sources (injected, or the
   built-in in-memory retriever whose startup health check fails fast until a
   deployment supplies documents),
@@ -58,7 +59,13 @@ from micro_agent.models import (
 from micro_agent.observability import FileAuditSink, JsonlAuditSink, NullAuditSink, Telemetry
 from micro_agent.observability.audit import AuditSink
 from micro_agent.runtime import AgentRuntime
-from micro_agent.security import AgentPolicy, CredentialProvider, EnvironmentCredentialProvider
+from micro_agent.security import (
+    AgentPolicy,
+    CredentialProvider,
+    EnvironmentCredentialProvider,
+    OperationRegistryProtocol,
+    RedisOperationRegistry,
+)
 from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
 from micro_agent.session import (
     InMemorySessionProvider,
@@ -166,12 +173,14 @@ def build_runtime(
     else:
         session_provider = _build_session_provider(definition, resolved)
         memory_provider = _build_memory_provider(definition, resolved)
+        operation_registry = _build_operation_registry(resolved)
         runtime = AdkRuntime(
             AdkRuntimeConfig(
                 model_provider=provider,
                 session_provider=session_provider,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                operation_registry=operation_registry,
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
                 policy=effective_policy,
@@ -222,6 +231,11 @@ def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: Reso
         raise BootstrapError(
             "Google ADK runtime does not yet map model credential references; "
             "use the custom runtime or remove the credential reference"
+        )
+    if config.idempotency_endpoint:
+        raise BootstrapError(
+            "Google ADK runtime does not yet map distributed idempotency; use "
+            "the custom runtime for MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
         )
 
 
@@ -427,6 +441,22 @@ def _build_memory_provider(
     raise BootstrapError(
         "external memory provider supports redis:// or rediss:// endpoints; "
         "install the 'redis' extra and configure MICRO_AGENT_MEMORY_ENDPOINT"
+    )
+
+
+def _build_operation_registry(config: ResolvedConfig) -> OperationRegistryProtocol | None:
+    """Construct the optional distributed idempotency registry."""
+    endpoint = config.idempotency_endpoint
+    if not endpoint:
+        return None
+    if endpoint.startswith(("redis://", "rediss://")):
+        try:
+            return RedisOperationRegistry(endpoint=endpoint)
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
+    raise BootstrapError(
+        "external idempotency provider supports redis:// or rediss:// endpoints; "
+        "install the 'redis' extra and configure MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
     )
 
 

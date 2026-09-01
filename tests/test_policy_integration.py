@@ -8,9 +8,11 @@ from micro_agent.models import FakeModelConfig, FakeModelProvider
 from micro_agent.security import (
     AgentPolicy,
     OperationRegistry,
+    RedisOperationRegistry,
     build_security_context,
 )
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+from tests.fake_redis import FakeRedis, FakeRedisBackend
 
 pytestmark = pytest.mark.integration
 
@@ -327,3 +329,38 @@ class TestOperationRegistry:
         second = await runtime.invoke(agent, AgentRequest(input={}, request_id="r2"))
         assert first.output["tool_results"][0].get("was_deduplicated") is not True
         assert second.output["tool_results"][0]["was_deduplicated"] is True
+        await runtime.close()
+
+    @pytest.mark.asyncio
+    async def test_redis_registry_deduplicates_across_runtime_replicas(self):
+        backend = FakeRedisBackend()
+        request = {
+            "name": "echo",
+            "arguments": {"idempotency_key": "shared-1", "message": "hi"},
+        }
+        runtime_a = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=OneShotToolProvider(
+                    FakeModelConfig(response="done", tool_requests=[request])
+                ),
+                operation_registry=RedisOperationRegistry(client=FakeRedis(backend)),
+            )
+        )
+        runtime_b = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=OneShotToolProvider(
+                    FakeModelConfig(response="done", tool_requests=[request])
+                ),
+                operation_registry=RedisOperationRegistry(client=FakeRedis(backend)),
+            )
+        )
+        definition = _definition()
+        agent_a = await runtime_a.create(definition)
+        agent_b = await runtime_b.create(definition)
+        first = await runtime_a.invoke(agent_a, AgentRequest(input={}, request_id="r1"))
+        second = await runtime_b.invoke(agent_b, AgentRequest(input={}, request_id="r2"))
+        assert first.output["tool_results"][0].get("was_deduplicated") is not True
+        assert second.output["tool_results"][0]["was_deduplicated"] is True
+        assert second.output["tool_results"][0]["output"] == {"echoed": "hi"}
+        await runtime_a.close()
+        await runtime_b.close()

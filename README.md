@@ -25,8 +25,9 @@ operated independently.
 - a custom reference agent loop currently located under `runtimes/adk`
 - an optional Google ADK adapter under `runtimes/google_adk`
 - fake and OpenAI-compatible model-provider implementations
-- tool, MCP, session, memory, knowledge, policy, health, and telemetry seams
-  (including optional Redis-backed shared memory and session providers)
+- tool, MCP, session, memory, idempotency, knowledge, policy, health, and
+  telemetry seams (including optional Redis-backed shared memory, session, and
+  operation-registry providers)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
 - container and Kubernetes/OpenShift-oriented deployment examples
 
@@ -145,9 +146,12 @@ bindings (anything other than the optional Redis provider) and model credential
 references fail before startup rather than being silently ignored. Install
 `micro-agents[redis]` and set
 `MICRO_AGENT_SESSION_ENDPOINT=redis://...` for the `external` session mode, or
-`MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for shared memory. Redis writes use
-transactional pipelines and key TTLs so independently scaled processes share
-state.
+`MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for shared memory, and
+`MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` for distributed operation
+deduplication. Redis writes use transactional pipelines and key TTLs so
+independently scaled processes share state. The operation registry currently
+does not provide tenant isolation or optimistic versioning, and the Google ADK
+runtime rejects the idempotency binding until its mapping is implemented.
 
 For an OpenAI-compatible endpoint, keep credentials out of the definition:
 
@@ -182,7 +186,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
-| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions with scoped records, transactional writes, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | distributed idempotency provider, optimistic versioning, and tenant isolation |
+| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with scoped records, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | optimistic versioning, tenant isolation, and Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -215,9 +219,9 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current base suite contains 484 collected tests: 408 in the default
-development selection and 76 integration tests (five also tagged E2E). The
-Redis extra adds two live integration tests in the Redis-enabled CI job, and the
+The current base suite contains 491 collected tests: 414 in the default
+development selection and 77 integration tests (five also tagged E2E). The
+Redis extra adds three live integration tests in the Redis-enabled CI job, and the
 optional Google ADK adapter adds 14 tests when that extra is installed. CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release

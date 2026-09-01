@@ -9,6 +9,7 @@ contracts.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import time
 from collections.abc import Awaitable
@@ -42,7 +43,7 @@ from micro_agent.security import (
     InMemoryApprovalStore,
     InvocationIdentity,
     Operation,
-    OperationRegistry,
+    OperationRegistryProtocol,
     OperationResult,
     PendingApproval,
     PolicyEvaluator,
@@ -66,6 +67,13 @@ class _ApprovalPausedError(Exception):
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 _MAX_SESSION_HISTORY_MESSAGES = 20
 _T = TypeVar("_T")
+
+
+async def _maybe_await(value: _T | Awaitable[_T]) -> _T:
+    """Normalize sync local providers and async external providers."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 @dataclass(frozen=True)
@@ -128,7 +136,7 @@ class AdkRuntimeConfig:
     policy: AgentPolicy | None = None
     audit: AuditSink | None = None
     approval_store: ApprovalStore | None = None
-    operation_registry: OperationRegistry | None = None
+    operation_registry: OperationRegistryProtocol | None = None
     telemetry: Telemetry | None = None
     tool_registry: dict[str, Tool] | None = None
     default_max_iterations: int = 5
@@ -249,6 +257,15 @@ class AdkRuntime(AgentRuntime):
             except Exception as exc:  # noqa: BLE001 — normalize startup failures
                 raise RuntimeError("memory provider failed its health check at startup") from exc
 
+        operation_registry = self._config.operation_registry
+        if operation_registry is not None:
+            try:
+                healthy = await _maybe_await(operation_registry.health_check())
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("operation registry failed its health check at startup") from exc
+            if not healthy:
+                raise RuntimeError("operation registry failed its health check at startup")
+
         knowledge_provider = self._config.knowledge_provider
         if knowledge_provider is not None:
             for source in self._knowledge_refs:
@@ -336,15 +353,19 @@ class AdkRuntime(AgentRuntime):
         """Release runtime-level resources (model, state, knowledge, and MCP)."""
         aclose = getattr(self._model_provider, "aclose", None)
         if aclose is not None:
-            await aclose()
-        for provider in (self._config.session_provider, self._config.memory_provider):
+            await _maybe_await(aclose())
+        for provider in (
+            self._config.session_provider,
+            self._config.memory_provider,
+            self._config.operation_registry,
+        ):
             provider_close = getattr(provider, "aclose", None)
             if provider_close is not None:
-                await provider_close()
+                await _maybe_await(provider_close())
         if self._config.knowledge_provider is not None:
             knowledge_close = getattr(self._config.knowledge_provider, "aclose", None)
             if knowledge_close is not None:
-                await knowledge_close()
+                await _maybe_await(knowledge_close())
         if self._config.mcp_manager is not None:
             await self._config.mcp_manager.aclose()
 
@@ -380,6 +401,14 @@ class AdkRuntime(AgentRuntime):
             probes["session"] = _session_probe
         if self._config.memory_provider is not None:
             probes["memory"] = _memory_probe
+        operation_registry = self._config.operation_registry
+
+        async def _operation_probe() -> HealthStatus | bool:
+            assert operation_registry is not None
+            return await _maybe_await(operation_registry.health_check())
+
+        if operation_registry is not None:
+            probes["operation_registry"] = _operation_probe
         if knowledge_provider is not None:
             probes["knowledge"] = _knowledge_probe
         if self._config.mcp_manager is not None:
@@ -942,14 +971,30 @@ class AdkRuntime(AgentRuntime):
             operation = None
             if registry is not None:
                 operation = _new_operation(tool_name, arguments)
-                if registry.is_duplicate(operation):
-                    prior = registry.find_by_idempotency_key(operation.idempotency_key or "")
+                claim = getattr(registry, "claim", None)
+                if callable(claim):
+                    claimed, prior = await _maybe_await(claim(operation))
+                else:
+                    duplicate = await _maybe_await(registry.is_duplicate(operation))
+                    prior = (
+                        await _maybe_await(
+                            registry.find_by_idempotency_key(operation.idempotency_key or "")
+                        )
+                        if duplicate
+                        else None
+                    )
+                    claimed = not duplicate
+                if not claimed:
                     results.append(
                         {
                             "tool": tool_name,
                             "tool_call_id": tool_call_id,
                             "output": prior.output if prior else None,
-                            "error": None,
+                            "error": (
+                                "operation is already in progress"
+                                if prior is not None and prior.status == "in_progress"
+                                else (prior.error if prior else None)
+                            ),
                             "latency_ms": 0.0,
                             "was_deduplicated": True,
                         }
@@ -983,13 +1028,16 @@ class AdkRuntime(AgentRuntime):
                 error = str(exc)
 
             if registry is not None and operation is not None:
-                registry.record(
-                    operation,
-                    OperationResult(
-                        operation_id=operation.operation_id,
-                        output=output,
-                        error=error,
-                    ),
+                await _maybe_await(
+                    registry.record(
+                        operation,
+                        OperationResult(
+                            operation_id=operation.operation_id,
+                            status="failed" if error else "success",
+                            output=output,
+                            error=error,
+                        ),
+                    )
                 )
 
             tool_latency = round((time.monotonic() - tool_start) * 1000, 2)

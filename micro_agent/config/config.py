@@ -34,6 +34,7 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     mcp_endpoints: dict[str, str] = Field(default_factory=dict)
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
+    idempotency_endpoint: str | None = None
     log_level: str | None = None
     auth: str | None = None
     auth_issuer: str | None = None
@@ -56,6 +57,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     mcp_endpoints: dict[str, str] = Field(default_factory=dict)
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
+    idempotency_endpoint: str | None = None
 
     @classmethod
     def _validate_http_endpoint(cls, value: str, field_name: str) -> str:
@@ -87,6 +89,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             mcp_endpoints=dict(self.mcp_endpoints),
             memory_endpoint=self.memory_endpoint,
             session_endpoint=self.session_endpoint,
+            idempotency_endpoint=self.idempotency_endpoint,
         )
 
 
@@ -105,6 +108,7 @@ class ResolvedConfig:
     mcp_endpoints: dict[str, str] = field(default_factory=dict)
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
+    idempotency_endpoint: str | None = None
     log_level: str = "INFO"
     auth: str | None = None
     auth_issuer: str | None = None
@@ -181,6 +185,8 @@ def resolve_config(
             config.memory_endpoint = env_config.memory_endpoint
         if env_config.session_endpoint:
             config.session_endpoint = env_config.session_endpoint
+        if env_config.idempotency_endpoint:
+            config.idempotency_endpoint = env_config.idempotency_endpoint
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
         if env_config.auth:
@@ -227,6 +233,10 @@ def resolve_config(
     env_session_endpoint = _read_env("session_endpoint")
     if env_session_endpoint:
         config.session_endpoint = env_session_endpoint
+
+    env_idempotency_endpoint = _read_env("idempotency_endpoint")
+    if env_idempotency_endpoint:
+        config.idempotency_endpoint = env_idempotency_endpoint
 
     env_auth = _read_env("auth")
     if env_auth:

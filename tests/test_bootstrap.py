@@ -7,7 +7,7 @@ from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
-from micro_agent.security import AgentPolicy
+from micro_agent.security import AgentPolicy, RedisOperationRegistry
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
 from runtimes.adk import AdkRuntime
 from runtimes.google_adk import GoogleAdkRuntime
@@ -348,6 +348,35 @@ async def test_external_redis_memory_is_constructed(monkeypatch):
         assert provider._endpoint == "redis://memory.example.test/0"
     finally:
         await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_external_redis_idempotency_registry_is_constructed(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        pass
+
+    fake_client = FakeRedisClient()
+    monkeypatch.setattr(
+        "micro_agent.security.redis_operations._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: fake_client),
+    )
+    monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://operations.example.test/0")
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        registry = bootstrap.runtime._config.operation_registry
+        assert isinstance(registry, RedisOperationRegistry)
+        assert registry._endpoint == "redis://operations.example.test/0"
+    finally:
+        await bootstrap.runtime.close()
+
+
+def test_google_adk_rejects_distributed_idempotency(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://operations.example.test/0")
+    with pytest.raises(BootstrapError, match="does not yet map distributed idempotency"):
+        build_runtime(_definition(provider="fake"))
 
 
 def test_state_endpoint_without_definition_is_not_silently_ignored(monkeypatch):

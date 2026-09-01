@@ -42,9 +42,11 @@ from micro_agent.security.propagation import (
     resolve_workload_identity,
     set_invocation_identity,
 )
+from micro_agent.security.redis_operations import RedisOperationRegistry
 from micro_agent.security.side_effects import (
     Operation,
     OperationRegistry,
+    OperationRegistryProtocol,
     OperationResult,
     RetryClassification,
 )
@@ -63,6 +65,7 @@ __all__ = [
     "InvocationIdentity",
     "Operation",
     "OperationRegistry",
+    "OperationRegistryProtocol",
     "OperationResult",
     "PolicyDecision",
     "PolicyEffect",
@@ -70,6 +73,7 @@ __all__ = [
     "PendingApproval",
     "PolicyRule",
     "RetryClassification",
+    "RedisOperationRegistry",
     "RuntimeIdentity",
     "SecurityContext",
     "StaticCredentialProvider",
