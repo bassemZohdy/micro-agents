@@ -24,6 +24,14 @@ All notable changes to the Micro-Agents project are documented in this file.
   approve/deny decision, and approved tools execute exactly once. Added an
   ADK integration test for the pause/resume flow.
 
+### Observability
+
+- Added an opt-in OpenTelemetry bridge for traces and metrics with W3C
+  trace-context propagation on HTTP requests. Content attributes are omitted
+  by default, attribute values are bounded, and metric labels use a bounded
+  cardinality policy. Existing in-memory telemetry remains available when
+  the optional `otel` extra is not installed.
+
 ### Bootstrap
 
 - Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,

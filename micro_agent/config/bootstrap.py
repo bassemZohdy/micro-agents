@@ -131,7 +131,7 @@ def build_runtime(
     resolved = _resolve_definition_config(definition, credential_provider, environment)
     runtime_name = _runtime_name(resolved.runtime)
 
-    telemetry = telemetry or Telemetry()
+    telemetry = telemetry or Telemetry.from_environment()
     telemetry.logger.set_level(resolved.log_level)
 
     _validate_credential_bindings(definition, credential_provider)

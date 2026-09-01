@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 507 base collected | 429 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, HTTP policy hooks, MCP SDK interop, and wire-protocol tests); 78 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests and 15 Google ADK tests when optional extras are installed |
+| Tests | 508 base collected | 430 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, HTTP policy hooks, MCP SDK interop, and wire-protocol tests); 78 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests, 15 Google ADK tests, and three OpenTelemetry tests when optional extras are installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -252,6 +252,10 @@ Implemented:
   `ToolConfirmation` protocol: approval-gated ADK tools emit a continuation
   with pending tool metadata and resume through the original session without
   exposing ADK types through the SPI
+- optional OpenTelemetry SDK integration emits standard spans and metrics
+  through the existing facade, preserves deterministic in-memory test
+  collectors, bridges W3C HTTP context, and suppresses content attributes by
+  default with bounded labels
 - durable, redacted audit events through an `AuditSink` SPI (stdout JSONL
   default, optional file sink) covering policy denials, approval decisions,
   and authentication failures
@@ -350,7 +354,9 @@ Gaps:
 
 - no response streaming implementation; runtimes currently advertise
   `streaming: false`
-- telemetry is not OpenTelemetry and does not propagate standard trace context
+- outbound model/MCP carrier instrumentation and operational dashboards/alerts
+  are not yet provided; the optional facade currently handles HTTP context and
+  in-process runtime spans/metrics
 
 ### Packaging, release, and deployment
 

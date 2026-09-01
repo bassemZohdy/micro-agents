@@ -116,7 +116,7 @@ class GoogleAdkRuntime(AgentRuntime):
         self._config = config or GoogleAdkRuntimeConfig()
         self._runners: list[Any] = []
         self._model_provider = self._config.model_provider
-        self._telemetry = self._config.telemetry or Telemetry()
+        self._telemetry = self._config.telemetry or Telemetry.from_environment()
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
@@ -312,11 +313,13 @@ def create_app(
                 "Content-Type",
                 "X-A2A-Version",
                 "X-Request-ID",
+                "traceparent",
+                "tracestate",
             ],
-            expose_headers=[API_VERSION_HEADER, "Retry-After"],
+            expose_headers=[API_VERSION_HEADER, "Retry-After", "traceparent", "tracestate"],
         )
     checker = health_checker or HealthChecker()
-    telemetry = telemetry or Telemetry()
+    telemetry = telemetry or Telemetry.from_environment()
     telemetry.logger.set_context(
         agent_id=agent.identity.agent_id,
         agent_version=agent.identity.agent_version,
@@ -610,5 +613,36 @@ def create_app(
     async def legacy_openapi() -> JSONResponse:
         """Keep the pre-versioned OpenAPI URL as a compatibility alias."""
         return JSONResponse(app.openapi())
+
+    @app.middleware("http")
+    async def propagate_trace_context(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Bridge W3C trace context at the HTTP boundary when OTel is enabled."""
+        context_token = telemetry.attach_context(request.headers)
+        span = telemetry.start_span(
+            "http.request",
+            attributes={
+                "http.method": request.method,
+                "http.route": request.url.path,
+            },
+        )
+        started = time.monotonic()
+        try:
+            response = await call_next(request)
+            span.set_attribute("http.status_code", response.status_code)
+            telemetry.inject_context(response.headers)
+            return response
+        except Exception as exc:  # noqa: BLE001 — preserve the HTTP error contract
+            span.add_event("http.error", {"error.type": type(exc).__name__})
+            raise
+        finally:
+            telemetry.record(
+                "http_request_latency_ms",
+                round((time.monotonic() - started) * 1000, 2),
+                {"route": request.url.path, "method": request.method},
+            )
+            telemetry.finish_span(span)
+            telemetry.detach_context(context_token)
 
     return app

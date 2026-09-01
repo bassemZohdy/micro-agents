@@ -170,7 +170,7 @@ class AdkRuntime(AgentRuntime):
             if self._config.model_provider is not None
             else FakeModelProvider(self._config.fake_model_config)
         )
-        self._telemetry = self._config.telemetry or Telemetry()
+        self._telemetry = self._config.telemetry or Telemetry.from_environment()
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )

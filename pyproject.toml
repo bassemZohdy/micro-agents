@@ -45,6 +45,10 @@ docs = [
 adk = [
     "google-adk==2.8.0",
 ]
+otel = [
+    "opentelemetry-api>=1.27,<2.0",
+    "opentelemetry-sdk>=1.27,<2.0",
+]
 auth = [
     "PyJWT[crypto]>=2.8,<3.0",
 ]
@@ -92,4 +96,5 @@ markers = [
     "integration: integration tests (real network service, MCP wiring)",
     "e2e: end-to-end tests (booted services, full invoke paths)",
     "adk: Google ADK adapter tests (requires the optional adk extra)",
+    "otel: OpenTelemetry integration tests (requires the optional otel extra)",
 ]
