@@ -6,6 +6,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
+- Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,
+  MCP, memory, and session locations at bootstrap time without mutating the
+  logical definition; model/MCP URLs are validated, unknown MCP refs and stdio
+  endpoint overrides fail fast, and explicit environment variables retain
+  precedence. Added a canonical v1alpha1 compatibility fixture and migration
+  guidance for future definition API versions.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

@@ -1,7 +1,10 @@
 """Tests for Micro-Agent Configuration Framework."""
 
+import pytest
+
 from micro_agent.config import (
     EnvironmentConfig,
+    EnvironmentOverlay,
     ResolvedConfig,
     SecretRef,
     resolve_config,
@@ -144,3 +147,26 @@ class TestEnvironmentConfig:
         )
         assert config.model_endpoint == "https://model.example.com"
         assert config.log_level == "DEBUG"
+
+
+class TestEnvironmentOverlay:
+    """Deployment endpoint bindings stay separate from logical definitions."""
+
+    def test_overlay_converts_to_environment_config(self):
+        overlay = EnvironmentOverlay(
+            model_endpoint="https://staging-model.example.com/v1",
+            mcp_endpoints={"rules": "https://staging-mcp.example.com"},
+            memory_endpoint="memory://",
+            session_endpoint="sqlite:///tmp/staging.db",
+        )
+        config = overlay.to_environment_config()
+        assert config.model_endpoint == "https://staging-model.example.com/v1"
+        assert config.mcp_endpoints == {"rules": "https://staging-mcp.example.com"}
+        assert config.memory_endpoint == "memory://"
+        assert config.session_endpoint == "sqlite:///tmp/staging.db"
+
+    def test_overlay_rejects_non_http_endpoints(self):
+        with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):
+            EnvironmentOverlay(model_endpoint="memory://model")
+        with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):
+            EnvironmentOverlay(mcp_endpoints={"rules": "localhost:9000"})

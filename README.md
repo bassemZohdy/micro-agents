@@ -101,6 +101,23 @@ python -m pip install -e ".[dev]"
 python -m micro_agent --definition examples/notification-agent.yaml
 ```
 
+Deployment-only endpoint bindings can be supplied as an `EnvironmentOverlay`
+without rewriting the portable definition. Model and MCP bindings must use
+absolute `http(s)` URLs; MCP keys must match declared server refs. Environment
+variables still have the highest non-secret precedence, and a definition's
+endpoint values remain unchanged:
+
+```python
+from micro_agent.config import EnvironmentOverlay, build_runtime
+
+overlay = EnvironmentOverlay(
+    model_endpoint="https://staging-llm.example.com/v1",
+    mcp_endpoints={"residency-services": "https://staging-mcp.example.com"},
+    session_endpoint="sqlite:///var/lib/micro-agent/sessions.db",
+)
+bootstrap = build_runtime(definition, environment=overlay)
+```
+
 The service binds to `0.0.0.0:8080` by default.
 
 ```bash
@@ -153,14 +170,14 @@ state, or A2A task interoperability.
 
 | Area | Current state | Production gap |
 |---|---|---|
-| Definition | Typed loader, generated schema, semantic uniqueness/format checks, and runtime contract enforcement | compatibility policy and reference overlays need hardening |
+| Definition | Typed loader, generated schema, semantic uniqueness/format checks, runtime contract enforcement, deployment endpoint overlays, and a v1alpha1 compatibility fixture | versioned policy for a future API release |
 | Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests | external production state and native ADK confirmation continuation |
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
 | State | definition-wired in-memory memory/session and SQLite session bindings, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
-| Security | data types and programmatic policy evaluator | authentication, caller propagation, policy/credential resolution, approval flow |
+| Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
 
@@ -192,8 +209,8 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 463 collected tests: 389 in the default development
-selection, 74 integration tests (four also tagged E2E), plus 14 tests for the
+The current suite contains 470 collected tests: 394 in the default development
+selection, 76 integration tests (five also tagged E2E), plus 14 tests for the
 optional Google ADK adapter when that extra is installed. CI runs lint, typing,
 schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release

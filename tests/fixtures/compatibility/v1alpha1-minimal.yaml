@@ -1,0 +1,11 @@
+# Canonical compatibility fixture for the current definition API.
+# Keep this fixture intentionally small so future API revisions can compare
+# required fields and defaults without depending on provider integrations.
+apiVersion: microagents.io/v1alpha1
+kind: MicroAgent
+metadata:
+  name: compatibility-fixture
+  version: 1.0.0
+spec:
+  behavior:
+    instructions: Respond with a concise acknowledgement.

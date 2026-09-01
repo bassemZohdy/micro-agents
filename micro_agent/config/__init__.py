@@ -10,6 +10,7 @@ from micro_agent.config.bootstrap import (
 from micro_agent.config.config import (
     ConfigDiagnostic,
     EnvironmentConfig,
+    EnvironmentOverlay,
     ResolvedConfig,
     SecretRef,
     resolve_config,
@@ -20,6 +21,7 @@ __all__ = [
     "BootstrapError",
     "ConfigDiagnostic",
     "EnvironmentConfig",
+    "EnvironmentOverlay",
     "ResolvedConfig",
     "RuntimeBootstrap",
     "SecretRef",

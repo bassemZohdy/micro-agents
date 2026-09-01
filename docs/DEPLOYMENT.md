@@ -21,6 +21,25 @@ Startup probes the configured model, state providers, knowledge sources, and
 declared MCP servers before readiness. Unsupported external state bindings and
 unavailable credentials fail before readiness.
 
+Keep the mounted definition identical across environments. Bind staging or
+production service locations at bootstrap time with `EnvironmentOverlay` (or
+provide the broader `EnvironmentConfig` when runtime/authentication settings
+also vary):
+
+```python
+from micro_agent.config import EnvironmentOverlay, build_runtime
+
+overlay = EnvironmentOverlay(
+    model_endpoint="https://llm.prod.example/v1",
+    mcp_endpoints={"residency-services": "https://mcp.prod.example"},
+)
+bootstrap = build_runtime(definition, environment=overlay)
+```
+
+The overlay is validated before runtime construction, unknown MCP refs are
+rejected, and the definition is never mutated. Keep credentials in the
+configured secret provider or environment rather than in either artifact.
+
 ## Kubernetes manifests
 
 Apply order for the sample:

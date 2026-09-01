@@ -12,10 +12,18 @@ from micro_agent.definition import (
 )
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
+COMPATIBILITY_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "compatibility"
 
 
 class TestMinimalDefinition:
     """Test minimal valid definitions."""
+
+    def test_v1alpha1_compatibility_fixture_loads(self):
+        fixture = COMPATIBILITY_FIXTURES_DIR / "v1alpha1-minimal.yaml"
+        definition = load_definition_from_file(fixture)
+        assert definition.api_version == "microagents.io/v1alpha1"
+        assert definition.metadata.name == "compatibility-fixture"
+        assert definition.spec.behavior.instructions
 
     def test_minimal_definition_loads(self):
         data = {

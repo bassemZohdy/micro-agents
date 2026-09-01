@@ -9,8 +9,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 _UNSET = object()
 
@@ -40,6 +41,53 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     audit_sink: str | None = None
     audit_file: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class EnvironmentOverlay(BaseModel, extra="forbid"):
+    """Deployment-only endpoint bindings for a portable definition.
+
+    An overlay carries environment-specific locations without copying or
+    mutating the logical agent definition. Values are converted into the
+    regular :class:`EnvironmentConfig` precedence layer by the bootstrap.
+    Credentials, policies, and agent semantics remain outside this object.
+    """
+
+    model_endpoint: str | None = None
+    mcp_endpoints: dict[str, str] = Field(default_factory=dict)
+    memory_endpoint: str | None = None
+    session_endpoint: str | None = None
+
+    @classmethod
+    def _validate_http_endpoint(cls, value: str, field_name: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError(f"{field_name} must be an absolute http(s) URL")
+        return value
+
+    @field_validator("model_endpoint")
+    @classmethod
+    def validate_model_endpoint(cls, value: str | None) -> str | None:
+        if value is not None:
+            return cls._validate_http_endpoint(value, "model_endpoint")
+        return value
+
+    @field_validator("mcp_endpoints")
+    @classmethod
+    def validate_mcp_endpoints(cls, values: dict[str, str]) -> dict[str, str]:
+        for ref, endpoint in values.items():
+            if not ref or not ref.strip():
+                raise ValueError("mcp_endpoints keys must not be empty")
+            cls._validate_http_endpoint(endpoint, f"MCP endpoint for '{ref}'")
+        return values
+
+    def to_environment_config(self) -> EnvironmentConfig:
+        """Convert overlay values into a config layer without in-place edits."""
+        return EnvironmentConfig(
+            model_endpoint=self.model_endpoint,
+            mcp_endpoints=dict(self.mcp_endpoints),
+            memory_endpoint=self.memory_endpoint,
+            session_endpoint=self.session_endpoint,
+        )
 
 
 @dataclass

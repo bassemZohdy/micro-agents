@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 464 collected | 389 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 75 run in the integration job, with five also tagged E2E |
+| Tests | 470 collected | 394 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 run in the integration job, with five also tagged E2E |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -40,6 +40,11 @@ Implemented:
   scopes, capabilities, and duplicate collections
 - runtime-neutral input/output contract enforcement with stable diagnostics
 - a separate `resolve_config()` precedence utility
+- typed deployment-only `EnvironmentOverlay` endpoint bindings for model, MCP,
+  memory, and session services; bindings are validated and applied without
+  mutating the logical definition
+- a canonical `v1alpha1` compatibility fixture and migration guidance; the
+  loader continues to reject unsupported API versions and unknown fields
 
 Gaps:
 
@@ -50,6 +55,8 @@ Gaps:
   external state providers remain unsupported and fail fast
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
+- only `microagents.io/v1alpha1` is currently supported; a future API version
+  needs a separate model, schema, compatibility fixture, and migration policy
 
 ### Runtime
 
