@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `74da780` on 2026-09-01. Completed work is removed rather
+Baseline audited: `66f50bf` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
