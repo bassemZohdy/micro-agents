@@ -32,6 +32,7 @@ from urllib.parse import urlsplit
 
 from micro_agent.config.config import (
     EnvironmentConfig,
+    EnvironmentOverlay,
     ResolvedConfig,
     SecretRef,
     resolve_config,
@@ -94,6 +95,7 @@ def build_runtime(
     mcp_manager: McpConnectionManager | None = None,
     credential_provider: CredentialProvider | None = None,
     knowledge_retriever: KnowledgeRetriever | None = None,
+    environment: EnvironmentConfig | EnvironmentOverlay | None = None,
 ) -> RuntimeBootstrap:
     """Build the current runtime from a definition and environment.
 
@@ -108,14 +110,19 @@ def build_runtime(
     """
 
     credential_provider = credential_provider or EnvironmentCredentialProvider()
-    resolved = _resolve_definition_config(definition, credential_provider)
+    resolved = _resolve_definition_config(definition, credential_provider, environment)
     runtime_name = _runtime_name(resolved.runtime)
 
     telemetry = telemetry or Telemetry()
     telemetry.logger.set_level(resolved.log_level)
 
     _validate_credential_bindings(definition, credential_provider)
-    mcp = _build_mcp_manager(definition, mcp_manager, credential_provider)
+    mcp = _build_mcp_manager(
+        definition,
+        mcp_manager,
+        credential_provider,
+        endpoint_overrides=resolved.mcp_endpoints,
+    )
     tool_registry = _build_tool_registry(definition)
     _validate_tool_bindings(definition, tool_registry, mcp)
     effective_policy = _resolve_policy(definition, policy, policy_resolver)
@@ -208,7 +215,9 @@ def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: Reso
 
 
 def _resolve_definition_config(
-    definition: MicroAgentDefinition, credential_provider: CredentialProvider
+    definition: MicroAgentDefinition,
+    credential_provider: CredentialProvider,
+    environment: EnvironmentConfig | EnvironmentOverlay | None = None,
 ) -> ResolvedConfig:
     model = definition.spec.dependencies.model
     overrides: dict[str, Any] = {}
@@ -225,9 +234,23 @@ def _resolve_definition_config(
         if model.credential_ref:
             credential_ref = SecretRef(name=model.credential_ref, source="env")
 
+    environment_config: EnvironmentConfig | None
+    if isinstance(environment, EnvironmentOverlay):
+        environment_config = environment.to_environment_config()
+    else:
+        environment_config = environment
+    if credential_ref is not None and (
+        environment_config is None or environment_config.model_api_key_ref is None
+    ):
+        if environment_config is None:
+            environment_config = EnvironmentConfig(model_api_key_ref=credential_ref)
+        else:
+            environment_config = environment_config.model_copy(
+                update={"model_api_key_ref": credential_ref}
+            )
     resolved = resolve_config(
         definition_overrides=overrides,
-        env_config=EnvironmentConfig(model_api_key_ref=credential_ref),
+        env_config=environment_config,
     )
     diagnostics = validate_config(resolved)
     errors = [diagnostic for diagnostic in diagnostics if diagnostic.level == "error"]
@@ -386,6 +409,7 @@ def _build_mcp_manager(
     definition: MicroAgentDefinition,
     injected: McpConnectionManager | None,
     credential_provider: CredentialProvider,
+    endpoint_overrides: dict[str, str] | None = None,
 ) -> McpConnectionManager | None:
     """Construct the MCP client for declared servers; an injected manager wins.
 
@@ -398,14 +422,30 @@ def _build_mcp_manager(
     capabilities.
     """
     if not definition.spec.dependencies.mcp_servers:
+        if endpoint_overrides:
+            unknown_ref_text = ", ".join(sorted(endpoint_overrides))
+            raise BootstrapError(
+                f"MCP endpoint bindings reference undeclared server(s): {unknown_ref_text}"
+            )
         return None
+    endpoint_overrides = dict(endpoint_overrides or {})
+    declared_refs = {server.ref for server in definition.spec.dependencies.mcp_servers}
+    unknown_refs = sorted(set(endpoint_overrides) - declared_refs)
+    if unknown_refs:
+        raise BootstrapError(
+            "MCP endpoint bindings reference undeclared server(s): " + ", ".join(unknown_refs)
+        )
     if injected is not None:
+        if endpoint_overrides:
+            injected.set_endpoint_overrides(endpoint_overrides)
         return injected
     from micro_agent.mcp.sdk_client import sdk_available, sdk_client_factory
 
     factory = sdk_client_factory() if sdk_available() else None
     return McpConnectionManager(
-        client_factory=factory, credential_resolver=credential_provider.resolve
+        client_factory=factory,
+        credential_resolver=credential_provider.resolve,
+        endpoint_overrides=endpoint_overrides,
     )
 
 

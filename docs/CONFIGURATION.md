@@ -40,6 +40,50 @@ until a deployment supplies an external provider; it is never silently
 downgraded to local state. An endpoint without a matching definition is also
 rejected so configuration cannot be accidentally ignored.
 
+## Deployment endpoint overlays
+
+Keep the definition portable and bind environment-specific service locations
+at bootstrap time with `EnvironmentOverlay`:
+
+```python
+from micro_agent.config import EnvironmentOverlay, build_runtime
+
+overlay = EnvironmentOverlay(
+    model_endpoint="https://staging-llm.example.com/v1",
+    mcp_endpoints={"rules": "https://staging-mcp.example.com"},
+    memory_endpoint="memory://",
+    session_endpoint="sqlite:///var/lib/micro-agent/sessions.db",
+)
+bootstrap = build_runtime(definition, environment=overlay)
+```
+
+The overlay is a typed deployment layer. `model_endpoint` and every
+`mcp_endpoints` value must be an absolute `http` or `https` URL; MCP keys must
+match a server `ref` declared by the definition. Overriding a stdio MCP
+server is rejected because stdio is selected by its command and arguments,
+not a network endpoint. Memory and session endpoints retain their provider
+specific schemes. An overlay is copied into runtime configuration and never
+mutates the `MicroAgentDefinition` object.
+
+The effective precedence is framework defaults, definition, an explicit
+`EnvironmentConfig` or `EnvironmentOverlay`, `MICRO_AGENT_*` environment
+variables, and finally resolved secret bindings. Unknown MCP bindings fail
+before runtime creation instead of being silently ignored. Pass an
+`EnvironmentConfig` directly when non-endpoint deployment fields (for
+example, runtime or authentication) also need to be supplied.
+
+## API compatibility fixtures and migration
+
+`tests/fixtures/compatibility/v1alpha1-minimal.yaml` is the canonical small
+fixture for the supported `microagents.io/v1alpha1` shape. The loader and
+generated schema reject other API versions and unknown fields, so a future
+version must be introduced as a new versioned model and fixture rather than
+silently widening v1alpha1. During migration, validate the new fixture in CI,
+keep endpoint bindings in an overlay, and update the schema, compatibility
+tests, this guide, and the changelog together. Existing v1alpha1 definitions
+remain valid until an explicit migration policy for the new API version is
+published.
+
 ## Secret references
 
 Definitions store references, never secret values:
@@ -221,9 +265,10 @@ resolved `model_id` while the logical `ref` remains unchanged.
 
 The logical definition owns portable agent semantics. Deployment configuration
 owns image, replicas, resources, namespace, runtime endpoint bindings, and
-secret-provider bindings. Provider endpoints that vary by environment should
-ultimately use an overlay/binding mechanism rather than editing the base
-logical definition.
+secret-provider bindings. Use `EnvironmentOverlay` for provider endpoints that
+vary by environment rather than editing the base logical definition; use
+`EnvironmentConfig` when runtime, authentication, or audit fields also need
+deployment-specific values.
 
 ## Invocation limits
 

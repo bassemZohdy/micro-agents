@@ -49,6 +49,11 @@ in-memory SQLite database for development. A declared `memory` dependency uses
 the built-in in-memory provider. External state endpoints fail before startup
 until a matching provider is configured.
 
+For environment-specific model or MCP locations, keep this definition
+unchanged and pass a typed `EnvironmentOverlay` to `build_runtime()`; see the
+[configuration reference](CONFIGURATION.md#deployment-endpoint-overlays) for
+the validation and precedence rules.
+
 ## Exercise the API
 
 ```bash

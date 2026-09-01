@@ -8,7 +8,7 @@ transport-agnostic and exercised with the fake client in tests.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -243,10 +243,12 @@ class McpConnectionManager:
         security_policy: McpSecurityPolicy | None = None,
         client_factory: Callable[[McpConfig], McpClient] | None = None,
         credential_resolver: Callable[[str], str | None] | None = None,
+        endpoint_overrides: Mapping[str, str] | None = None,
     ) -> None:
         self._security = security_policy or McpSecurityPolicy()
         self._client_factory = client_factory
         self._credential_resolver = credential_resolver
+        self._endpoint_overrides = dict(endpoint_overrides or {})
         self._clients: dict[str, McpClient] = {}
         self._tools: dict[str, McpToolAdapter] = {}
         self._discovery: dict[str, McpDiscovery] = {}
@@ -282,6 +284,15 @@ class McpConnectionManager:
         provider at connect time and are never stored on the config.
         """
         config = config_from_definition(ref)
+        endpoint_override = self._endpoint_overrides.get(ref.ref)
+        if endpoint_override is not None:
+            if ref.transport == "stdio":
+                raise McpSecurityError(
+                    f"mcp '{ref.ref}': endpoint overlays cannot target stdio servers"
+                )
+            # Keep the logical definition untouched; only this connection's
+            # runtime config receives the deployment binding.
+            config.endpoint = endpoint_override
         self._security.validate(config)
         credential = self._resolve_credential(config)
         client = self._default_client(config)
@@ -303,8 +314,18 @@ class McpConnectionManager:
 
     async def connect_definition(self, definition: Any) -> None:
         """Connect every MCP server declared in a MicroAgentDefinition."""
+        declared_refs = {ref.ref for ref in definition.spec.dependencies.mcp_servers}
+        unknown = sorted(set(self._endpoint_overrides) - declared_refs)
+        if unknown:
+            raise McpSecurityError(
+                "MCP endpoint bindings reference undeclared server(s): " + ", ".join(unknown)
+            )
         for ref in definition.spec.dependencies.mcp_servers:
             await self.connect_server(ref)
+
+    def set_endpoint_overrides(self, overrides: Mapping[str, str]) -> None:
+        """Set deployment endpoint bindings without changing a definition."""
+        self._endpoint_overrides = dict(overrides)
 
     def tools(self) -> dict[str, McpToolAdapter]:
         """Discovered MCP tools, keyed by `server:tool`."""

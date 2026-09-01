@@ -2,7 +2,7 @@
 
 import pytest
 
-from micro_agent.config import BootstrapError, build_runtime
+from micro_agent.config import BootstrapError, EnvironmentOverlay, build_runtime
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
@@ -137,6 +137,40 @@ async def test_definition_selects_openai_compatible_provider():
         assert provider._config.timeout_seconds == 12.0
     finally:
         await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_environment_overlay_binds_model_endpoint_without_mutating_definition():
+    definition = _definition(
+        ref="logical-model",
+        model_id="staging-model",
+        provider="openai-compatible",
+        endpoint="https://logical-model.example.test/v1",
+    )
+    bootstrap = build_runtime(
+        definition,
+        environment=EnvironmentOverlay(model_endpoint="https://staging-model.example.test/v1"),
+    )
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, OpenAICompatProvider)
+        assert provider._config.endpoint == "https://staging-model.example.test/v1"
+        assert definition.spec.dependencies.model is not None
+        assert (
+            definition.spec.dependencies.model.endpoint == "https://logical-model.example.test/v1"
+        )
+    finally:
+        await bootstrap.runtime.close()
+
+
+def test_mcp_overlay_binding_must_reference_declared_server():
+    with pytest.raises(BootstrapError, match="undeclared server"):
+        build_runtime(
+            _definition(provider="fake"),
+            environment=EnvironmentOverlay(
+                mcp_endpoints={"missing-server": "https://mcp.example.test"}
+            ),
+        )
 
 
 @pytest.mark.asyncio

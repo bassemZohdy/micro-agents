@@ -154,6 +154,25 @@ class TestMcpConnectionManager:
         assert await manager.health_probe() is False
 
     @pytest.mark.asyncio
+    async def test_endpoint_overlay_replaces_connection_location_only(self):
+        clients: dict[str, FakeMcpClient] = {}
+
+        def factory(config):
+            clients[config.ref] = _fake_client()
+            return clients[config.ref]
+
+        manager = McpConnectionManager(
+            client_factory=factory,
+            endpoint_overrides={"residency-services": "https://staging.example.com/mcp"},
+        )
+        definition = _definition_with_mcp()
+        await manager.connect_definition(definition)
+        assert definition.spec.dependencies.mcp_servers[0].endpoint == "https://mcp.example.com"
+        assert clients["residency-services"]._config is not None
+        assert clients["residency-services"]._config.endpoint == "https://staging.example.com/mcp"
+        await manager.aclose()
+
+    @pytest.mark.asyncio
     async def test_security_violation_blocks_connection(self):
         manager = McpConnectionManager(
             security_policy=McpSecurityPolicy(allowed_endpoints=["https://other.example.com"]),
