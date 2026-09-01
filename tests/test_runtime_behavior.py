@@ -19,6 +19,7 @@ from micro_agent.models import (
 from micro_agent.observability import (
     HealthChecker,
     HealthStatus,
+    OperationRegistry,
     Telemetry,
 )
 from micro_agent.session import InMemorySessionProvider
@@ -421,10 +422,11 @@ class TestHealthProbes:
         config = AdkRuntimeConfig(
             session_provider=InMemorySessionProvider(),
             memory_provider=InMemoryMemoryProvider(),
+            operation_registry=OperationRegistry(),
         )
         runtime = AdkRuntime(config)
         probes = runtime.health_probes()
-        assert set(probes) == {"model", "session", "memory"}
+        assert set(probes) == {"model", "session", "memory", "operation_registry"}
         checker = HealthChecker()
         for name, probe in probes.items():
             checker.add_dependency(name, probe=probe)

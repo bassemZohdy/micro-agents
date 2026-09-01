@@ -50,9 +50,12 @@ the built-in in-memory provider. External state endpoints fail before startup
 until a matching provider is configured. For shared memory or sessions across
 processes, install `micro-agents[redis]` and bind the relevant endpoint to a
 `redis://` or `rediss://` URL; use `MICRO_AGENT_MEMORY_ENDPOINT` for declared
-memory and `MICRO_AGENT_SESSION_ENDPOINT` for external sessions. The Redis
-providers use transactional writes and key TTLs. Set `persistence: external`
-for shared sessions.
+memory, `MICRO_AGENT_SESSION_ENDPOINT` for external sessions, and
+`MICRO_AGENT_IDEMPOTENCY_ENDPOINT` for distributed operation deduplication in
+the custom runtime. The Redis providers use transactional writes and key TTLs;
+operation claims use an atomic `SET NX` reservation. The idempotency registry
+does not yet provide tenant isolation or optimistic versioning, and Google ADK
+rejects this binding. Set `persistence: external` for shared sessions.
 
 For environment-specific model or MCP locations, keep this definition
 unchanged and pass a typed `EnvironmentOverlay` to `build_runtime()`; see the

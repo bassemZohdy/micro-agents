@@ -55,6 +55,19 @@ definition's overall timeout, and each model/tool timeout. Cancellation of any
 in-flight model, tool (including MCP adapters), session, or memory operation
 releases its resources and propagates to that provider.
 
+## Distributed operation idempotency
+
+The custom runtime can use a shared Redis operation registry when
+`MICRO_AGENT_IDEMPOTENCY_ENDPOINT` is configured. Side-effect tools may include
+an `idempotency_key` in their arguments. Reusing the same stable key causes a
+retry on another replica to return the original result instead of executing the
+tool again; while the first attempt is still running, the duplicate receives an
+`operation is already in progress` result with `was_deduplicated: true`.
+Claims are atomic and results expire with the registry TTL (one day by default).
+Keys are currently provider-wide rather than tenant-isolated, and optimistic
+versioning is not implemented. The Google ADK runtime rejects this binding
+until its idempotency mapping is available.
+
 ## Invoke response
 
 ```json

@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-01
-Documentation-audit baseline: `99af91fea6e070b4b6fccd91f6196780572624df`
-Cleanup verification baseline: `99af91fea6e070b4b6fccd91f6196780572624df`
+Documentation-audit baseline: `283be4f94d08913169e931efb151f3c5e3c0a1c2`
+Cleanup verification baseline: `283be4f94d08913169e931efb151f3c5e3c0a1c2`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 484 base collected | 408 selected by the default test job (including Redis memory/session-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 baseline integration tests run in the integration job, with five also tagged E2E, plus two Redis service tests when the `redis` extra is installed |
+| Tests | 491 base collected | 414 selected by the default test job (including Redis memory/session/idempotency-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 77 baseline integration tests run in the integration job, with five also tagged E2E, plus three Redis service tests when the `redis` extra is installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -52,8 +52,9 @@ Gaps:
   built-in memory and SQLite/in-memory session bindings plus optional Redis
   external memory/session bindings, the built-in tool
   registry, the MCP connection manager, the knowledge provider, the
-  credential provider, and telemetry are constructed from configuration;
-  external idempotency providers remain unsupported and fail fast
+  credential provider, telemetry, and the custom runtime's optional Redis
+  operation registry are constructed from configuration; unsupported external
+  schemes fail fast and the Google ADK runtime rejects the binding until mapped
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 - only `microagents.io/v1alpha1` is currently supported; a future API version
@@ -123,6 +124,9 @@ Implemented:
 - the optional Redis memory provider stores scoped JSON records in a shared
   namespace, applies `MemoryPolicy` TTL/capacity retention, purges stale index
   members, exposes a health probe, and closes only clients it owns
+- the optional Redis operation registry atomically claims idempotency keys,
+  shares in-progress/completed results across custom-runtime replicas, applies
+  result TTLs, exposes a health probe, and closes only clients it owns
 
 Current custom-runtime capability matrix:
 
@@ -277,7 +281,9 @@ Gaps:
   database-backed audit arrives with production state providers
 - the approval store is process-local; production approval state arrives
   with production state providers
-- idempotency storage is process-local and non-atomic
+- Redis operation idempotency is available in the custom runtime, but claims
+  are not yet tenant-isolated or optimistic-versioned; late completion is
+  owner-checked and the Google ADK adapter rejects the binding
 
 ### State and knowledge
 
@@ -287,6 +293,8 @@ Implemented:
 - SQLite session provider
 - optional Redis memory provider for declared shared memory and Redis session
   provider for shared `persistence: external` state
+- optional Redis operation registry for custom-runtime distributed idempotency
+  claims and results
 - `MemoryPolicy` validates retention bounds; expired in-memory entries are
   purged before reads, writes, and capacity eviction so stale entries cannot
   consume capacity or evict live data
@@ -299,11 +307,11 @@ Implemented:
 Gaps:
 
 - bootstrap constructs in-memory or Redis memory, in-memory/SQLite sessions,
-  and Redis external sessions; external idempotency endpoints are rejected
-  until a provider is wired
+  Redis external sessions, and the custom runtime's Redis operation registry;
+  unsupported idempotency schemes are rejected
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
-- no production knowledge or idempotency provider; Redis memory/session support
+- no production knowledge provider; Redis memory/session/idempotency support
   does not yet provide optimistic versioning or tenant isolation
 
 ### HTTP, health, and observability

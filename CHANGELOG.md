@@ -33,6 +33,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   limits, purges stale index members, exposes a health probe, and closes only
   clients owned by the provider. `MICRO_AGENT_MEMORY_ENDPOINT=redis://...`
   selects it when `micro-agents[redis]` is installed.
+- Added an optional Redis-backed operation registry for the custom runtime.
+  `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` or `rediss://...` enables
+  atomic idempotency-key claims, shared in-progress/completed results, result
+  TTLs, readiness probing, and ownership-aware shutdown. The Google ADK runtime
+  rejects this binding until its distributed mapping is implemented; tenant
+  isolation and optimistic versioning remain open.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

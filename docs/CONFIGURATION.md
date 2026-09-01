@@ -27,6 +27,7 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory or Redis (`redis://`/`rediss://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite or Redis (`redis://`/`rediss://`) bindings; unsupported external endpoints fail fast |
+| `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's Redis-backed distributed operation registry; unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
@@ -46,9 +47,19 @@ can share session state. Other endpoints fail fast; the declaration is never
 silently downgraded to local state. An endpoint without a matching definition
 is also rejected so configuration cannot be accidentally ignored.
 
+The custom runtime can share operation reservations and completed results across
+replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`. Redis (`redis://` or
+`rediss://`) is supported when the optional client is installed. Reservations
+use an atomic `SET ... NX` claim and completed results expire after the provider
+TTL (one day by default). The registry is intentionally scoped to operation
+keys, not tenant/version semantics; optimistic versioning and tenant isolation
+remain open backlog work. The Google ADK runtime rejects this binding until its
+distributed idempotency mapping is implemented.
+
 ```bash
 pip install 'micro-agents[redis]'
 export MICRO_AGENT_SESSION_ENDPOINT='rediss://sessions.example:6380/0'
+export MICRO_AGENT_IDEMPOTENCY_ENDPOINT='rediss://operations.example:6380/0'
 ```
 
 ## Deployment endpoint overlays
@@ -64,6 +75,7 @@ overlay = EnvironmentOverlay(
     mcp_endpoints={"rules": "https://staging-mcp.example.com"},
     memory_endpoint="memory://",
     session_endpoint="sqlite:///var/lib/micro-agent/sessions.db",
+    idempotency_endpoint="rediss://operations.example:6380/0",
 )
 bootstrap = build_runtime(definition, environment=overlay)
 ```

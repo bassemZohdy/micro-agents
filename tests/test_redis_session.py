@@ -11,6 +11,7 @@ import pytest
 redis = pytest.importorskip("redis.asyncio")
 
 from micro_agent.memory import MemoryEntry, RedisMemoryProvider  # noqa: E402
+from micro_agent.security import Operation, OperationResult, RedisOperationRegistry  # noqa: E402
 from micro_agent.session import RedisSessionProvider  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -66,5 +67,34 @@ async def test_redis_memory_provider_shares_entries() -> None:
         assert await provider_a.health_check() is True
     finally:
         await provider_a.delete("preference", scope="user")
+        await client_a.aclose()
+        await client_b.aclose()
+
+
+@pytest.mark.asyncio
+async def test_redis_operation_registry_claims_once_and_shares_result() -> None:
+    endpoint = os.getenv("MICRO_AGENT_REDIS_URL", "redis://localhost:6379/0")
+    namespace = f"micro-agent-operation-test-{uuid4().hex}"
+    client_a = redis.from_url(endpoint, decode_responses=True)
+    client_b = redis.from_url(endpoint, decode_responses=True)
+    registry_a = RedisOperationRegistry(endpoint, namespace=namespace, client=client_a)
+    registry_b = RedisOperationRegistry(endpoint, namespace=namespace, client=client_b)
+    operation_a = Operation(idempotency_key="payment-1", name="payment")
+    operation_b = Operation(idempotency_key="payment-1", name="payment")
+    try:
+        assert await registry_a.claim(operation_a) == (True, None)
+        claimed, pending = await registry_b.claim(operation_b)
+        assert claimed is False
+        assert pending is not None
+        assert pending.status == "in_progress"
+        await registry_a.record(
+            operation_a,
+            OperationResult(operation_id=operation_a.operation_id, output={"receipt": "r-1"}),
+        )
+        prior = await registry_b.find_by_idempotency_key("payment-1")
+        assert prior is not None
+        assert prior.output == {"receipt": "r-1"}
+    finally:
+        await client_a.delete(f"{namespace}:operation:payment-1")
         await client_a.aclose()
         await client_b.aclose()

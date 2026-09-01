@@ -48,7 +48,10 @@ class FakeRedis:
         assert transaction is True
         return FakeRedisPipeline(self)
 
-    async def set(self, key: str, value: str, *, ex: int | None = None) -> bool:
+    async def set(self, key: str, value: str, *, ex: int | None = None, nx: bool = False) -> bool:
+        self._purge(key)
+        if nx and key in self.backend.values:
+            return False
         self.backend.values[key] = value
         if ex is not None:
             self.backend.expiry[key] = asyncio.get_running_loop().time() + ex

@@ -15,7 +15,7 @@ The image:
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
 from the mounted definition and environment. It constructs local memory/session
-providers, optional Redis-backed external memory/session providers, the official
+providers, optional Redis-backed external memory/session/idempotency providers, the official
 MCP SDK client for declared servers, knowledge and credential providers,
 policy, telemetry, and audit sinks from configuration.
 Startup probes the configured model, state providers, knowledge sources, and
@@ -81,15 +81,19 @@ reference, while Redis endpoints provide shared memory and session state across
 independently scheduled pods. Install the optional Redis extra and configure
 `MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for declared memory plus
 `MICRO_AGENT_SESSION_ENDPOINT=redis://...` (or `rediss://...`) for
-`persistence: external` sessions. Idempotency state is still process-local
-until its production provider is implemented.
+`persistence: external` sessions. Set
+`MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` (or `rediss://...`) for
+distributed operation reservations/results in the custom runtime. The Redis
+registry is not yet tenant-isolated or version-aware, and Google ADK rejects
+the binding until its mapping is implemented.
 
 ## Production checklist
 
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
 - [ ] authenticated HTTP and enabled A2A standards endpoints
-- [ ] external session, memory, and idempotency state
+- [ ] external session, memory, and idempotency state with tenant isolation and
+      optimistic versioning
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation
 - [ ] resource, disruption, autoscaling, topology, and NetworkPolicy decisions
