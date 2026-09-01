@@ -28,6 +28,13 @@ All notable changes to the Micro-Agents project are documented in this file.
   configuration plus injectable HTTP clients, and providers now report
   `ProviderCapabilities` — declaring tools against a provider without tool
   use fails at startup.
+- Added a live OpenAI-compatible acceptance path: a real loopback server now
+  completes a multi-turn tool call, validates the `/v1` endpoint prefix and
+  model ID, and confirms that session storage replays the assistant tool-call
+  payload together with its matching `tool_call_id` result on the next turn.
+- Persisted complete runtime conversation turns (assistant tool calls and tool
+  results included) instead of reducing sessions to user/final-assistant
+  pairs, so OpenAI-compatible providers can safely replay tool transcripts.
 - Added the official MCP SDK wire client behind the existing `McpClient`
   SPI: the executable bootstrap now constructs real SDK-backed connections
   for declared MCP servers against the stable `2025-11-25` specification

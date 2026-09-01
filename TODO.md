@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `87d1779` on 2026-08-30. Completed work is removed rather
+Baseline audited: `dabf50b` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -166,7 +166,7 @@ server through the executable bootstrap.
       and tool use; tool use is enforced at startup (declaring tools against a
       provider without it fails), the other two stay false until those
       features are wired.
-- [ ] Add a live OpenAI-compatible end-to-end acceptance test: a real server
+- [x] Add a live OpenAI-compatible end-to-end acceptance test: a real server
       completes a multi-turn tool call and the transcript replays from
       session storage.
 

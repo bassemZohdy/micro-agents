@@ -155,7 +155,7 @@ state, or A2A task interoperability.
 |---|---|---|
 | Definition | Typed loader, generated schema, semantic uniqueness/format checks, and runtime contract enforcement | compatibility policy and reference overlays need hardening |
 | Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests | external production state and native ADK confirmation continuation |
-| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client; ADK bridge accepts injected providers | richer credential providers and live-model acceptance remain |
+| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |

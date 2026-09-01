@@ -48,12 +48,17 @@ class OpenAICompatProvider(ModelProvider):
 
     def __init__(self, config: OpenAICompatConfig) -> None:
         self._config = config
+        self._endpoint = config.endpoint.rstrip("/")
         self._owns_client = config.http_client is None
         headers = {"Content-Type": "application/json", **config.default_headers}
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
+        # Keep a normalized base URL for relative use by callers while the
+        # provider below uses absolute endpoint paths. This preserves any
+        # configured prefix (for example ``/v1``) even for injected clients
+        # whose own ``base_url`` lacks a trailing slash.
         self._client = config.http_client or httpx.AsyncClient(
-            base_url=config.endpoint.rstrip("/"),
+            base_url=f"{config.endpoint.rstrip('/')}/",
             headers=headers,
             timeout=config.timeout_seconds,
             trust_env=config.trust_env,
@@ -94,7 +99,7 @@ class OpenAICompatProvider(ModelProvider):
     ) -> ModelResponse:
         """Generate a response via POST /chat/completions."""
         response = await self._client.post(
-            "/chat/completions", json=self._payload(config, messages, tools)
+            f"{self._endpoint}/chat/completions", json=self._payload(config, messages, tools)
         )
         response.raise_for_status()
         data = response.json()
@@ -125,7 +130,7 @@ class OpenAICompatProvider(ModelProvider):
     async def health_check(self) -> bool:
         """GET /models as a cheap availability probe."""
         try:
-            response = await self._client.get("/models")
+            response = await self._client.get(f"{self._endpoint}/models")
             return response.status_code < 500
         except httpx.HTTPError:
             return False
