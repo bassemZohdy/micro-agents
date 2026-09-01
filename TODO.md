@@ -296,10 +296,15 @@ state through an external service under concurrent load.
 - [ ] Add structured output, streaming, and checkpointing only behind truthful
       runtime capabilities.
 - [ ] Add performance/load benchmarks and resource budgets.
-- [ ] Add upgrade, deprecation, and API compatibility policy.
+- [x] Add upgrade, deprecation, and API compatibility policy
+      (docs/COMPATIBILITY.md + ADR 0009: stability tiers, deprecation
+      process, re-export retirement mechanism).
 - [ ] Add examples that are executable as written; keep conceptual examples
       clearly labeled.
-- [ ] Decide how backward-compatibility re-exports will be deprecated.
+- [x] Decide how backward-compatibility re-exports will be deprecated:
+      module `__getattr__` shims emitting `DeprecationWarning` with the
+      canonical import path, held for two minor releases and removed at the
+      next major (ADR 0009); no re-export is deprecated today.
 
 ## Micro-Agent Cloud — gated future workstream
 

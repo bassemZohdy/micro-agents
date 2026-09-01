@@ -38,6 +38,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Documentation
 
+- Added the compatibility, upgrade, and deprecation policy
+  (docs/COMPATIBILITY.md, ADR 0009): tiered stability surfaces, a
+  deprecation process with grace windows, and the decided mechanism for
+  retiring backward-compatibility re-exports (module `__getattr__` shims
+  with `DeprecationWarning`).
+
 - Added docs/OBSERVABILITY.md: the complete operational-metric inventory
   (counters and gauges with labels), scraping guidance for `GET /metrics`,
   recommended dashboard panels (traffic, errors, latency, tools, retries,
