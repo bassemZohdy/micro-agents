@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-01
-Documentation-audit baseline: `b1dc40a66d51a4c73201958b17d2d75ee2a62f38`
-Cleanup verification baseline: `b1dc40a66d51a4c73201958b17d2d75ee2a62f38`
+Documentation-audit baseline: `99af91fea6e070b4b6fccd91f6196780572624df`
+Cleanup verification baseline: `99af91fea6e070b4b6fccd91f6196780572624df`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 476 collected | 400 selected by the default test job (including the reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 run in the integration job, with five also tagged E2E |
+| Tests | 480 base collected | 404 selected by the default test job (including Redis-provider unit coverage, reconnect, authentication, audit, propagation, MCP SDK interop, and wire-protocol tests); 76 baseline integration tests run in the integration job, with five also tagged E2E, plus one Redis service test when the `redis` extra is installed |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -49,10 +49,11 @@ Implemented:
 Gaps:
 
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
-  built-in memory and SQLite/in-memory session bindings, the built-in tool
+  built-in memory and SQLite/in-memory session bindings plus optional Redis
+  external session bindings, the built-in tool
   registry, the MCP connection manager, the knowledge provider, the
   credential provider, and telemetry are constructed from configuration;
-  external state providers remain unsupported and fail fast
+  external memory and idempotency providers remain unsupported and fail fast
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 - only `microagents.io/v1alpha1` is currently supported; a future API version
@@ -115,6 +116,10 @@ Implemented:
 - declared MCP servers connect through the official SDK wire client at
   startup when the `mcp` extra is installed; without it, startup fails with
   an installation message instead of silently ignoring the declarations
+- the optional Redis session provider validates `redis://`/`rediss://`
+  endpoints, updates session documents and their active index in transactional
+  pipelines, enforces expiry with Redis key TTLs, cleans stale index members,
+  exposes a health probe, and closes only clients it owns
 
 Current custom-runtime capability matrix:
 
@@ -178,7 +183,8 @@ Implemented:
   negotiation, tool/resource/prompt discovery, tool invocation with per-call
   timeouts, graceful close; stdio models local command/args, Streamable HTTP
   is the standard transport, SSE is legacy compatibility only; interop tests
-  run real FastMCP servers over stdio and Streamable HTTP
+  run real FastMCP servers over stdio and Streamable HTTP; Streamable HTTP
+  clients disable ambient proxy environment variables by default
 - bounded automatic reconnect after unexpected transport termination, with
   exponential backoff, explicit shutdown suppression, and a terminal error
   state after attempts are exhausted
@@ -276,6 +282,7 @@ Implemented:
 
 - in-memory session and memory providers
 - SQLite session provider
+- optional Redis session provider for shared `persistence: external` state
 - `MemoryPolicy` validates retention bounds; expired in-memory entries are
   purged before reads, writes, and capacity eviction so stale entries cannot
   consume capacity or evict live data
@@ -287,11 +294,13 @@ Implemented:
 
 Gaps:
 
-- bootstrap only constructs in-memory memory and in-memory/SQLite session
-  providers; external state endpoints are rejected until a provider is wired
+- bootstrap constructs in-memory memory, in-memory/SQLite sessions, and Redis
+  external sessions; external memory and idempotency endpoints are rejected
+  until providers are wired
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
-- no production memory, knowledge, session, or idempotency provider
+- no production memory, knowledge, or idempotency provider; Redis session
+  support does not make memory or idempotency state distributed
 
 ### HTTP, health, and observability
 

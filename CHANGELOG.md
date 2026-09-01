@@ -19,6 +19,15 @@ All notable changes to the Micro-Agents project are documented in this file.
   added a bounded busy timeout, made close idempotent, and documented SQLite
   as a single-process development store rather than a production multi-replica
   backend.
+- Added an optional Redis-backed session provider for `persistence: external`.
+  `redis://` and `rediss://` endpoints are validated at bootstrap; session
+  writes use transactional pipelines, Redis key TTLs enforce expiry, stale
+  index entries are cleaned, health probing is available, and shutdown closes
+  only clients owned by the provider. Install `micro-agents[redis]` to enable
+  the built-in client; injected clients remain supported for tests/deployments.
+- MCP Streamable HTTP clients now disable ambient proxy environment variables
+  by default, keeping loopback/inter-service traffic on the configured endpoint
+  unless an explicit transport policy is added.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

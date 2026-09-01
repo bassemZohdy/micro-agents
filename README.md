@@ -26,6 +26,7 @@ operated independently.
 - an optional Google ADK adapter under `runtimes/google_adk`
 - fake and OpenAI-compatible model-provider implementations
 - tool, MCP, session, memory, knowledge, policy, health, and telemetry seams
+  (including an optional Redis-backed shared session provider)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
 - container and Kubernetes/OpenShift-oriented deployment examples
 
@@ -140,8 +141,12 @@ Runtime selection is deployment configuration. The custom loop is the default;
 set `MICRO_AGENT_RUNTIME=google-adk` (with the optional `adk` extra installed)
 to select the Google ADK adapter. Memory, policy, MCP, knowledge, credentials,
 and telemetry mappings are validated at bootstrap; unsupported external session
-bindings and model credential references fail before startup rather than being
-silently ignored.
+bindings (anything other than the optional Redis provider) and model credential
+references fail before startup rather than being silently ignored. Install
+`micro-agents[redis]` and set
+`MICRO_AGENT_SESSION_ENDPOINT=redis://...` for the `external` session mode;
+Redis writes use transactional pipelines and key TTLs so independently scaled
+processes share session state.
 
 For an OpenAI-compatible endpoint, keep credentials out of the definition:
 
@@ -176,7 +181,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | documented plugin contract and safe side-effect classification |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
-| State | definition-wired in-memory memory/session and SQLite session bindings, validated memory retention bounds, expired-entry purging, serialized SQLite operations, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared providers and provider-specific deadline tuning |
+| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external sessions with transactional writes/TTL expiry; validated memory retention bounds, expired-entry purging, startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | production shared memory/idempotency providers and provider-specific deadline tuning |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
 | Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
 | Operations | container, package/release gates, request-size guard, and sample manifests | production bootstrap and OpenShift hardening |
@@ -209,10 +214,11 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite contains 476 collected tests: 400 in the default development
-selection, 76 integration tests (five also tagged E2E), plus 14 tests for the
-optional Google ADK adapter when that extra is installed. CI runs lint, typing,
-schema, unit, integration, E2E, package, container, separate
+The current base suite contains 480 collected tests: 404 in the default
+development selection and 76 integration tests (five also tagged E2E). The
+Redis extra adds one live integration test in the Redis-enabled CI job, and the
+optional Google ADK adapter adds 14 tests when that extra is installed. CI runs
+lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release
 tags repeat the quality gates, validate the tag against the package version,
 and publish only after all verification succeeds.

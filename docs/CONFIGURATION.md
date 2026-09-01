@@ -26,7 +26,7 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for the built-in memory provider; external endpoints fail fast |
-| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite bindings; unsupported external endpoints fail fast |
+| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite or Redis (`redis://`/`rediss://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
@@ -35,10 +35,18 @@ in-memory provider. `MICRO_AGENT_MEMORY_ENDPOINT` may be `memory://` or
 is installed. Session persistence `memory` constructs an in-memory provider.
 Persistence `sqlite` accepts `MICRO_AGENT_SESSION_ENDPOINT` as
 `sqlite:///absolute/path` (or a plain SQLite path) and defaults to `:memory:`
-for development. Persistence `external` requires an endpoint but fails fast
-until a deployment supplies an external provider; it is never silently
-downgraded to local state. An endpoint without a matching definition is also
-rejected so configuration cannot be accidentally ignored.
+for development. Persistence `external` accepts `redis://` or `rediss://`
+endpoints when the optional `redis` extra is installed
+(`pip install 'micro-agents[redis]'`). The Redis provider uses transactional
+writes, Redis key TTLs, and a shared index so independently scaled processes
+can share session state. Other endpoints fail fast; the declaration is never
+silently downgraded to local state. An endpoint without a matching definition
+is also rejected so configuration cannot be accidentally ignored.
+
+```bash
+pip install 'micro-agents[redis]'
+export MICRO_AGENT_SESSION_ENDPOINT='rediss://sessions.example:6380/0'
+```
 
 ## Deployment endpoint overlays
 

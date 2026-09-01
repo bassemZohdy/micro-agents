@@ -30,3 +30,4 @@ nav:
       - 0006 SQLite development persistence: adr/0006-sqlite-session-reference.md
       - 0007 Stable protocol baselines: adr/0007-stable-protocol-baselines.md
       - 0008 Runtime adapter truthfulness: adr/0008-runtime-adapter-truthfulness.md
+      - 0009 Redis session provider: adr/0009-redis-session-provider.md

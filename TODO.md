@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `dabf50b` on 2026-09-01. Completed work is removed rather
+Baseline audited: `99af91f` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -187,7 +187,7 @@ and the transcript can be replayed from session storage.
 
 ### P1.5 Production state providers
 
-- [ ] Add a concurrency-safe PostgreSQL or Redis session provider.
+- [x] Add a concurrency-safe PostgreSQL or Redis session provider (Redis).
 - [ ] Add production memory and operational/idempotency providers.
 - [ ] Add optimistic concurrency/versioning and tenant isolation.
 - [x] Purge expired in-memory entries consistently and validate memory policy

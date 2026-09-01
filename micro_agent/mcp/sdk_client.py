@@ -29,6 +29,8 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, TypeVar
 
+import httpx
+
 from micro_agent.mcp.mcp import (
     McpClient,
     McpConfig,
@@ -46,6 +48,22 @@ _RECONNECT_ATTEMPTS = 3
 _RECONNECT_BACKOFF_SECONDS = 0.25
 
 _T = TypeVar("_T")
+
+
+def _direct_httpx_client_factory(
+    headers: dict[str, str] | None = None,
+    timeout: httpx.Timeout | None = None,
+    auth: httpx.Auth | None = None,
+) -> httpx.AsyncClient:
+    """Build an MCP HTTP client without ambient proxy environment variables."""
+    kwargs: dict[str, Any] = {"follow_redirects": True, "trust_env": False}
+    if headers is not None:
+        kwargs["headers"] = headers
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    if auth is not None:
+        kwargs["auth"] = auth
+    return httpx.AsyncClient(**kwargs)
 
 
 class SdkMcpError(ConnectionError):
@@ -225,7 +243,10 @@ class SdkMcpClient(McpClient):
         timeout = float(config.timeout_seconds) if config.timeout_seconds else 30.0
         read, write, _session_id = await stack.enter_async_context(
             sdk.streamable_http.streamablehttp_client(
-                config.endpoint, headers=headers, timeout=timeout
+                config.endpoint,
+                headers=headers,
+                timeout=timeout,
+                httpx_client_factory=_direct_httpx_client_factory,
             )
         )
         return read, write
