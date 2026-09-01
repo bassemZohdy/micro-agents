@@ -65,6 +65,7 @@ from micro_agent.security import (
     set_invocation_identity,
 )
 from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
+from micro_agent.tools.plugin import load_plugin_tools
 
 _ADK_REQUEST_CONFIRMATION_NAME = "adk_request_confirmation"
 
@@ -601,6 +602,7 @@ class GoogleAdkRuntime(AgentRuntime):
     def _resolve_tools(self, definition: MicroAgentDefinition) -> dict[str, Tool]:
         """Resolve declared tools against the configured and built-in registries."""
         registry = builtin_tool_registry()
+        registry.update(load_plugin_tools())
         registry.update(self._config.tool_registry)
         tools: dict[str, Tool] = {}
         for tool_definition in definition.spec.dependencies.tools:

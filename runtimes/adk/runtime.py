@@ -58,6 +58,7 @@ from micro_agent.security import (
 )
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
+from micro_agent.tools.plugin import load_plugin_tools
 
 
 class _ApprovalPausedError(Exception):
@@ -1008,6 +1009,7 @@ class AdkRuntime(AgentRuntime):
     def _resolve_tools(self, definition: MicroAgentDefinition) -> tuple[dict[str, Tool], list[str]]:
         """Resolve definition-declared tools against the configured/built-in registry."""
         registry = builtin_tool_registry()
+        registry.update(load_plugin_tools())
         registry.update(self._config.tool_registry or {})
         tools: dict[str, Tool] = {}
         unresolved: list[str] = []

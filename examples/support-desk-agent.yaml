@@ -1,0 +1,52 @@
+# Executable example — boots as written with the deterministic fake provider.
+#
+#   python -m pip install -e ".[dev]"
+#   python -m micro_agent --definition examples/support-desk-agent.yaml
+#
+# or via Docker (see docs/DEPLOYMENT.md). Sessions persist in process memory;
+# the echo tool resolves from the built-in native registry.
+apiVersion: microagents.io/v1alpha1
+kind: MicroAgent
+
+metadata:
+  name: support-desk-agent
+  version: 0.1.0
+  description: Answers support questions and echoes structured requests.
+
+spec:
+
+  behavior:
+    instructions: |
+      You are a support desk assistant.
+      Use the echo tool to acknowledge structured requests.
+      Keep answers short and actionable.
+
+    input_contract:
+      parameters:
+        - name: question
+          type: string
+          description: The support question or request payload.
+          required: true
+
+  dependencies:
+    model:
+      ref: reasoning-model
+      provider: fake
+    tools:
+      - name: echo
+        source: native
+        description: Echoes the structured request back.
+    skills:
+      - id: answer-support-question
+        name: Answer Support Question
+        description: Answer a support question with a short, actionable reply.
+        tags:
+          - support
+
+    memory:
+      ref: support-memory
+      scope: agent
+
+    session:
+      persistence: memory
+      ttl_seconds: 3600

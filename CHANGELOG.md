@@ -38,6 +38,15 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Documentation
 
+- Added a tool extension/plugin contract: installed packages contribute
+  tools through `micro_agent.tools` entry points, merged over built-ins and
+  overridden by programmatic injection (documented in CONFIGURATION.md with
+  tests).
+- Added `examples/support-desk-agent.yaml` — an executable example wiring
+  in-memory session and memory plus the built-in echo tool — with the
+  examples README status table; tests boot every example marked Executable
+  from configuration alone.
+
 - Added the compatibility, upgrade, and deprecation policy
   (docs/COMPATIBILITY.md, ADR 0009): tiered stability surfaces, a
   deprecation process with grace windows, and the decided mechanism for

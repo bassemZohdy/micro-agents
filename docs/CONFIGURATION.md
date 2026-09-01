@@ -321,6 +321,24 @@ budget is bounded (three attempts by default) with exponential backoff; an
 explicit runtime shutdown suppresses reconnects, and an exhausted budget keeps
 the dependency unhealthy so readiness does not report a recovered server.
 
+## Extending the tool registry
+
+Tools are resolved in precedence order: programmatic injection (the
+runtime's `tool_registry`), plugin packages, then the built-in native
+registry. A plugin package exposes an entry point in the `micro_agent.tools`
+group whose value is `module:attribute` — a `Tool` subclass with a
+no-argument constructor, or a zero-argument callable returning a `Tool`
+instance. Tools are keyed by their `metadata.name`.
+
+```python
+# in your package (setup.py/pyproject entry points):
+[project.entry-points."micro_agent.tools"]
+weather = "weather_tools:WeatherTool"
+```
+
+Definition-declared tools resolve by name against the merged registry;
+unresolvable tools fail before runtime creation.
+
 ## Workload identity
 
 The runtime resolves its own workload identity once per process for audit

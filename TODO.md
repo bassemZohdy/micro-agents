@@ -290,8 +290,11 @@ state through an external service under concurrent load.
 
 ## P2 — Framework maturity
 
-- [ ] Replace the single built-in tool map with a documented extension/plugin
-      contract.
+- [x] Replace the single built-in tool map with a documented extension/plugin
+      contract: plugin packages contribute tools via `micro_agent.tools`
+      entry points, merged over built-ins and overridden by programmatic
+      injection; resolution order and naming rules are documented in
+      docs/CONFIGURATION.md.
 - [ ] Define knowledge-provider configuration and runtime retrieval semantics.
 - [ ] Add structured output, streaming, and checkpointing only behind truthful
       runtime capabilities.
@@ -299,8 +302,10 @@ state through an external service under concurrent load.
 - [x] Add upgrade, deprecation, and API compatibility policy
       (docs/COMPATIBILITY.md + ADR 0009: stability tiers, deprecation
       process, re-export retirement mechanism).
-- [ ] Add examples that are executable as written; keep conceptual examples
-      clearly labeled.
+- [x] Add examples that are executable as written; keep conceptual examples
+      clearly labeled (`examples/README.md` statuses and the first-line
+      labeling convention, enforced by tests/test_examples.py which boots
+      every example marked Executable from configuration alone).
 - [x] Decide how backward-compatibility re-exports will be deprecated:
       module `__getattr__` shims emitting `DeprecationWarning` with the
       canonical import path, held for two minor releases and removed at the

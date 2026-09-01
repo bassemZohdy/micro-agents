@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 564 collected | 478 selected by the default test job; the remaining 86 run in the integration/e2e jobs (Redis and PostgreSQL service containers) |
+| Tests | 569 collected | 483 selected by the default test job; the remaining 86 run in the integration/e2e jobs (Redis and PostgreSQL service containers) |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |

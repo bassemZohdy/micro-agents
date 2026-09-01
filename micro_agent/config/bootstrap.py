@@ -526,7 +526,10 @@ def _build_knowledge_provider(
 
 def _build_tool_registry(definition: MicroAgentDefinition) -> dict[str, Tool]:
     """Instantiate the built-in native tools declared by the definition."""
+    from micro_agent.tools.plugin import load_plugin_tools
+
     builtins = builtin_tool_registry()
+    builtins.update(load_plugin_tools())
     return {
         tool_definition.name: builtins[tool_definition.name]
         for tool_definition in definition.spec.dependencies.tools
