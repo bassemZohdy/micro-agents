@@ -190,7 +190,7 @@ state, or A2A task interoperability.
 | A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests | streaming, push notifications, durable task store, and cancellation |
 | State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions plus custom-runtime operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, approval flow, and redacted audit events | downstream delegation and generic policy conditions |
-| Observability | in-memory metrics/spans and JSON logging | OpenTelemetry export and context propagation |
+| Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, safe content defaults, and bounded labels | outbound carrier instrumentation and operational dashboards/alerts |
 | Operations | container, package/release gates, versioned OpenAPI, request-size guard, opt-in CORS, rate-limit hook, and sample manifests | production bootstrap and OpenShift hardening |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
@@ -221,10 +221,11 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current base suite contains 507 collected tests: 429 in the default
+The current base suite contains 508 collected tests: 430 in the default
 development selection and 78 integration tests (five also tagged E2E). The
-Redis extra adds three live integration tests in the Redis-enabled CI job, and the
-optional Google ADK adapter adds 15 tests when that extra is installed. CI runs
+Redis extra adds three live integration tests in the Redis-enabled CI job, the
+optional Google ADK adapter adds 15 tests, and the optional OpenTelemetry extra
+adds three integration tests when those extras are installed. CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release
 tags repeat the quality gates, validate the tag against the package version,

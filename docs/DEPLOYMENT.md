@@ -113,5 +113,7 @@ Google ADK rejects the binding until its mapping is implemented.
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation
 - [ ] resource, disruption, autoscaling, topology, and NetworkPolicy decisions
-- [ ] log/metric/trace export with sensitive-data controls
+- [x] optional OpenTelemetry instrumentation with content capture disabled and
+      bounded metric labels; configure SDK exporters before enabling in
+      production
 - [ ] rollback and compatibility-tested release

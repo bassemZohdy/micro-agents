@@ -16,7 +16,7 @@ framework defaults
 executable bootstrap uses it to construct the configured model provider before
 the service becomes ready.
 
-## Environment variables recognized by `resolve_config()`
+## Environment variables recognized by `resolve_config()` and telemetry bootstrap
 
 | Variable | Resolved field | Bootstrap status |
 |---|---|---|
@@ -30,6 +30,11 @@ the service becomes ready.
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's Redis-backed distributed operation registry; unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 | `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
+| `MICRO_AGENT_OTEL_ENABLED` | telemetry bootstrap | wired; opt-in OpenTelemetry instrumentation (`true`/`false`, default `false`) |
+| `MICRO_AGENT_OTEL_SERVICE_NAME` | telemetry bootstrap | wired; service name for standard traces/metrics (falls back to `OTEL_SERVICE_NAME`) |
+| `MICRO_AGENT_OTEL_CAPTURE_CONTENT` | telemetry bootstrap | wired; opt-in bounded content attributes (default `false`) |
+| `MICRO_AGENT_OTEL_MAX_ATTRIBUTE_LENGTH` | telemetry bootstrap | wired; positive bound for attribute/label strings (default `256`) |
+| `MICRO_AGENT_OTEL_MAX_LABEL_VALUES` | telemetry bootstrap | wired; maximum distinct values per metric label (default `100`, overflow is `[OTHER]`) |
 
 When a definition declares `memory`, the bootstrap constructs the built-in
 in-memory provider when `MICRO_AGENT_MEMORY_ENDPOINT` is `memory://` or
@@ -191,6 +196,26 @@ time; events carry identifiers and reasons, never payloads or credentials.
 The default `stdout` sink writes one JSON object per line for platform log
 collection (the 12-factor durability path); `file` appends to a local file
 for deployments without a log pipeline.
+
+## OpenTelemetry
+
+Install the optional instrumentation extra and enable it explicitly:
+
+```bash
+pip install 'micro-agents[otel]'
+export MICRO_AGENT_OTEL_ENABLED=true
+export MICRO_AGENT_OTEL_SERVICE_NAME=orders-agent
+```
+
+`Telemetry` keeps the in-memory metrics and span tree for deterministic tests
+and adds SDK-backed spans, counters, histograms, and W3C `traceparent`/
+`tracestate` extraction and injection when enabled. Configure the OpenTelemetry
+SDK/exporter using the standard `OTEL_*` environment variables or an embedding
+process's providers. Content-bearing attributes are suppressed by default;
+only enable `MICRO_AGENT_OTEL_CAPTURE_CONTENT` after reviewing redaction,
+retention, and cost controls. Label values are truncated and capped to avoid
+unbounded cardinality. Model/MCP outbound carrier instrumentation and
+dashboard/alert definitions remain deployment follow-up work.
 
 ## Approval continuation
 

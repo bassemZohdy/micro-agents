@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
 
 async def run(args: argparse.Namespace) -> None:
     definition = load_definition_from_file(args.definition)
-    telemetry = Telemetry()
+    telemetry = Telemetry.from_environment()
     bootstrap = build_runtime(definition, telemetry=telemetry)
     runtime = bootstrap.runtime
     agent = DefaultMicroAgent(definition, runtime)

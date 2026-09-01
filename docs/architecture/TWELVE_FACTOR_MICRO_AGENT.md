@@ -337,5 +337,7 @@ No factor exists as a purely philosophical statement.
 
 Acceptance requires executable evidence at the relevant boundary. Schema
 validation is not runtime portability, a fake client is not wire-protocol
-interoperability, a shared SQLite file is not an external multi-replica state
-service, and in-memory spans are not OpenTelemetry export or propagation.
+interoperability, and a shared SQLite file is not an external multi-replica
+state service. The optional OpenTelemetry path now exports standard
+spans/metrics and bridges HTTP trace context; outbound carrier instrumentation
+and production dashboards still require deployment configuration.

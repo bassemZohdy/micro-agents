@@ -1,9 +1,12 @@
 """Tests for Micro-Agent Observability — logging, metrics, tracing."""
 
+import pytest
+
 from micro_agent.observability import (
     MetricPoint,
     MetricsCollector,
     StructuredLogger,
+    Telemetry,
     TraceSpan,
 )
 
@@ -64,6 +67,23 @@ class TestMetricsCollector:
         collector.clear()
         assert len(collector.get_metrics()) == 0
 
+    def test_telemetry_bounds_label_cardinality(self):
+        from micro_agent.observability import Telemetry
+
+        telemetry = Telemetry(max_label_values=1)
+        telemetry.increment("requests_total", {"tenant": "first"})
+        telemetry.increment("requests_total", {"tenant": "second"})
+        points = telemetry.metrics.get_metrics("requests_total")
+        assert [point.labels["tenant"] for point in points] == ["first", "[OTHER]"]
+
+    @pytest.mark.otel
+    def test_otel_environment_is_opt_in(self, monkeypatch):
+        monkeypatch.delenv("MICRO_AGENT_OTEL_ENABLED", raising=False)
+        assert not Telemetry.from_environment().otel_enabled
+        monkeypatch.setenv("MICRO_AGENT_OTEL_ENABLED", "true")
+        monkeypatch.setenv("MICRO_AGENT_OTEL_MAX_LABEL_VALUES", "3")
+        assert Telemetry.from_environment().otel_enabled
+
 
 class TestMetricPoint:
     """Test metric point."""
@@ -106,3 +126,57 @@ class TestTraceSpan:
     def test_parent_span(self):
         span = TraceSpan(trace_id="t1", span_id="s2", parent_span_id="s1", name="model.call")
         assert span.parent_span_id == "s1"
+
+
+@pytest.mark.otel
+def test_otel_bridge_exports_spans_metrics_and_w3c_context():
+    """The optional SDK receives standard telemetry without changing the facade."""
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry import context, propagate, trace
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    span_exporter = InMemorySpanExporter()
+    tracer_provider = TracerProvider()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    metric_reader = InMemoryMetricReader()
+    meter_provider = MeterProvider(metric_readers=[metric_reader])
+    telemetry = Telemetry(
+        otel_tracer=tracer_provider.get_tracer("micro-agent-test"),
+        otel_meter=meter_provider.get_meter("micro-agent-test"),
+        capture_content=False,
+    )
+
+    carrier: dict[str, str] = {}
+    incoming = tracer_provider.get_tracer("parent").start_span("incoming")
+    incoming_token = context.attach(trace.set_span_in_context(incoming))
+    try:
+        propagate.inject(carrier)
+    finally:
+        context.detach(incoming_token)
+    incoming.end()
+    token = telemetry.attach_context(carrier)
+    span = telemetry.start_span(
+        "agent.invoke",
+        attributes={"content": "must not be exported", "agent": "test"},
+    )
+    span.add_event("agent.response", {"content": "also omitted"})
+    telemetry.increment("agent_invocations_total", {"agent": "test"})
+    telemetry.record("agent_invocation_latency_ms", 12.5, {"agent": "test"})
+    telemetry.finish_span(span)
+    telemetry.detach_context(token)
+
+    exported = span_exporter.get_finished_spans()
+    agent_spans = [item for item in exported if item.name == "agent.invoke"]
+    assert len(agent_spans) == 1
+    assert agent_spans[0].parent is not None
+    assert agent_spans[0].parent.is_valid
+    assert "content" not in agent_spans[0].attributes
+    assert agent_spans[0].events[0].name == "agent.response"
+    assert "content" not in agent_spans[0].events[0].attributes
+    metric_data = metric_reader.get_metrics_data()
+    assert metric_data is not None
+    assert metric_data.resource_metrics
