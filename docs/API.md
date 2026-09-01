@@ -117,6 +117,11 @@ implements it.
 
 ## Distributed operation idempotency
 
+Tool declarations classify each operation as `read_only`, `idempotent`, or
+`unsafe`. `read_only` tools bypass side-effect approval and idempotency claims;
+the other classes retain policy enforcement and can use the registry below.
+The default for legacy or undeclared tools is `unsafe`.
+
 The custom runtime can use a shared Redis operation registry when
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` is configured. Side-effect tools may include
 an `idempotency_key` in their arguments. Reusing the same stable key causes a
@@ -124,6 +129,8 @@ retry on another replica to return the original result instead of executing the
 tool again; while the first attempt is still running, the duplicate receives an
 `operation is already in progress` result with `was_deduplicated: true`.
 Claims are atomic and results expire with the registry TTL (one day by default).
+Operation objects carry the mapped retry classification (`safe`, `idempotent`,
+or `unsafe`) into registry and audit hooks for downstream dispatch decisions.
 Keys are tenant-scoped when a verified tenant identity is available (local or
 unverified calls retain the legacy provider-wide namespace). Session and memory
 records carry the same optional `tenant_id` boundary and a monotonically

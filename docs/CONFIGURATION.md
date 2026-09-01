@@ -246,6 +246,40 @@ returned metadata also includes the pending tool names, approval hints, and
 payloads. The adapter keeps ADK classes behind the runtime SPI and does not
 enable the feature for runtimes that do not advertise the adapter.
 
+## Tool side-effect classification
+
+Declare the retry and approval semantics of each tool explicitly. The
+classification is part of the portable definition, so both runtime adapters
+apply the same policy:
+
+```yaml
+spec:
+  dependencies:
+    tools:
+      - name: profile
+        source: native
+        side_effect: read_only
+      - name: charge-card
+        source: mcp
+        side_effect: idempotent
+      - name: send-notification
+        source: native
+        side_effect: unsafe
+```
+
+`read_only` means the tool must not write external state. It is still subject
+to the ordinary tool allow/deny policy, but it does not trigger side-effect
+approval or an operation-registry claim. `idempotent` means a stable
+`idempotency_key` can safely deduplicate a retry; `unsafe` may have a
+non-repeatable effect and remains approval/policy gated. Both `idempotent` and
+`unsafe` use the operation registry when one is configured.
+
+The field defaults to `unsafe` for backward compatibility and fail-closed
+behavior. Runtime metadata for injected or discovered tools also defaults to
+`unsafe` when no declaration overrides it. A classification documents the
+contract; it does not make an implementation idempotent or add automatic
+retry logic. Unknown write outcomes and retry budgets remain deployment work.
+
 ## MCP servers
 
 Declared MCP servers connect through the official MCP SDK (stable

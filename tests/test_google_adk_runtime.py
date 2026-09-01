@@ -202,6 +202,37 @@ async def test_adk_approval_continuation_uses_native_confirmation_flow():
 
 
 @pytest.mark.asyncio
+async def test_adk_read_only_tool_skips_side_effect_confirmation():
+    from micro_agent.security import AgentPolicy
+
+    provider = SequencedProvider()
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=provider,
+            policy=AgentPolicy(approval_required=True, side_effect_policy="deny"),
+        )
+    )
+    definition = _definition(
+        include_tool=True,
+        dependencies_extra={
+            "tools": [{"name": "echo", "source": "native", "side_effect": "read_only"}]
+        },
+    )
+    agent = await runtime.create(definition)
+    try:
+        await runtime.start(agent)
+        response = await runtime.invoke(
+            agent,
+            AgentRequest(input={"message": "run"}, session_id="read-only-session"),
+        )
+        assert response.status == "success"
+        assert response.output["tool_results"][0]["output"] == {"echoed": "from-adk"}
+        assert "continuation_id" not in response.metadata
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
 async def test_adk_start_checks_injected_provider_health():
     runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=UnhealthyProvider()))
     agent = await runtime.create(_definition())

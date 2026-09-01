@@ -64,7 +64,7 @@ from micro_agent.security import (
     resolve_workload_identity,
     set_invocation_identity,
 )
-from micro_agent.tools import Tool, builtin_tool_registry
+from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
 
 _ADK_REQUEST_CONFIRMATION_NAME = "adk_request_confirmation"
 
@@ -149,12 +149,17 @@ class GoogleAdkRuntime(AgentRuntime):
         )
         adk_model = self._adk_model(definition, model_config)
         tools = self._resolve_tools(definition)
+        tool_side_effects = {
+            tool_definition.name: tool_definition.side_effect
+            for tool_definition in definition.spec.dependencies.tools
+        }
         adk_tools = [
             _as_adk_tool(
                 tool,
                 evaluator=self._policy_evaluator,
                 telemetry=self._telemetry,
                 audit=self._config.audit,
+                side_effect=tool_side_effects.get(tool.metadata.name),
             )
             for tool in tools.values()
         ]
@@ -220,6 +225,7 @@ class GoogleAdkRuntime(AgentRuntime):
                 "app_name": app_name,
                 "user_id": self._config.user_id,
                 "model_config": model_config,
+                "tool_side_effects": tool_side_effects,
                 "mcp_tools_appended": False,
                 "started": False,
             },
@@ -298,6 +304,9 @@ class GoogleAdkRuntime(AgentRuntime):
                         evaluator=self._policy_evaluator,
                         telemetry=self._telemetry,
                         audit=self._config.audit,
+                        side_effect=(agent._internal.get("tool_side_effects") or {}).get(
+                            tool.metadata.name
+                        ),
                     )
                     for tool in discovered.values()
                 ]
@@ -790,6 +799,7 @@ def _as_adk_tool(
     evaluator: PolicyEvaluator | None = None,
     telemetry: Telemetry | None = None,
     audit: AuditSink | None = None,
+    side_effect: str | None = None,
 ) -> Any:
     """Adapt a Micro-Agent tool to ADK's client-side ``BaseTool`` contract.
 
@@ -810,6 +820,9 @@ def _as_adk_tool(
                 description=micro_tool.metadata.description or micro_tool.metadata.name,
             )
             self._micro_tool = micro_tool
+            self._side_effect = normalize_tool_side_effect(
+                side_effect or micro_tool.metadata.side_effect
+            )
 
         def _get_declaration(self) -> Any:
             schema = self._micro_tool.input_schema.parameters
@@ -830,7 +843,7 @@ def _as_adk_tool(
 
         async def check_require_confirmation(self, args: dict[str, Any], tool_context: Any) -> bool:
             """Expose Micro-Agent approval policy to ADK's resume validator."""
-            if evaluator is None:
+            if evaluator is None or self._side_effect == "read_only":
                 return False
             return evaluator.evaluate_side_effect(self._micro_tool.metadata.name).requires_approval
 
@@ -839,10 +852,13 @@ def _as_adk_tool(
                 decision = evaluator.evaluate_tool(self._micro_tool.metadata.name)
                 if not decision.allowed:
                     return self._denied(f"denied by policy: {decision.reason}")
-                side_effect_decision = evaluator.evaluate_side_effect(
-                    self._micro_tool.metadata.name
-                )
-                if not side_effect_decision.allowed:
+                if self._side_effect != "read_only":
+                    side_effect_decision = evaluator.evaluate_side_effect(
+                        self._micro_tool.metadata.name
+                    )
+                else:
+                    side_effect_decision = None
+                if side_effect_decision is not None and not side_effect_decision.allowed:
                     if side_effect_decision.requires_approval:
                         confirmation = getattr(tool_context, "tool_confirmation", None)
                         if confirmation is None:

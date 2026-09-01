@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `76cbd0a` on 2026-09-01. Completed work is removed rather
+Baseline audited: `0a32d65` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -228,13 +228,13 @@ state through an external service under concurrent load.
 - [x] Replace in-memory-only telemetry with OpenTelemetry traces, metrics, and
       context propagation while keeping test exporters.
 - [x] Propagate trace context through HTTP, model, MCP, tool, and A2A calls.
-- [ ] Define safe content-capture defaults, cardinality limits, and cost/token
+- [x] Define safe content-capture defaults, cardinality limits, and cost/token
       conventions.
 - [ ] Expose operational metrics and document dashboards/alerts.
 
 ### P1.8 Side-effect and retry safety
 
-- [ ] Classify tools as read-only, idempotent, or unsafe instead of treating
+- [x] Classify tools as read-only, idempotent, or unsafe instead of treating
       every tool as a side effect.
 - [x] Persist Redis idempotency records atomically with status and expiry.
 - [ ] Do not retry an entire invocation after an unknown write outcome.

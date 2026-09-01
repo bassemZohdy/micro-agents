@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -176,7 +176,13 @@ class ModelRef(BaseModel, extra="forbid"):
 
 
 class ToolDefinition(BaseModel, extra="forbid"):
-    """Defines a tool available to the agent."""
+    """Defines a tool available to the agent.
+
+    ``side_effect`` is intentionally explicit at the definition boundary so
+    runtimes can enforce approval and retry behavior without inferring safety
+    from a tool name or prompt text.  Existing definitions default to
+    ``unsafe`` for backward-compatible fail-closed behavior.
+    """
 
     name: str = Field(..., min_length=1, max_length=128, pattern=_TOKEN_PATTERN)
     description: str | None = None
@@ -186,6 +192,14 @@ class ToolDefinition(BaseModel, extra="forbid"):
         description="Tool source (native, mcp, openapi).",
     )
     timeout_seconds: int | None = Field(None, ge=1)
+    side_effect: Literal["read_only", "idempotent", "unsafe"] = Field(
+        "unsafe",
+        description=(
+            "Tool side-effect classification: read_only performs no writes, "
+            "idempotent can be retried with a stable idempotency key, and "
+            "unsafe may have non-repeatable effects."
+        ),
+    )
 
 
 class McpServerRef(BaseModel, extra="forbid"):

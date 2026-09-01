@@ -8,7 +8,9 @@ from micro_agent.tools.tool import (
     ToolMetadata,
     ToolOutputSchema,
     ToolResult,
+    ToolSideEffect,
     builtin_tool_registry,
+    normalize_tool_side_effect,
 )
 
 __all__ = [
@@ -19,5 +21,7 @@ __all__ = [
     "ToolMetadata",
     "ToolOutputSchema",
     "ToolResult",
+    "ToolSideEffect",
     "builtin_tool_registry",
+    "normalize_tool_side_effect",
 ]

@@ -8,6 +8,7 @@ from micro_agent.tools import (
     ToolError,
     ToolMetadata,
     ToolResult,
+    normalize_tool_side_effect,
 )
 
 
@@ -18,6 +19,7 @@ class TestToolMetadata:
         meta = ToolMetadata(name="test-tool")
         assert meta.name == "test-tool"
         assert meta.description is None
+        assert meta.side_effect == "unsafe"
 
     def test_full_metadata(self):
         meta = ToolMetadata(
@@ -28,6 +30,11 @@ class TestToolMetadata:
         )
         assert meta.source == "native"
         assert meta.timeout_seconds == 10
+
+    def test_side_effect_normalization_fails_closed(self):
+        assert normalize_tool_side_effect("read_only") == "read_only"
+        assert normalize_tool_side_effect("idempotent") == "idempotent"
+        assert normalize_tool_side_effect("unexpected") == "unsafe"
 
 
 class TestToolResult:

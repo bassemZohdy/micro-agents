@@ -9,6 +9,7 @@ from micro_agent.security import (
     AgentPolicy,
     OperationRegistry,
     RedisOperationRegistry,
+    RetryClassification,
     UserContext,
     build_security_context,
 )
@@ -47,6 +48,18 @@ class OneShotToolProvider(FakeModelProvider):
         if len(self.invocations) == 1:
             self._config.tool_requests = []
         return await super().generate(config, messages, tools=tools)
+
+
+class RecordingOperationRegistry(OperationRegistry):
+    """Capture operation metadata while retaining local deduplication behavior."""
+
+    def __init__(self):
+        super().__init__()
+        self.operations = []
+
+    def claim(self, operation):
+        self.operations.append(operation)
+        return super().claim(operation)
 
 
 def _echo_runtime(policy: AgentPolicy | None = None, **config_kwargs) -> AdkRuntime:
@@ -119,6 +132,32 @@ class TestToolPolicyEnforcement:
         # The pause is not a completed invocation: nothing was executed and
         # nothing was persisted to the session.
         assert await runtime._approval_store.get(response.metadata["continuation_id"])
+
+    @pytest.mark.asyncio
+    async def test_read_only_tool_bypasses_side_effect_approval(self):
+        policy = AgentPolicy(approval_required=True, side_effect_policy="deny")
+        registry = RecordingOperationRegistry()
+        runtime = _echo_runtime(policy=policy, operation_registry=registry)
+        agent = await runtime.create(
+            _definition(tools=[{"name": "echo", "source": "native", "side_effect": "read_only"}])
+        )
+        response = await runtime.invoke(agent, AgentRequest(input={}))
+        assert response.status == "success"
+        assert response.output["tool_results"][0]["output"] == {"echoed": "hi"}
+        assert response.metadata["tools_called"] == ["echo"]
+        assert registry.operations == []
+
+    @pytest.mark.asyncio
+    async def test_idempotent_tool_marks_operation_retry_classification(self):
+        registry = RecordingOperationRegistry()
+        runtime = _echo_runtime(operation_registry=registry)
+        agent = await runtime.create(
+            _definition(tools=[{"name": "echo", "source": "native", "side_effect": "idempotent"}])
+        )
+        response = await runtime.invoke(agent, AgentRequest(input={}))
+        assert response.status == "success"
+        assert registry.operations
+        assert registry.operations[0].retry_classification is RetryClassification.IDEMPOTENT
 
     @pytest.mark.asyncio
     async def test_approved_continuation_executes_and_completes(self):
