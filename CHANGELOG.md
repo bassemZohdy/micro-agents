@@ -132,42 +132,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Bootstrap
 
-- Added typed deployment endpoint overlays. `EnvironmentOverlay` binds model,
-  MCP, memory, and session locations at bootstrap time without mutating the
-  logical definition; model/MCP URLs are validated, unknown MCP refs and stdio
-  endpoint overrides fail fast, and explicit environment variables retain
-  precedence. Added a canonical v1alpha1 compatibility fixture and migration
-  guidance for future definition API versions.
-- Hardened the in-memory memory provider: invalid retention bounds now fail at
-  construction, and expired entries are purged consistently before reads,
-  writes, and capacity eviction so stale data cannot displace live entries.
-- Serialized SQLite session-provider operations with an explicit async lock,
-  added a bounded busy timeout, made close idempotent, and documented SQLite
-  as a single-process development store rather than a production multi-replica
-  backend.
-- Added an optional Redis-backed session provider for `persistence: external`.
-  `redis://` and `rediss://` endpoints are validated at bootstrap; session
-  writes use transactional pipelines, Redis key TTLs enforce expiry, stale
-  index entries are cleaned, health probing is available, and shutdown closes
-  only clients owned by the provider. Install `micro-agents[redis]` to enable
-  the built-in client; injected clients remain supported for tests/deployments.
-- MCP Streamable HTTP clients now disable ambient proxy environment variables
-  by default, keeping loopback/inter-service traffic on the configured endpoint
-  unless an explicit transport policy is added.
-- Added an optional Redis-backed memory provider. Redis memory stores scoped
-  JSON records in a shared namespace, enforces `MemoryPolicy` TTL and capacity
-  limits, purges stale index members, exposes a health probe, and closes only
-  clients owned by the provider. `MICRO_AGENT_MEMORY_ENDPOINT=redis://...`
-  selects it when `micro-agents[redis]` is installed.
-- Added an optional Redis-backed operation registry for the custom runtime.
-  `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` or `rediss://...` enables
-  atomic idempotency-key claims, shared in-progress/completed results, result
-  TTLs, readiness probing, and ownership-aware shutdown. The Google ADK runtime
-  rejects this binding until its distributed mapping is implemented.
-- Added verified-tenant namespaces and optimistic versions to in-memory,
-  SQLite, and Redis session/memory providers. Provider reads return snapshots,
-  updates advance their version, and stale non-zero-version writes raise
-  `StateConflictError`; zero-version writes retain legacy compatibility.
+- Added optional PostgreSQL production state providers (the `postgres` extra,
+  asyncpg): a concurrency-safe session provider with optimistic version-based
+  conflict detection, a scope-isolated memory provider, and an atomic
+  cross-process operation registry. `postgres://` and `postgresql://` session,
+  memory, and idempotency endpoints construct these providers at bootstrap;
+  concurrent DDL is serialized with advisory locks for multi-replica startups.
+  Providers close their pools on shutdown and serve as readiness probes.
+  Integration tests run against a real PostgreSQL service (CI service
+  container included) proving two independent provider instances share state
+  under concurrent load.
 - Added A2A compliance on the official a2a-sdk: the standard
   `/.well-known/agent-card.json` route serves the SDK's card model (protocol
   binding/version, security schemes advertised from the configured

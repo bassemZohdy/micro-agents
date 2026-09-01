@@ -331,6 +331,13 @@ Implemented:
   provider for shared `persistence: external` state
 - optional Redis operation registry for custom-runtime distributed idempotency
   claims and results
+- optional PostgreSQL state providers (`postgres` extra, asyncpg): a
+  concurrency-safe session provider and a tenant/scope-partitioned memory
+  provider, both with optimistic version-based conflict detection, plus a
+  PostgreSQL operation registry with atomic cross-process idempotency-key
+  claims; `postgres://`/`postgresql://` session, memory, and idempotency
+  endpoints select them at bootstrap, concurrent DDL is serialized with
+  advisory locks, and pools close on shutdown
 - `MemoryPolicy` validates retention bounds; expired in-memory entries are
   purged before reads, writes, and capacity eviction so stale entries cannot
   consume capacity or evict live data
@@ -343,7 +350,8 @@ Implemented:
 Gaps:
 
 - SQLite is a development persistence example, not a Kubernetes multi-replica
-  external store
+  external store; PostgreSQL providers require the optional extra and a
+  provisioned database (not embedded with the framework)
 - no production knowledge provider; state providers scope records by verified
   tenant when available and reject stale non-zero-version updates; unscoped
   zero-version writes remain a compatibility path

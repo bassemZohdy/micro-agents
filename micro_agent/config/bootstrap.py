@@ -395,10 +395,22 @@ def _build_session_provider(
             )
         except (RuntimeError, ValueError) as exc:
             raise BootstrapError(str(exc)) from exc
+    if _is_postgres_endpoint(endpoint):
+        from micro_agent.session.postgres import PostgresSessionProvider
+
+        try:
+            return PostgresSessionProvider(endpoint, ttl_seconds=session.ttl_seconds)
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
     raise BootstrapError(
-        "external session provider supports redis:// or rediss:// endpoints; "
-        "install the 'redis' extra and configure MICRO_AGENT_SESSION_ENDPOINT"
+        "external session provider supports redis://, rediss://, postgres://, or "
+        "postgresql:// endpoints; install the 'redis' or 'postgres' extra and "
+        "configure MICRO_AGENT_SESSION_ENDPOINT"
     )
+
+
+def _is_postgres_endpoint(endpoint: str) -> bool:
+    return endpoint.startswith(("postgres://", "postgresql://"))
 
 
 def _sqlite_path(endpoint: str | None) -> str:
@@ -450,9 +462,17 @@ def _build_memory_provider(
             return RedisMemoryProvider(endpoint=endpoint, policy=MemoryPolicy())
         except (RuntimeError, ValueError) as exc:
             raise BootstrapError(str(exc)) from exc
+    if _is_postgres_endpoint(endpoint):
+        from micro_agent.memory.postgres import PostgresMemoryProvider
+
+        try:
+            return PostgresMemoryProvider(endpoint, policy=MemoryPolicy())
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
     raise BootstrapError(
-        "external memory provider supports redis:// or rediss:// endpoints; "
-        "install the 'redis' extra and configure MICRO_AGENT_MEMORY_ENDPOINT"
+        "external memory provider supports redis://, rediss://, postgres://, or "
+        "postgresql:// endpoints; install the 'redis' or 'postgres' extra and "
+        "configure MICRO_AGENT_MEMORY_ENDPOINT"
     )
 
 
@@ -466,9 +486,17 @@ def _build_operation_registry(config: ResolvedConfig) -> OperationRegistryProtoc
             return RedisOperationRegistry(endpoint=endpoint)
         except (RuntimeError, ValueError) as exc:
             raise BootstrapError(str(exc)) from exc
+    if _is_postgres_endpoint(endpoint):
+        from micro_agent.memory.postgres import PostgresIdempotencyStore
+
+        try:
+            return PostgresIdempotencyStore(endpoint)
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
     raise BootstrapError(
-        "external idempotency provider supports redis:// or rediss:// endpoints; "
-        "install the 'redis' extra and configure MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
+        "external idempotency provider supports redis://, rediss://, postgres://, or "
+        "postgresql:// endpoints; install the 'redis' or 'postgres' extra and "
+        "configure MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
     )
 
 

@@ -1,5 +1,6 @@
 """Micro-Agent Session — conversational/runtime context."""
 
+from micro_agent.session.postgres import PostgresSessionProvider
 from micro_agent.session.redis import RedisSessionProvider
 from micro_agent.session.session import (
     InMemorySessionProvider,
@@ -12,6 +13,7 @@ from micro_agent.state import ConcurrencyConflictError, StateConflictError
 
 __all__ = [
     "InMemorySessionProvider",
+    "PostgresSessionProvider",
     "RedisSessionProvider",
     "SessionContext",
     "SessionMetadata",

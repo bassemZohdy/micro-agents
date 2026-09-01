@@ -3,7 +3,9 @@
 The provider demonstrates persistence across provider instances using only the
 standard library. It serializes operations per provider and lets SQLite wait
 briefly for another connection, but SQLite remains a single-process
-development store rather than a production multi-replica backend.
+development store rather than a production multi-replica backend:
+multi-replica deployments must use an external provider (PostgreSQL) instead
+of sharing this file across processes.
 """
 
 from __future__ import annotations

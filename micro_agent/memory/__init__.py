@@ -6,6 +6,7 @@ from micro_agent.memory.memory import (
     MemoryPolicy,
     MemoryProvider,
 )
+from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
 from micro_agent.memory.redis import RedisMemoryProvider
 from micro_agent.state import ConcurrencyConflictError, StateConflictError
 
@@ -14,6 +15,8 @@ __all__ = [
     "MemoryEntry",
     "MemoryPolicy",
     "MemoryProvider",
+    "PostgresIdempotencyStore",
+    "PostgresMemoryProvider",
     "RedisMemoryProvider",
     "ConcurrencyConflictError",
     "StateConflictError",

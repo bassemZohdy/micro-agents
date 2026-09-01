@@ -121,12 +121,23 @@ class TestMemoryPolicyEnforcement:
         assert await provider.get("b") is not None
 
     @pytest.mark.asyncio
-    async def test_ttl_expires_entries(self):
-        provider = InMemoryMemoryProvider(policy=MemoryPolicy(ttl_seconds=0))
+    async def test_ttl_expires_and_purges_entries(self, monkeypatch):
+        clock = [1000.0]
+        monkeypatch.setattr("micro_agent.memory.memory.monotonic", lambda: clock[0])
+        provider = InMemoryMemoryProvider(policy=MemoryPolicy(ttl_seconds=30))
         await provider.store(MemoryEntry(key="a", value="1"))
+        assert await provider.get("a") is not None
+        clock[0] += 31
         assert await provider.get("a") is None
+        # Expired entries are physically purged, not only skipped on read.
         assert await provider.list_entries() == []
         assert await provider.search("1") == []
+
+    def test_memory_policy_bounds_are_validated(self):
+        with pytest.raises(ValueError, match="max_entries"):
+            MemoryPolicy(max_entries=0)
+        with pytest.raises(ValueError, match="ttl_seconds"):
+            MemoryPolicy(ttl_seconds=-1)
 
     @pytest.mark.asyncio
     async def test_read_operations_remove_expired_entries_without_matching_key(self):

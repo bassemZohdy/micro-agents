@@ -25,9 +25,9 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
-| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory or Redis (`redis://`/`rediss://`) memory; unsupported endpoints fail fast |
-| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite or Redis (`redis://`/`rediss://`) bindings; unsupported external endpoints fail fast |
-| `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's Redis-backed distributed operation registry; unsupported endpoints fail fast |
+| `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
+| `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
+| `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 | `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
 | `MICRO_AGENT_OTEL_ENABLED` | telemetry bootstrap | wired; opt-in OpenTelemetry instrumentation (`true`/`false`, default `false`) |
@@ -43,23 +43,32 @@ in-memory provider when `MICRO_AGENT_MEMORY_ENDPOINT` is `memory://` or
 `inmemory://` (or unset). A `redis://` or `rediss://` endpoint selects the
 optional Redis memory provider, which stores scoped JSON records in a shared
 namespace, enforces `MemoryPolicy` TTL/capacity limits, and cleans expired
-records. Other endpoints fail fast until a matching provider is installed.
+records. A `postgres://` or `postgresql://` endpoint selects the optional
+PostgreSQL memory provider, which stores tenant- and scope-partitioned
+versioned entries with optimistic-conflict detection. Other endpoints fail
+fast until a matching provider is installed.
 Session persistence `memory` constructs an in-memory provider.
 Persistence `sqlite` accepts `MICRO_AGENT_SESSION_ENDPOINT` as
 `sqlite:///absolute/path` (or a plain SQLite path) and defaults to `:memory:`
 for development. Persistence `external` accepts `redis://` or `rediss://`
 endpoints when the optional `redis` extra is installed
-(`pip install 'micro-agents[redis]'`). The Redis provider uses transactional
+(`pip install 'micro-agents[redis]'`), or `postgres://`/`postgresql://`
+endpoints when the optional `postgres` extra is installed
+(`pip install 'micro-agents[postgres]'`). The Redis provider uses transactional
 writes, Redis key TTLs, and a shared index so independently scaled processes
-can share session state. Other endpoints fail fast; the declaration is never
+can share session state; the PostgreSQL provider guards updates with stored
+version checks so a stale writer raises `StateConflictError` instead of
+losing its update. Other endpoints fail fast; the declaration is never
 silently downgraded to local state. An endpoint without a matching definition
 is also rejected so configuration cannot be accidentally ignored.
 
 The custom runtime can share operation reservations and completed results across
 replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`. Redis (`redis://` or
-`rediss://`) is supported when the optional client is installed. Reservations
-use an atomic `SET ... NX` claim and completed results expire after the provider
-TTL (one day by default). When a verified tenant identity is present, operation
+`rediss://`) is supported when the optional client is installed, and
+PostgreSQL (`postgres://`/`postgresql://`) when the optional `postgres` extra
+is installed. Reservations are claimed with one atomic write (Redis `SET ...
+NX`, PostgreSQL `INSERT ... ON CONFLICT DO NOTHING`) and completed results
+expire after the provider TTL (one day by default). When a verified tenant identity is present, operation
 keys are namespaced by that tenant; unverified/local calls retain the legacy
 provider-wide namespace. Session and memory records use the same verified
 tenant boundary. Reads return a versioned snapshot (starting at version 1),

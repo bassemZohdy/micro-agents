@@ -6,9 +6,11 @@ from micro_agent.config import BootstrapError, EnvironmentOverlay, build_runtime
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
+from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
 from micro_agent.security import AgentPolicy, RedisOperationRegistry
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
+from micro_agent.session.postgres import PostgresSessionProvider
 from runtimes.adk import AdkRuntime
 from runtimes.google_adk import GoogleAdkRuntime
 
@@ -286,6 +288,41 @@ async def test_external_redis_session_persistence_is_constructed(monkeypatch):
         assert provider._endpoint == "rediss://sessions.example.test/0"
     finally:
         await bootstrap.runtime.close()
+
+
+def test_external_postgres_endpoints_construct_providers(monkeypatch):
+    pytest.importorskip("asyncpg")
+    monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "postgres://db.example.test/agents")
+    monkeypatch.setenv("MICRO_AGENT_MEMORY_ENDPOINT", "postgresql://db.example.test/agents")
+    monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "postgres://db.example.test/agents")
+    bootstrap = build_runtime(
+        _definition(
+            provider="fake",
+            session={"persistence": "external"},
+            memory={"ref": "agent-memory"},
+        )
+    )
+    try:
+        session_provider = bootstrap.runtime._config.session_provider
+        assert isinstance(session_provider, PostgresSessionProvider)
+        assert session_provider._dsn == "postgres://db.example.test/agents"
+        assert isinstance(bootstrap.runtime._config.memory_provider, PostgresMemoryProvider)
+        registry = bootstrap.runtime._config.operation_registry
+        assert isinstance(registry, PostgresIdempotencyStore)
+    finally:
+        # Pools are created lazily; closing before any I/O is a no-op.
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_external_postgres_session_endpoint_requires_postgres_extra(monkeypatch):
+    import sys
+
+    monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "postgres://db.example.test/agents")
+    monkeypatch.setitem(sys.modules, "asyncpg", None)
+    with pytest.raises(BootstrapError, match="'postgres' extra"):
+        build_runtime(_definition(provider="fake", session={"persistence": "external"}))
 
 
 @pytest.mark.asyncio
