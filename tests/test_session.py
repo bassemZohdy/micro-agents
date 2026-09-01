@@ -1,5 +1,7 @@
 """Tests for Micro-Agent Session."""
 
+import asyncio
+
 import pytest
 
 from micro_agent.session import (
@@ -93,3 +95,29 @@ class TestInMemorySessionProvider:
         await provider.create("sess-2")
         active = await provider.list_active()
         assert len(active) == 2
+
+
+class TestSqliteSessionProvider:
+    """SQLite operations are serialized for one development provider."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_operations_are_serialized(self, tmp_path):
+        from micro_agent.session import SqliteSessionProvider
+
+        provider = SqliteSessionProvider(str(tmp_path / "sessions.db"))
+        try:
+            await asyncio.gather(*(provider.create(f"session-{index}") for index in range(20)))
+            active = await provider.list_active()
+            assert {meta.session_id for meta in active} == {
+                f"session-{index}" for index in range(20)
+            }
+        finally:
+            await provider.aclose()
+
+    @pytest.mark.asyncio
+    async def test_close_is_idempotent(self):
+        from micro_agent.session import SqliteSessionProvider
+
+        provider = SqliteSessionProvider()
+        await provider.aclose()
+        await provider.aclose()
