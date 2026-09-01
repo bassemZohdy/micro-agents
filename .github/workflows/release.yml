@@ -18,10 +18,8 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip setuptools
       - run: python -m pip install -e ".[dev,docs]" build
-      - name: Validate tag and package version
-        run: |
-          package_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          test "${GITHUB_REF_NAME#v}" = "$package_version"
+      - name: Validate tag, package version, schema, image tag, and changelog
+        run: python tools/validate_release.py "${GITHUB_REF_NAME#v}"
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy micro_agent runtimes
@@ -61,6 +59,7 @@ jobs:
       contents: write
       id-token: write
       packages: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -88,12 +87,24 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push image
+        id: image-build
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.image-build.outputs.digest }}
+
+      - name: Attest distribution build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/*
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0

@@ -170,6 +170,16 @@ jobs:
           docker logs micro-agent-smoke
           exit 1
 
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Kubernetes manifests
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+          find deploy/kubernetes -name '*.yaml' -print0 | xargs -0 kubeconform -strict -summary
+
   security-runtime:
     runs-on: ubuntu-latest
     steps:

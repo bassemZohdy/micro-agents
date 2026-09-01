@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: micro-agent
+  labels:
+    app: micro-agent
+spec:
+  podSelector:
+    matchLabels:
+      app: micro-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # Restrict to your ingress gateway / service mesh namespace.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Model provider / MCP / state endpoints (HTTPS). Restrict with
+    # ipBlock or namespace selectors for your actual providers.
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443

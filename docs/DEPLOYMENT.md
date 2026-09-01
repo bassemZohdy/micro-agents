@@ -48,18 +48,57 @@ Apply order for the sample:
 ```bash
 kubectl apply -f deploy/kubernetes/configmap.yaml
 kubectl apply -f deploy/kubernetes/definition-configmap.yaml
-kubectl apply -f deploy/kubernetes/secret.yaml
 kubectl apply -f deploy/kubernetes/deployment.yaml
 kubectl apply -f deploy/kubernetes/service.yaml
+# optional production hardening:
+kubectl apply -f deploy/kubernetes/production/
 ```
+
+Manifest rules enforced by the test suite and CI (`kubeconform`):
+
+- the image reference must be an immutable version tag or digest — never
+  `:latest`. Resolve a digest with
+  `docker buildx imagetools inspect ghcr.io/bassemzohdy/micro-agents:<tag>`
+  and pin `image: ...@sha256:<digest>`.
+- no runtime UID is pinned: the image runs as an arbitrary UID in group 0
+  (OpenShift-compatible); keep `runAsNonRoot: true` and do not add
+  `runAsUser`.
+- no Secret is committed as an appliable manifest. Create it out of band:
+
+  ```bash
+  kubectl create secret generic micro-agent-secrets     --from-literal=MICRO_AGENT_MODEL_API_KEY=<value>
+  ```
+
+  or manage it with a secret manager — External Secrets Operator, Vault
+  Agent Injector, or SealedSecrets — referencing the same Secret name
+  (`micro-agent-secrets`). `deploy/kubernetes/secret.template.yaml` documents
+  the expected keys and is excluded from `kubectl apply -f deploy/kubernetes`
+  by its `.template.yaml` suffix.
+
+## Supply chain
+
+- **Image provenance**: every release tag publishes SLSA build provenance
+  attestations for the container image and the Python distributions
+  (`actions/attest-build-provenance`). Verify before deploying:
+
+  ```bash
+  gh attestation verify oci://ghcr.io/bassemzohdy/micro-agents@sha256:<digest> -R bassemZohdy/micro-agents
+  ```
+
+  Sign or re-attach organization policy with `cosign sign`/`cosign verify`
+  if your cluster enforces signature policy.
+- **Dependency locking**: CI installs from `pyproject.toml` bounds and runs
+  `pip-audit` on every pull request; releases build from the verified
+  environment. For hermetic deployments, generate a hash-pinned
+  `requirements.txt` (for example with `pip-compile --generate-hashes`) from
+  the committed bounds and install the image from that file; keep the lock
+  file in version control and regenerate on dependency bumps only.
 
 Before using this outside a disposable namespace:
 
-- replace `micro-agent:latest` with an immutable image tag or digest
-- do not store real credentials in `secret.yaml`; use the platform's secret
-  workflow
 - use an executable definition whose dependencies are actually wired
-- validate network egress to model/MCP endpoints
+- validate network egress to model/MCP endpoints (see
+  `deploy/kubernetes/production/networkpolicy.yaml`)
 - add external shared state for multiple replicas
 - define a shutdown deadline and cancellation policy for requests that do not
   drain in time

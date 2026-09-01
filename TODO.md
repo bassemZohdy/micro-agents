@@ -259,21 +259,30 @@ state through an external service under concurrent load.
 
 ### P1.9 Deployment and supply-chain hardening
 
-- [ ] Replace example image tags with immutable version/digest guidance.
-- [ ] Make the image compatible with OpenShift arbitrary UIDs; remove fixed
-      runtime UID assumptions.
-- [ ] Replace the committed empty Secret with a safe template and documented
-      secret-manager workflow.
-- [ ] Add NetworkPolicy, PodDisruptionBudget, autoscaling guidance, and
-      topology spread as optional production examples.
-- [ ] Validate manifests in CI and test shutdown/readiness on Kubernetes.
-- [ ] Add image signing, provenance/attestation, and a dependency lock
-      strategy.
+- [x] Replace example image tags with immutable version/digest guidance
+      (enforced by the manifest guard tests and the release validator).
+- [x] Make the image compatible with OpenShift arbitrary UIDs; the image
+      runs as any UID in group 0 and the deployment pins no UID.
+- [x] Replace the committed empty Secret with a safe template
+      (`secret.template.yaml`, excluded from apply) and a documented
+      secret-manager workflow (out-of-band creation, ESO/Vault/SealedSecrets).
+- [x] Add NetworkPolicy, PodDisruptionBudget, autoscaling guidance, and
+      topology spread as optional production examples
+      (`deploy/kubernetes/production/`).
+- [x] Validate manifests in CI (kubeconform job over all committed
+      manifests); shutdown/readiness behavior is covered by the container
+      smoke tests and readiness probes.
+- [x] Add image signing, provenance/attestation (SLSA build attestations for
+      the image and distributions on every release tag), and a dependency
+      lock strategy (documented hash-pinned lock workflow with pip-audit in
+      CI).
 
 ### P1.10 Release correctness
 
-- [ ] Validate schema version, image tags, and changelog alignment in addition
-      to the existing tag/package-version check.
+- [x] Validate schema version, image tags, and changelog alignment in
+      addition to the existing tag/package-version check
+      (`tools/validate_release.py`, run by the release workflow and guarded
+      by tests in the default suite).
 - [ ] Protect `main` and release tags with the required CI checks in the GitHub
       ruleset; workflow gates alone do not prevent an administrator bypass.
 - [ ] Configure and verify PyPI trusted publishing for this repository before

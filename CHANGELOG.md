@@ -4,6 +4,21 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Deployment
+
+- Hardened deployment and supply chain: the image now runs as an arbitrary
+  UID in group 0 (OpenShift-compatible, no pinned runtime UID), the sample
+  deployment requires an immutable version tag with no `:latest`, the
+  committed Secret became a non-appliable `secret.template.yaml` with a
+  documented secret-manager workflow, and optional production manifests
+  (NetworkPolicy, PodDisruptionBudget, HPA, topology-spread guidance) live
+  under `deploy/kubernetes/production/`. CI validates all manifests with
+  kubeconform, and release tags now publish SLSA build-provenance
+  attestations for the image and distributions; the dependency lock strategy
+  (hash-pinned requirements + pip-audit) is documented in DEPLOYMENT.md.
+- Added release alignment validation (`tools/validate_release.py`): schema
+  version, immutable image tag, package version, tag, and changelog section
+  are checked by the release workflow and guarded by tests.
 ### Runtime
 
 - Added a retryable-error taxonomy and circuit breaking: deterministic

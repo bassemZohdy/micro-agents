@@ -20,13 +20,15 @@ spec:
         app: micro-agent
     spec:
       securityContext:
+        # The image supports arbitrary UIDs (OpenShift); do not pin one.
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: micro-agent
-          image: micro-agent:latest
+          # Pin an immutable version tag or digest; never deploy :latest.
+          # image: ghcr.io/bassemzohdy/micro-agents@sha256:<digest>
+          image: ghcr.io/bassemzohdy/micro-agents:0.1.0
           args:
             - "--definition"
             - "/etc/micro-agent/agent.yaml"
