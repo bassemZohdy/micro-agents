@@ -5,8 +5,15 @@ start_marker = "          python - <<'PY'\n"
 end_marker = "\n          PY\n      - name: Install development dependencies"
 start = workflow.index(start_marker) + len(start_marker)
 end = workflow.index(end_marker, start)
-lines = workflow[start:end].splitlines()
-script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines)
+raw_lines = workflow[start:end].splitlines()
+lines: list[str] = []
+in_triple = False
+for line in raw_lines:
+    processed = line if in_triple else (line[10:] if line.startswith("          ") else line)
+    lines.append(processed)
+    if processed.count("'''") % 2:
+        in_triple = not in_triple
+script = "\n".join(lines)
 exec(compile(script, 'checkpointing-implementation', 'exec'))
 
 path = Path('runtimes/adk/runtime.py')
