@@ -30,7 +30,13 @@ approval_safe = '''                await self._approval_store.save(approval)
 '''
 if approval_save not in text:
     raise RuntimeError("approval save boundary not found")
-path.write_text(text.replace(approval_save, approval_safe, 1))
+text = text.replace(approval_save, approval_safe, 1)
+text = text.replace(
+    '            messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]\n',
+    '            messages = [{"role": "system", "content": system_prompt}]\n',
+    1,
+)
+path.write_text(text)
 
 http_path = Path("micro_agent/interoperability/http_api.py")
 http_text = http_path.read_text()
