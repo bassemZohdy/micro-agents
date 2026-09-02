@@ -8,13 +8,13 @@ from __future__ import annotations
 import inspect
 import json
 import time
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from micro_agent.core import (
@@ -249,6 +249,45 @@ def _accepts_streaming(request: Request) -> bool:
     return False
 
 
+def _sse(name: str, payload: dict[str, Any]) -> str:
+    data = json.dumps(payload, default=str, separators=(",", ":"))
+    return f"event: {name}\ndata: {data}\n\n"
+
+
+async def _stream_invoke(
+    agent: DefaultMicroAgent, request: AgentRequest, telemetry: Telemetry
+) -> AsyncIterator[str]:
+    """Translate runtime-neutral stream events to the public SSE contract."""
+    try:
+        async for event in agent.stream(request):
+            if event.delta:
+                yield _sse("delta", {"delta": event.delta})
+            if event.response is not None:
+                response = event.response
+                telemetry.logger.info(
+                    "invoke stream completed",
+                    request_id=request.request_id,
+                    status=response.status,
+                )
+                yield _sse(
+                    "final",
+                    InvokeResponseModel(
+                        output=response.output,
+                        request_id=response.request_id,
+                        session_id=response.session_id,
+                        status=response.status,
+                        error=response.error,
+                        metadata=response.metadata,
+                    ).model_dump(),
+                )
+    except Exception:
+        telemetry.increment("http_streaming_errors_total", {"route": "/v1/invoke"})
+        yield _sse(
+            "error",
+            {"code": "stream_failed", "message": "Streaming invocation failed"},
+        )
+
+
 def serialize_response(data: Any) -> str:
     """Serialize a response to JSON, handling nested dataclasses."""
     if hasattr(data, "__dataclass_fields__"):
@@ -447,7 +486,7 @@ def create_app(
         return response
 
     @app.post("/v1/invoke", response_model=InvokeResponseModel)
-    async def invoke(request: InvokeRequestModel, http_request: Request) -> InvokeResponseModel:
+    async def invoke(request: InvokeRequestModel, http_request: Request) -> Any:
         telemetry.increment("http_requests_total", {"route": "/v1/invoke", "method": "POST"})
         identity: AuthenticatedIdentity | None = getattr(http_request.state, "identity", None)
         if _accepts_streaming(http_request) and not agent.runtime_capabilities.streaming:
@@ -505,6 +544,15 @@ def create_app(
             session_id=request.session_id,
             authenticated=identity is not None,
         )
+        if _accepts_streaming(http_request):
+            return StreamingResponse(
+                _stream_invoke(agent, agent_request, telemetry),
+                media_type=STREAMING_MEDIA_TYPE,
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                },
+            )
         try:
             response = await agent.invoke(agent_request)
         except InvocationOverloadedError as exc:

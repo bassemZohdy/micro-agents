@@ -254,7 +254,7 @@ class TestOpenAICompatProvider:
             )
         )
         assert provider.capabilities().tool_use is True
-        assert provider.capabilities().streaming is False
+        assert provider.capabilities().streaming is True
 
     def test_tls_and_proxy_options_reach_the_built_client(self):
         import ssl

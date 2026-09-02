@@ -6,6 +6,7 @@ Model configuration and provider abstraction. No paid model required for CI.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -44,6 +45,14 @@ class ModelResponse:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ModelStreamEvent:
+    """One provider stream event; the final event carries the full response."""
+
+    delta: str = ""
+    response: ModelResponse | None = None
+
+
 # ---------------------------------------------------------------------------
 # Model Provider Interface
 # ---------------------------------------------------------------------------
@@ -77,6 +86,16 @@ class ModelProvider(ABC):
         tools: list[dict[str, Any]] | None = None,
     ) -> ModelResponse:
         """Generate a response from the model."""
+
+    async def stream(
+        self,
+        config: ModelConfig,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ModelStreamEvent]:
+        """Stream model output when ``capabilities().streaming`` is true."""
+        raise NotImplementedError("model provider does not implement streaming")
+        yield ModelStreamEvent()  # pragma: no cover - marks this as an async generator
 
     @abstractmethod
     async def health_check(self) -> bool:

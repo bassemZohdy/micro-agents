@@ -5,6 +5,7 @@ No paid model access required.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -12,6 +13,7 @@ from micro_agent.models.model import (
     ModelConfig,
     ModelProvider,
     ModelResponse,
+    ModelStreamEvent,
     ProviderCapabilities,
 )
 
@@ -24,6 +26,7 @@ class FakeModelConfig:
     tool_requests: list[dict[str, Any]] = field(default_factory=list)
     should_error: bool = False
     error_message: str = "fake model error"
+    stream_chunks: list[str] | None = None
     usage: dict[str, int] = field(
         default_factory=lambda: {"prompt_tokens": 10, "completion_tokens": 5}
     )
@@ -69,9 +72,37 @@ class FakeModelProvider(ModelProvider):
             usage=dict(self._config.usage),
         )
 
+    async def stream(
+        self,
+        config: ModelConfig,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ModelStreamEvent]:
+        """Emit configured deterministic chunks and a complete final response."""
+        if self._config.stream_chunks is None:
+            raise NotImplementedError("fake streaming is not configured")
+        self._invocations.append({"config": config, "messages": messages, "tools": tools})
+        if self._config.should_error:
+            raise RuntimeError(self._config.error_message)
+        content = ""
+        for chunk in self._config.stream_chunks:
+            content += chunk
+            yield ModelStreamEvent(delta=chunk)
+        yield ModelStreamEvent(
+            response=ModelResponse(
+                content=content,
+                tool_requests=list(self._config.tool_requests),
+                finish_reason="stop",
+                usage=dict(self._config.usage),
+            )
+        )
+
     def capabilities(self) -> ProviderCapabilities:
-        """The deterministic provider exercises tool calling in tests."""
-        return ProviderCapabilities(tool_use=True)
+        """Report only features implemented by this configured fake provider."""
+        return ProviderCapabilities(
+            tool_use=True,
+            streaming=self._config.stream_chunks is not None,
+        )
 
     async def health_check(self) -> bool:
         """Always healthy."""

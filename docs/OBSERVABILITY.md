@@ -35,6 +35,7 @@ names the tool.
 | `http_rate_limit_failures_total` | counter | `route` | Rate-limiter internal failures |
 | `http_rate_limit_rejections_total` | counter | `route` | Invocations rejected by the rate limiter |
 | `http_streaming_rejections_total` | counter | `route` | Streaming requests refused by a runtime without streaming |
+| `http_streaming_errors_total` | counter | `route` | Streaming invocations that fail after the SSE response starts |
 | `agent_invocations_total` | counter | `agent` | Completed agent invocations |
 | `agent_invocation_errors_total` | counter | `agent` | Failed agent invocations (deadline, provider, runtime) |
 | `agent_invocation_latency_ms` | gauge | `agent` | Latest end-to-end invocation latency |

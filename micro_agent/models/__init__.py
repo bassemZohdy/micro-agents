@@ -5,6 +5,7 @@ from micro_agent.models.model import (
     ModelConfig,
     ModelProvider,
     ModelResponse,
+    ModelStreamEvent,
     ProviderCapabilities,
 )
 from micro_agent.models.openai_compat import OpenAICompatConfig, OpenAICompatProvider
@@ -16,6 +17,7 @@ __all__ = [
     "ModelConfig",
     "ModelProvider",
     "ModelResponse",
+    "ModelStreamEvent",
     "OpenAICompatConfig",
     "OpenAICompatProvider",
     "ProviderCapabilities",

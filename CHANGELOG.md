@@ -21,6 +21,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   are checked by the release workflow and guarded by tests.
 ### Runtime
 
+- Added truthful end-to-end streaming for the built-in runtime: the model SPI
+  now has runtime-neutral stream events, OpenAI-compatible providers consume
+  chat-completions SSE (including tool-call deltas), the fake provider can opt
+  into deterministic chunks for CI, and `/v1/invoke` returns SSE only when the
+  selected runtime/provider actually supports it. Retries/fallback are
+  suppressed once stream output has been emitted to avoid duplicate content.
 - Added truthful provider-native structured output for the built-in runtime:
   OpenAI-compatible providers advertise JSON-schema structured output, agent
   output contracts are translated into strict `response_format` constraints,
