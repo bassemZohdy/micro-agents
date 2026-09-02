@@ -88,13 +88,21 @@ jobs:
               1,
           )
           path.write_text(text)
+
+          path = Path('docs/OBSERVABILITY.md')
+          text = path.read_text()
+          marker = '| `http_streaming_rejections_total` | counter | `route` | Streaming requests refused by a runtime without streaming |\n'
+          addition = marker + '| `http_streaming_errors_total` | counter | `route` | Streaming invocations that fail after the SSE response starts |\n'
+          if marker not in text:
+              raise SystemExit('streaming metric inventory marker not found')
+          path.write_text(text.replace(marker, addition, 1))
           PY
       - name: Install development dependencies
         run: python -m pip install -e ".[dev]"
       - name: Format and fix imports
         run: |
-          ruff format micro_agent/models/model.py micro_agent/models/__init__.py micro_agent/models/fake.py micro_agent/models/openai_compat.py micro_agent/core/agent.py micro_agent/core/__init__.py micro_agent/core/default_agent.py micro_agent/runtime/runtime.py runtimes/adk/runtime.py micro_agent/interoperability/http_api.py tests/test_streaming.py
-          ruff check --fix micro_agent/models/openai_compat.py micro_agent/models/fake.py runtimes/adk/runtime.py micro_agent/interoperability/http_api.py tests/test_streaming.py
+          ruff format micro_agent/models/model.py micro_agent/models/__init__.py micro_agent/models/fake.py micro_agent/models/openai_compat.py micro_agent/core/agent.py micro_agent/core/__init__.py micro_agent/core/default_agent.py micro_agent/runtime/runtime.py runtimes/adk/runtime.py micro_agent/interoperability/http_api.py tests/test_streaming.py tests/test_models.py
+          ruff check --fix micro_agent/models/openai_compat.py micro_agent/models/fake.py runtimes/adk/runtime.py micro_agent/interoperability/http_api.py tests/test_streaming.py tests/test_models.py
       - name: Lint
         run: ruff check .
       - name: Typecheck
@@ -107,7 +115,7 @@ jobs:
         run: |
           git rm .github/workflows/temporary-runtime-streaming-runner.yml
           git rm .github/workflows/temporary-runtime-streaming-fix-runner.yml
-          git add micro_agent runtimes tests TODO.md CHANGELOG.md docs/STREAMING.md
+          git add micro_agent runtimes tests TODO.md CHANGELOG.md docs/STREAMING.md docs/OBSERVABILITY.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat: add truthful runtime streaming"
