@@ -14,9 +14,9 @@ for line in raw_lines:
     if processed.count("'''") % 2:
         in_triple = not in_triple
 script = "\n".join(lines)
-exec(compile(script, 'checkpointing-implementation', 'exec'))
+exec(compile(script, "checkpointing-implementation", "exec"))
 
-path = Path('runtimes/adk/runtime.py')
+path = Path("runtimes/adk/runtime.py")
 text = path.read_text()
 approval_save = '''                await self._approval_store.save(approval)
                 raise _ApprovalPausedError(approval)
@@ -29,28 +29,31 @@ approval_safe = '''                await self._approval_store.save(approval)
                 raise _ApprovalPausedError(approval)
 '''
 if approval_save not in text:
-    raise RuntimeError('approval save boundary not found')
+    raise RuntimeError("approval save boundary not found")
 path.write_text(text.replace(approval_save, approval_safe, 1))
 
-http_path = Path('micro_agent/interoperability/http_api.py')
+http_path = Path("micro_agent/interoperability/http_api.py")
 http_text = http_path.read_text()
-http_text = http_text.replace(
-    '        description="Replay-safe checkpoint id to resume; do not combine with approval continuation.",\n',
-    '        description=(\n'
-    '            "Replay-safe checkpoint id to resume; do not combine with approval continuation."\n'
-    '        ),\n',
-    1,
+old_description = (
+    '        description="Replay-safe checkpoint id to resume; '
+    'do not combine with approval continuation.",\n'
 )
-http_path.write_text(http_text)
+new_description = (
+    '        description=(\n'
+    '            "Replay-safe checkpoint id to resume; do not combine with "\n'
+    '            "approval continuation."\n'
+    '        ),\n'
+)
+http_path.write_text(http_text.replace(old_description, new_description, 1))
 
-todo = Path('TODO.md')
+todo = Path("TODO.md")
 text = todo.read_text()
 old_parent = (
-    '- [ ] Add structured output, streaming, and checkpointing only behind truthful\n'
-    '      runtime capabilities.'
+    "- [ ] Add structured output, streaming, and checkpointing only behind truthful\n"
+    "      runtime capabilities."
 )
 new_parent = (
-    '- [x] Add structured output, streaming, and checkpointing only behind truthful\n'
-    '      runtime capabilities.'
+    "- [x] Add structured output, streaming, and checkpointing only behind truthful\n"
+    "      runtime capabilities."
 )
 todo.write_text(text.replace(old_parent, new_parent, 1))
