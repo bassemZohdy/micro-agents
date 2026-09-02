@@ -301,8 +301,10 @@ state through an external service under concurrent load.
   - [x] Add provider-native structured output for the built-in runtime when the
         selected model provider advertises support; translate output contracts
         to JSON Schema and keep unsupported runtime/provider paths false.
-  - [ ] Add streaming behind a runtime/provider capability that is exercised by
-        the public transport rather than inferred from an SDK feature.
+  - [x] Add streaming behind a runtime/provider capability exercised by the
+        public HTTP transport: OpenAI-compatible SSE and opt-in fake-provider
+        streams flow through the runtime-neutral SPI to `/v1/invoke`; unsupported
+        providers/runtimes remain false, and retries are suppressed after output.
   - [ ] Add checkpointing with an explicit persistence/resume contract and
         capability-specific acceptance tests.
 - [ ] Add performance/load benchmarks and resource budgets.

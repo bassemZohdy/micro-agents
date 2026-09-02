@@ -6,6 +6,7 @@ Core contracts for the Micro-Agent framework. No ADK-native types.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -93,6 +94,14 @@ class AgentResponse:
     status: str = "success"
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AgentStreamEvent:
+    """One runtime-neutral streaming event."""
+
+    delta: str = ""
+    response: AgentResponse | None = None
 
 
 class InvocationOverloadedError(RuntimeError):
@@ -189,6 +198,11 @@ class MicroAgent(ABC):
     @abstractmethod
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         """Invoke the agent with a request. Must be in READY state."""
+
+    async def stream(self, request: AgentRequest) -> AsyncIterator[AgentStreamEvent]:
+        """Stream an invocation when the selected runtime supports it."""
+        raise NotImplementedError("agent runtime does not implement streaming")
+        yield AgentStreamEvent()  # pragma: no cover
 
     @abstractmethod
     async def stop(self) -> None:

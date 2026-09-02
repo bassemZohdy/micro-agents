@@ -8,7 +8,12 @@ import pytest
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.interoperability import create_app
-from micro_agent.models import FakeModelConfig, ModelConfig, OpenAICompatConfig, OpenAICompatProvider
+from micro_agent.models import (
+    FakeModelConfig,
+    ModelConfig,
+    OpenAICompatConfig,
+    OpenAICompatProvider,
+)
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 

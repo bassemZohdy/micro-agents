@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any
 
 from micro_agent.core.agent import (
@@ -11,6 +12,7 @@ from micro_agent.core.agent import (
     AgentRequest,
     AgentResponse,
     AgentState,
+    AgentStreamEvent,
     InvocationOverloadedError,
     MicroAgent,
 )
@@ -122,6 +124,43 @@ class DefaultMicroAgent(MicroAgent):
             response = await self._runtime.invoke(runtime_agent, request)
             validate_output(self._definition.spec.behavior.output_contract, response.output)
             return response
+        finally:
+            async with self._lifecycle_lock:
+                self._active_invocations -= 1
+                if current_task is not None:
+                    self._invocation_tasks.discard(current_task)
+                if self._active_invocations == 0:
+                    self._idle.set()
+                self._capacity_available.notify_all()
+
+    async def stream(self, request: AgentRequest) -> AsyncIterator[AgentStreamEvent]:
+        """Stream while preserving the same lifecycle, contract, and concurrency guards."""
+        async with self._lifecycle_lock:
+            max_concurrency = self._definition.spec.runtime.max_concurrency
+            policy = self._definition.spec.runtime.concurrency_policy
+            while max_concurrency is not None and self._active_invocations >= max_concurrency:
+                if policy == ConcurrencyPolicy.REJECT:
+                    raise InvocationOverloadedError(max_concurrency)
+                await self._capacity_available.wait()
+            if self._state != AgentState.READY:
+                raise RuntimeError(f"Cannot invoke from state {self._state.value}")
+            if not self._runtime.capabilities().streaming:
+                raise RuntimeError("Runtime does not support streaming")
+            assert self._runtime_agent is not None
+            validate_input(self._definition.spec.behavior.input_contract, request.input)
+            runtime_agent = self._runtime_agent
+            self._active_invocations += 1
+            self._idle.clear()
+            current_task = asyncio.current_task()
+            if current_task is not None:
+                self._invocation_tasks.add(current_task)
+        try:
+            async for event in self._runtime.stream(runtime_agent, request):
+                if event.response is not None:
+                    validate_output(
+                        self._definition.spec.behavior.output_contract, event.response.output
+                    )
+                yield event
         finally:
             async with self._lifecycle_lock:
                 self._active_invocations -= 1

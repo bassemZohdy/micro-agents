@@ -7,6 +7,7 @@ No framework-native types cross the public boundary.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,6 +16,7 @@ from micro_agent.core import (
     AgentIdentity,
     AgentRequest,
     AgentResponse,
+    AgentStreamEvent,
 )
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.health import DependencyProbe
@@ -105,6 +107,13 @@ class AgentRuntime(ABC):
     @abstractmethod
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
         """Invoke the runtime agent."""
+
+    async def stream(
+        self, agent: RuntimeAgent, request: AgentRequest
+    ) -> AsyncIterator[AgentStreamEvent]:
+        """Stream one invocation when ``capabilities().streaming`` is true."""
+        raise NotImplementedError("runtime does not implement streaming")
+        yield AgentStreamEvent()  # pragma: no cover
 
     @abstractmethod
     async def stop(self, agent: RuntimeAgent) -> None:

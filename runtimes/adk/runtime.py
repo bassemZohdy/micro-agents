@@ -13,7 +13,7 @@ import inspect
 import json
 import random
 import time
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 from uuid import uuid4
@@ -23,6 +23,7 @@ from micro_agent.core import (
     AgentIdentity,
     AgentRequest,
     AgentResponse,
+    AgentStreamEvent,
     ContinuationNotFoundError,
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
@@ -40,6 +41,7 @@ from micro_agent.models import (
     FakeModelProvider,
     ModelConfig,
     ModelProvider,
+    ModelResponse,
     structured_output_generation,
 )
 from micro_agent.observability import AuditSink, Telemetry
@@ -226,7 +228,7 @@ class AdkRuntime(AgentRuntime):
 
     def capabilities(self) -> RuntimeCapabilities:
         return RuntimeCapabilities(
-            streaming=False,
+            streaming=self._model_provider.capabilities().streaming,
             memory=self._config.memory_provider is not None,
             mcp=self._config.mcp_manager is not None,
             a2a=False,
@@ -497,7 +499,55 @@ class AdkRuntime(AgentRuntime):
         finally:
             reset_invocation_identity(token)
 
-    async def _invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+    async def stream(
+        self, agent: RuntimeAgent, request: AgentRequest
+    ) -> AsyncIterator[AgentStreamEvent]:
+        """Stream provider deltas and finish with the normal AgentResponse contract."""
+        if not self.capabilities().streaming:
+            raise RuntimeError("Runtime does not support streaming")
+        queue: asyncio.Queue[AgentStreamEvent | BaseException | None] = asyncio.Queue()
+
+        async def emit(delta: str) -> None:
+            if delta:
+                await queue.put(AgentStreamEvent(delta=delta))
+
+        async def run() -> None:
+            token = set_invocation_identity(
+                InvocationIdentity(
+                    caller=request.caller_identity,
+                    user=request.user_context,
+                    workload=self._workload_identity,
+                )
+            )
+            try:
+                response = await self._invoke(agent, request, emit_delta=emit)
+                await queue.put(AgentStreamEvent(response=response))
+            except BaseException as exc:
+                await queue.put(exc)
+            finally:
+                reset_invocation_identity(token)
+                await queue.put(None)
+
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def _invoke(
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        emit_delta: Callable[[str], Awaitable[None]] | None = None,
+    ) -> AgentResponse:
         definition: MicroAgentDefinition = agent._internal["definition"]
         semantics = definition.spec.runtime
         trace_id = request.request_id or str(uuid4())
@@ -508,6 +558,15 @@ class AdkRuntime(AgentRuntime):
         )
         retry_deadline = _InvocationDeadline.from_seconds(semantics.retry_budget_seconds)
         side_effect_state: dict[str, Any] = {"attempted_tools": []}
+        emitted_stream_output = False
+
+        async def tracked_emit(delta: str) -> None:
+            nonlocal emitted_stream_output
+            if not delta or emit_delta is None:
+                return
+            emitted_stream_output = True
+            await emit_delta(delta)
+
         breaker = self._circuit_for(definition)
         if breaker is not None:
             # Reject before any work while the circuit is open; after the
@@ -521,6 +580,7 @@ class AdkRuntime(AgentRuntime):
                 trace_id,
                 deadline,
                 side_effect_state=side_effect_state,
+                emit_delta=tracked_emit if emit_delta is not None else None,
             )
 
         start_time = time.monotonic()
@@ -563,6 +623,12 @@ class AdkRuntime(AgentRuntime):
             )
         except Exception as exc:
             self._telemetry.increment("agent_invocation_errors_total", labels)
+            if emitted_stream_output:
+                self._telemetry.increment("agent_retries_suppressed_total", labels)
+                raise RuntimeError(
+                    "invocation failed after streaming output was emitted; "
+                    "retry/fallback suppressed"
+                ) from exc
             self._telemetry.logger.error(
                 "invocation failed",
                 request_id=request.request_id,
@@ -646,6 +712,7 @@ class AdkRuntime(AgentRuntime):
         deadline: _InvocationDeadline,
         *,
         side_effect_state: dict[str, Any] | None = None,
+        emit_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentResponse:
         definition: MicroAgentDefinition = agent._internal["definition"]
         model_provider: ModelProvider = agent._internal["model_provider"]
@@ -833,10 +900,29 @@ class AdkRuntime(AgentRuntime):
             )
             model_start = time.monotonic()
             try:
-                model_call = model_provider.generate(
-                    model_config, messages, tools=tool_schemas or None
-                )
-                response = await deadline.run(model_call, cap=model_config.timeout_seconds)
+                if emit_delta is None:
+                    model_call = model_provider.generate(
+                        model_config, messages, tools=tool_schemas or None
+                    )
+                    response = await deadline.run(model_call, cap=model_config.timeout_seconds)
+                else:
+
+                    async def consume_stream() -> ModelResponse:
+                        final_response = None
+                        async for event in model_provider.stream(
+                            model_config, messages, tools=tool_schemas or None
+                        ):
+                            if event.delta:
+                                await emit_delta(event.delta)
+                            if event.response is not None:
+                                final_response = event.response
+                        if final_response is None:
+                            raise RuntimeError("model stream ended without a final response")
+                        return final_response
+
+                    response = await deadline.run(
+                        consume_stream(), cap=model_config.timeout_seconds
+                    )
             except Exception as exc:
                 model_span.add_event("model.error", {"error": str(exc)})
                 self._telemetry.finish_span(model_span)

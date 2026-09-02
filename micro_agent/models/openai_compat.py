@@ -8,6 +8,8 @@ remains the CI default.
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,6 +19,7 @@ from micro_agent.models.model import (
     ModelConfig,
     ModelProvider,
     ModelResponse,
+    ModelStreamEvent,
     ProviderCapabilities,
 )
 from micro_agent.observability import Telemetry
@@ -125,9 +128,76 @@ class OpenAICompatProvider(ModelProvider):
             usage=dict(data.get("usage") or {}),
         )
 
+    async def stream(
+        self,
+        config: ModelConfig,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ModelStreamEvent]:
+        """Stream OpenAI-compatible SSE chat-completion deltas."""
+        headers: dict[str, str] = {}
+        if self._config.telemetry is not None:
+            self._config.telemetry.inject_context(headers)
+        payload = self._payload(config, messages, tools)
+        payload["stream"] = True
+        content_parts: list[str] = []
+        tool_calls: dict[int, dict[str, Any]] = {}
+        finish_reason = "stop"
+        usage: dict[str, int] = {}
+        async with self._client.stream(
+            "POST",
+            f"{self._endpoint}/chat/completions",
+            json=payload,
+            headers=headers or None,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if not raw or raw == "[DONE]":
+                    continue
+                data = json.loads(raw)
+                if isinstance(data.get("usage"), dict):
+                    usage = {str(k): int(v) for k, v in data["usage"].items() if isinstance(v, int)}
+                choice = (data.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    content_parts.append(content)
+                    yield ModelStreamEvent(delta=content)
+                for call in delta.get("tool_calls") or []:
+                    index = int(call.get("index", 0))
+                    state = tool_calls.setdefault(index, {"id": None, "name": "", "arguments": ""})
+                    if call.get("id"):
+                        state["id"] = call["id"]
+                    function = call.get("function") or {}
+                    if function.get("name"):
+                        state["name"] += str(function["name"])
+                    if function.get("arguments"):
+                        state["arguments"] += str(function["arguments"])
+                if choice.get("finish_reason"):
+                    finish_reason = str(choice["finish_reason"])
+        requests = [
+            {
+                "id": state.get("id"),
+                "name": state.get("name", ""),
+                "arguments": _parse_arguments(state.get("arguments")),
+            }
+            for _, state in sorted(tool_calls.items())
+        ]
+        yield ModelStreamEvent(
+            response=ModelResponse(
+                content="".join(content_parts),
+                tool_requests=requests,
+                finish_reason=finish_reason,
+                usage=usage,
+            )
+        )
+
     def capabilities(self) -> ProviderCapabilities:
         """Report the chat-completions features this adapter actually wires."""
-        return ProviderCapabilities(tool_use=True, structured_output=True)
+        return ProviderCapabilities(tool_use=True, streaming=True, structured_output=True)
 
     async def health_check(self) -> bool:
         """GET /models as a cheap availability probe."""
@@ -148,8 +218,6 @@ def _parse_arguments(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
     if isinstance(raw, str) and raw:
-        import json
-
         try:
             parsed = json.loads(raw)
             return parsed if isinstance(parsed, dict) else {"value": parsed}
