@@ -40,6 +40,7 @@ from micro_agent.models import (
     FakeModelProvider,
     ModelConfig,
     ModelProvider,
+    structured_output_generation,
 )
 from micro_agent.observability import AuditSink, Telemetry
 from micro_agent.resilience import CircuitBreaker, Retryability, classify_retry
@@ -229,7 +230,7 @@ class AdkRuntime(AgentRuntime):
             memory=self._config.memory_provider is not None,
             mcp=self._config.mcp_manager is not None,
             a2a=False,
-            structured_output=False,
+            structured_output=self._model_provider.capabilities().structured_output,
         )
 
     async def create(self, definition: MicroAgentDefinition) -> RuntimeAgent:
@@ -744,7 +745,11 @@ class AdkRuntime(AgentRuntime):
             model_id=model_ref.model_id if model_ref else None,
             endpoint=model_ref.endpoint if model_ref else None,
             credential_ref=model_ref.credential_ref if model_ref else None,
-            generation=model_ref.generation if model_ref else {},
+            generation=structured_output_generation(
+                model_ref.generation if model_ref else {},
+                definition.spec.behavior.output_contract,
+                model_provider.capabilities(),
+            ),
             timeout_seconds=model_ref.timeout_seconds if model_ref else None,
         )
         tool_schemas = [
