@@ -30,14 +30,27 @@ approval_safe = '''                await self._approval_store.save(approval)
 '''
 if approval_save not in text:
     raise RuntimeError('approval save boundary not found')
-text = text.replace(approval_save, approval_safe, 1)
-path.write_text(text)
+path.write_text(text.replace(approval_save, approval_safe, 1))
+
+http_path = Path('micro_agent/interoperability/http_api.py')
+http_text = http_path.read_text()
+http_text = http_text.replace(
+    '        description="Replay-safe checkpoint id to resume; do not combine with approval continuation.",\n',
+    '        description=(\n'
+    '            "Replay-safe checkpoint id to resume; do not combine with approval continuation."\n'
+    '        ),\n',
+    1,
+)
+http_path.write_text(http_text)
 
 todo = Path('TODO.md')
 text = todo.read_text()
-text = text.replace(
-    '- [ ] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.',
-    '- [x] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.',
-    1,
+old_parent = (
+    '- [ ] Add structured output, streaming, and checkpointing only behind truthful\n'
+    '      runtime capabilities.'
 )
-todo.write_text(text)
+new_parent = (
+    '- [x] Add structured output, streaming, and checkpointing only behind truthful\n'
+    '      runtime capabilities.'
+)
+todo.write_text(text.replace(old_parent, new_parent, 1))
