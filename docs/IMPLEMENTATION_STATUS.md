@@ -22,6 +22,7 @@ readiness or protocol compliance.
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
+| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
 so ambient proxy variables cannot unexpectedly route model traffic or loopback
