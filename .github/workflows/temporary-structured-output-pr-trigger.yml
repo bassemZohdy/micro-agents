@@ -1,0 +1,16 @@
+name: Temporary structured output PR trigger
+
+on:
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  noop:
+    if: github.head_ref == 'feat/structured-output-20260902'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo trigger
