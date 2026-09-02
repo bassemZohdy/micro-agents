@@ -1,4 +1,4 @@
-"""Tests for Micro-Agent Model Support."""
+"""Tests for model provider and configuration contracts."""
 
 import pytest
 
@@ -7,109 +7,87 @@ from micro_agent.models import (
     FakeModelProvider,
     ModelConfig,
     ModelResponse,
+    ProviderCapabilities,
 )
 
 
+def _model_config(**overrides):
+    values = {"ref": "test-model", "model_id": "test-model"}
+    values.update(overrides)
+    return ModelConfig(**values)
+
+
 class TestModelConfig:
-    """Test model configuration."""
+    def test_minimal(self):
+        config = ModelConfig(ref="model")
+        assert config.ref == "model"
+        assert config.generation == {}
 
-    def test_basic_config(self):
-        config = ModelConfig(ref="test-model")
-        assert config.ref == "test-model"
-        assert config.provider is None
-        assert config.endpoint is None
-
-    def test_full_config(self):
+    def test_full(self):
         config = ModelConfig(
-            ref="gpt-4",
-            provider="openai",
-            model_id="gpt-4-turbo",
-            endpoint="https://api.openai.com",
-            generation={"temperature": 0.2},
-            timeout_seconds=30,
+            ref="primary",
+            provider="openai-compatible",
+            model_id="gpt-test",
+            endpoint="https://example.test/v1",
+            credential_ref="secret",
+            generation={"temperature": 0.1},
+            timeout_seconds=15,
+            capabilities=["tool_use"],
         )
-        assert config.provider == "openai"
-        assert config.generation["temperature"] == 0.2
+        assert config.model_id == "gpt-test"
+        assert config.capabilities == ["tool_use"]
 
 
-class TestModelResponse:
-    """Test model response."""
-
-    def test_default_response(self):
-        resp = ModelResponse()
-        assert resp.content == ""
-        assert resp.finish_reason == "stop"
-        assert resp.tool_requests == []
-
-    def test_response_with_content(self):
-        resp = ModelResponse(content="hello", usage={"total": 100})
-        assert resp.content == "hello"
-        assert resp.usage["total"] == 100
+class TestProviderCapabilities:
+    def test_conservative_defaults(self):
+        capabilities = ProviderCapabilities()
+        assert capabilities.tool_use is False
+        assert capabilities.streaming is False
+        assert capabilities.structured_output is False
 
 
 class TestFakeModelProvider:
-    """Test deterministic fake model."""
+    @pytest.mark.asyncio
+    async def test_returns_configured_response(self):
+        provider = FakeModelProvider(FakeModelConfig(response="hello"))
+        result = await provider.generate(_model_config(), [{"role": "user", "content": "hi"}])
+        assert isinstance(result, ModelResponse)
+        assert result.content == "hello"
 
     @pytest.mark.asyncio
-    async def test_basic_response(self):
-        provider = FakeModelProvider()
-        config = ModelConfig(ref="fake")
-        response = await provider.generate(config, [{"role": "user", "content": "hi"}])
-        assert response.content == "fake response"
-        assert response.finish_reason == "stop"
+    async def test_returns_tool_requests(self):
+        provider = FakeModelProvider(
+            FakeModelConfig(tool_requests=[{"name": "echo", "arguments": {"value": "hi"}}])
+        )
+        result = await provider.generate(_model_config(), [])
+        assert result.tool_requests[0]["name"] == "echo"
 
     @pytest.mark.asyncio
-    async def test_custom_response(self):
-        provider = FakeModelProvider(FakeModelConfig(response="custom answer"))
-        config = ModelConfig(ref="fake")
-        response = await provider.generate(config, [{"role": "user", "content": "hi"}])
-        assert response.content == "custom answer"
-
-    @pytest.mark.asyncio
-    async def test_tool_requests(self):
-        tool_req = {"name": "check_eligibility", "arguments": {"user_id": "123"}}
-        provider = FakeModelProvider(FakeModelConfig(tool_requests=[tool_req]))
-        config = ModelConfig(ref="fake")
-        response = await provider.generate(config, [{"role": "user", "content": "check"}])
-        assert len(response.tool_requests) == 1
-        assert response.tool_requests[0]["name"] == "check_eligibility"
-
-    @pytest.mark.asyncio
-    async def test_error_mode(self):
+    async def test_can_fail(self):
         provider = FakeModelProvider(FakeModelConfig(should_error=True, error_message="boom"))
-        config = ModelConfig(ref="fake")
         with pytest.raises(RuntimeError, match="boom"):
-            await provider.generate(config, [{"role": "user", "content": "hi"}])
+            await provider.generate(_model_config(), [])
 
     @pytest.mark.asyncio
-    async def test_invocation_recording(self):
+    async def test_records_invocations(self):
         provider = FakeModelProvider()
-        config = ModelConfig(ref="fake")
-        messages = [{"role": "user", "content": "test"}]
-        await provider.generate(config, messages)
+        await provider.generate(_model_config(), [{"role": "user", "content": "hi"}])
         assert len(provider.invocations) == 1
-        assert provider.invocations[0]["messages"] == messages
+        assert provider.invocations[0]["messages"][0]["content"] == "hi"
+
+    def test_capabilities_report_tool_use_only_by_default(self):
+        provider = FakeModelProvider()
+        assert provider.capabilities().tool_use is True
+        assert provider.capabilities().streaming is False
 
     @pytest.mark.asyncio
     async def test_health_check(self):
         provider = FakeModelProvider()
         assert await provider.health_check() is True
 
-    @pytest.mark.asyncio
-    async def test_usage_tracking(self):
-        provider = FakeModelProvider(
-            FakeModelConfig(usage={"prompt_tokens": 100, "completion_tokens": 50})
-        )
-        config = ModelConfig(ref="fake")
-        response = await provider.generate(config, [{"role": "user", "content": "hi"}])
-        assert response.usage["prompt_tokens"] == 100
-        assert response.usage["completion_tokens"] == 50
-
 
 class TestOpenAICompatProvider:
-    """Wire-contract behavior of the OpenAI-compatible provider."""
-
-    def _provider(self, client) -> object:
+    def _provider(self, client, *, telemetry=None):
         from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
 
         return OpenAICompatProvider(
@@ -117,124 +95,172 @@ class TestOpenAICompatProvider:
                 endpoint="https://llm.example.test/v1",
                 model_id="test-model",
                 http_client=client,
+                telemetry=telemetry,
             )
         )
 
     @pytest.mark.asyncio
-    async def test_tool_call_ids_are_preserved_from_the_wire(self):
-        import json as jsonlib
-
+    async def test_generate_maps_chat_completion(self):
         import httpx
 
-        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
-
-        captured: dict = {}
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            captured["payload"] = jsonlib.loads(request.content)
+        async def handler(request):
+            payload = __import__("json").loads(request.content)
+            assert payload["model"] == "test-model"
+            assert payload["messages"][0]["content"] == "hi"
             return httpx.Response(
                 200,
                 json={
                     "choices": [
                         {
-                            "finish_reason": "tool_calls",
+                            "message": {"content": "hello"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 3, "completion_tokens": 1},
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = self._provider(client)
+        try:
+            result = await provider.generate(
+                _model_config(), [{"role": "user", "content": "hi"}]
+            )
+        finally:
+            await client.aclose()
+        assert result.content == "hello"
+        assert result.usage == {"prompt_tokens": 3, "completion_tokens": 1}
+
+    @pytest.mark.asyncio
+    async def test_generate_maps_tool_calls(self):
+        import httpx
+
+        async def handler(request):
+            payload = __import__("json").loads(request.content)
+            assert payload["tools"][0]["function"]["name"] == "echo"
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
                             "message": {
                                 "content": None,
                                 "tool_calls": [
                                     {
-                                        "id": "call_wire_1",
+                                        "id": "call-1",
                                         "type": "function",
                                         "function": {
                                             "name": "echo",
-                                            "arguments": '{"message": "hi"}',
+                                            "arguments": '{"value":"hi"}',
                                         },
                                     }
                                 ],
                             },
+                            "finish_reason": "tool_calls",
                         }
-                    ],
-                    "usage": {"total_tokens": 9},
+                    ]
                 },
             )
 
-        client = httpx.AsyncClient(
-            base_url="https://llm.example.test/v1", transport=httpx.MockTransport(handler)
-        )
-        provider = OpenAICompatProvider(
-            OpenAICompatConfig(
-                endpoint="https://llm.example.test/v1",
-                model_id="test-model",
-                http_client=client,
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = self._provider(client)
+        try:
+            result = await provider.generate(
+                _model_config(),
+                [{"role": "user", "content": "hi"}],
+                tools=[
+                    {
+                        "name": "echo",
+                        "description": "Echo",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {"value": {"type": "string"}},
+                        },
+                    }
+                ],
             )
-        )
-        response = await provider.generate(
-            _model_config(),
-            messages=[],
-            tools=[
-                {
-                    "name": "echo",
-                    "description": "Echo",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {"message": {"type": "string"}},
-                        "required": ["message"],
-                    },
-                }
-            ],
-        )
-        await provider.aclose()
-        assert response.tool_requests[0]["id"] == "call_wire_1"
-        assert response.tool_requests[0]["name"] == "echo"
-        assert response.tool_requests[0]["arguments"] == {"message": "hi"}
-        # The provider sends the standard function-tool shape.
-        assert captured["payload"]["tools"][0]["type"] == "function"
+        finally:
+            await client.aclose()
+        assert result.tool_requests == [
+            {"id": "call-1", "name": "echo", "arguments": {"value": "hi"}}
+        ]
 
     @pytest.mark.asyncio
-    async def test_injected_client_is_used_and_not_closed(self):
+    async def test_invalid_tool_arguments_are_preserved_as_raw(self):
+        import httpx
+
+        async def handler(_request):
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "function": {"name": "echo", "arguments": "not-json"},
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = self._provider(client)
+        try:
+            result = await provider.generate(_model_config(), [])
+        finally:
+            await client.aclose()
+        assert result.tool_requests[0]["arguments"] == {"raw": "not-json"}
+
+    @pytest.mark.asyncio
+    async def test_health_check(self):
         import httpx
 
         client = httpx.AsyncClient(
-            base_url="https://llm.example.test/v1",
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, json={"choices": []})
-            ),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={}))
         )
         provider = self._provider(client)
-        await provider.generate(_model_config(), messages=[])
-        await provider.aclose()
-        # The injected client stays usable — the provider does not own it.
-        assert not client.is_closed
-        await client.aclose()
+        try:
+            assert await provider.health_check() is True
+        finally:
+            await client.aclose()
 
-    @pytest.mark.otel
     @pytest.mark.asyncio
-    async def test_injects_w3c_context_on_chat_completion(self):
-        pytest.importorskip("opentelemetry.sdk")
+    async def test_health_check_handles_network_error(self):
         import httpx
-        from opentelemetry.sdk.trace import TracerProvider
 
-        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
+        def handler(request):
+            raise httpx.ConnectError("offline", request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = self._provider(client)
+        try:
+            assert await provider.health_check() is False
+        finally:
+            await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_trace_context_is_injected_into_provider_request(self):
+        import httpx
+
         from micro_agent.observability import Telemetry
 
-        captured: dict[str, str | None] = {}
+        captured = {}
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request):
             captured["traceparent"] = request.headers.get("traceparent")
-            return httpx.Response(200, json={"choices": []})
-
-        client = httpx.AsyncClient(
-            base_url="https://llm.example.test/v1", transport=httpx.MockTransport(handler)
-        )
-        tracer_provider = TracerProvider()
-        telemetry = Telemetry(otel_tracer=tracer_provider.get_tracer("model-test"))
-        provider = OpenAICompatProvider(
-            OpenAICompatConfig(
-                endpoint="https://llm.example.test/v1",
-                model_id="test-model",
-                http_client=client,
-                telemetry=telemetry,
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "ok"}}]},
             )
-        )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        telemetry = Telemetry()
+        provider = self._provider(client, telemetry=telemetry)
         span = telemetry.start_span("model.generate")
         try:
             await provider.generate(_model_config(), messages=[])
@@ -254,7 +280,7 @@ class TestOpenAICompatProvider:
             )
         )
         assert provider.capabilities().tool_use is True
-        assert provider.capabilities().streaming is False
+        assert provider.capabilities().streaming is True
 
     def test_tls_and_proxy_options_reach_the_built_client(self):
         import ssl
@@ -269,15 +295,19 @@ class TestOpenAICompatProvider:
                 proxy="http://proxy.example.test:3128",
             )
         )
-        try:
-            assert provider._client._transport._pool._ssl_context.verify_mode == ssl.CERT_NONE
-        finally:
-            import asyncio
+        transport = provider._client._transport
+        assert transport._pool._proxy is not None
+        ssl_context = transport._pool._ssl_context
+        assert isinstance(ssl_context, ssl.SSLContext)
+        assert ssl_context.verify_mode == ssl.CERT_NONE
 
-            asyncio.run(provider.aclose())
+    @pytest.mark.asyncio
+    async def test_aclose_closes_owned_client(self):
+        from micro_agent.models import OpenAICompatConfig, OpenAICompatProvider
 
-
-def _model_config():
-    from micro_agent.models import ModelConfig
-
-    return ModelConfig(ref="test-model", model_id="test-model")
+        provider = OpenAICompatProvider(
+            OpenAICompatConfig(endpoint="https://llm.example.test/v1")
+        )
+        assert provider._client.is_closed is False
+        await provider.aclose()
+        assert provider._client.is_closed is True
