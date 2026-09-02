@@ -1,0 +1,126 @@
+name: Temporary runtime checkpointing fix runner
+
+on:
+  push:
+    branches: [feat/runtime-checkpointing-20260902]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.ref == 'refs/heads/feat/runtime-checkpointing-20260902' || github.head_ref == 'feat/runtime-checkpointing-20260902'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/runtime-checkpointing-20260902
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Apply checkpointing implementation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/temporary-runtime-checkpointing-runner.yml').read_text()
+          start_marker = "          python - <<'PY'\n"
+          end_marker = "\n          PY\n      - name: Install development dependencies"
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          lines = workflow[start:end].splitlines()
+          script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines)
+          exec(compile(script, 'checkpointing-implementation', 'exec'))
+
+          path = Path('runtimes/adk/runtime.py')
+          text = path.read_text()
+          misplaced = '''            if (
+                checkpoint_store is not None
+                and not self._tool_wave_is_replay_safe(agent, tools, response.tool_requests)
+            ):
+                await deadline.run(
+                    checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
+                )
+
+            tool_results = await self._execute_tools(
+                tools,
+                resume.tool_requests,
+'''
+          corrected_resume = '''            tool_results = await self._execute_tools(
+                tools,
+                resume.tool_requests,
+'''
+          if misplaced not in text:
+              raise RuntimeError('expected misplaced approval checkpoint guard not found')
+          text = text.replace(misplaced, corrected_resume, 1)
+
+          normal_call = '''            tool_results = await self._execute_tools(
+                tools,
+                response.tool_requests,
+'''
+          normal_guard = '''            if (
+                checkpoint_store is not None
+                and not self._tool_wave_is_replay_safe(agent, tools, response.tool_requests)
+            ):
+                await deadline.run(
+                    checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
+                )
+
+            tool_results = await self._execute_tools(
+                tools,
+                response.tool_requests,
+'''
+          if normal_call not in text:
+              raise RuntimeError('normal tool wave call not found')
+          text = text.replace(normal_call, normal_guard, 1)
+
+          approval_save = '''                await self._approval_store.save(approval)
+                raise _ApprovalPausedError(approval)
+'''
+          approval_safe = '''                await self._approval_store.save(approval)
+                if checkpoint_store is not None:
+                    await deadline.run(
+                        checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
+                    )
+                raise _ApprovalPausedError(approval)
+'''
+          if approval_save not in text:
+              raise RuntimeError('approval save boundary not found')
+          text = text.replace(approval_save, approval_safe, 1)
+          path.write_text(text)
+
+          todo = Path('TODO.md')
+          text = todo.read_text()
+          text = text.replace(
+              '- [ ] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.',
+              '- [x] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.',
+              1,
+          )
+          todo.write_text(text)
+          PY
+      - name: Install development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Format
+        run: ruff format micro_agent runtimes tests/test_checkpointing.py
+      - name: Lint
+        run: ruff check .
+      - name: Typecheck
+        run: mypy micro_agent runtimes
+      - name: Focused checkpoint tests
+        run: pytest tests/test_checkpointing.py -q
+      - name: Default tests
+        run: pytest -m "not integration and not e2e and not otel and not adk" -q
+      - name: Commit implementation and remove temporary files
+        run: |
+          git rm .github/workflows/temporary-runtime-checkpointing-runner.yml
+          git rm .github/workflows/temporary-runtime-checkpointing-fix-runner.yml
+          git add micro_agent runtimes tests TODO.md CHANGELOG.md docs/CHECKPOINTING.md mkdocs.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: add replay-safe runtime checkpointing"
+          git pull --rebase origin feat/runtime-checkpointing-20260902
+          git push origin HEAD:feat/runtime-checkpointing-20260902
