@@ -14,11 +14,20 @@ blockers are complete and the relevant acceptance tests are green.
 
 ### P0 — Release correctness
 
-- [ ] Protect `main` and release tags with the required CI checks in GitHub
+- [x] Protect `main` and release tags with the required CI checks in GitHub
       rulesets; workflow gates alone do not prevent an administrator bypass.
-- [ ] Configure and verify a pending PyPI trusted publisher for project
-      `micro-agents`, owner `bassemZohdy`, repository `micro-agents`, and
-      workflow `release.yml` before creating the first release tag.
+      Done 2026-09-03 via two active rulesets with an empty bypass list:
+      `main-required-CI` (deletion and force-push blocked, all 15 PR-visible
+      CI checks required) and `release-tags-immutable` (release tags `v*`
+      cannot be deleted or moved). Updates to `main` now go through pull
+      requests so the checks can pass before the ref advances.
+- [ ] Configure and verify a pending PyPI trusted publisher on pypi.org for
+      project `micro-agents`, owner `bassemZohdy`, repository `micro-agents`,
+      workflow filename `release.yml`, and an **empty environment name** (the
+      publish job declares no GitHub environment) before creating the first
+      release tag. Owner action on pypi.org (Manage → Publishing); the
+      workflow side is already ready (`id-token: write` +
+      `pypa/gh-action-pypi-publish@release/v1`).
 
 ## Micro-Agent Cloud — gated future workstream
 

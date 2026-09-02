@@ -6,6 +6,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Deployment
 
+- Protected the release pipeline with two active GitHub rulesets and an
+  empty bypass list: `main-required-CI` blocks `main` deletion and
+  force-pushes and requires every PR-visible CI check to pass before the
+  branch advances (updates now flow through pull requests), and
+  `release-tags-immutable` prevents deleting or moving `v*` release tags.
+
 - Hardened deployment and supply chain: the image now runs as an arbitrary
   UID in group 0 (OpenShift-compatible, no pinned runtime UID), the sample
   deployment requires an immutable version tag with no `:latest`, the
