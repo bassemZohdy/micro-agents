@@ -20,7 +20,10 @@ async def test_openai_compat_stream_parses_sse_deltas_and_final_response() -> No
         body = "\n\n".join(
             [
                 'data: {"choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}',
-                'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}],"usage":{"completion_tokens":2}}',
+                (
+                    'data: {"choices":[{"delta":{"content":"lo"},'
+                    '"finish_reason":"stop"}],"usage":{"completion_tokens":2}}'
+                ),
                 "data: [DONE]",
                 "",
             ]
@@ -75,16 +78,18 @@ async def test_http_invoke_streams_sse_when_runtime_truthfully_supports_it() -> 
 
     app = create_app(agent)
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        async with client.stream(
+    async with (
+        httpx.AsyncClient(transport=transport, base_url="http://test") as client,
+        client.stream(
             "POST",
             "/v1/invoke",
             headers={"Accept": "text/event-stream"},
             json={"input": {"q": "hi"}, "request_id": "stream-1"},
-        ) as response:
-            assert response.status_code == 200
-            assert response.headers["content-type"].startswith("text/event-stream")
-            body = await response.aread()
+        ) as response,
+    ):
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = await response.aread()
 
     text = body.decode()
     assert 'event: delta\ndata: {"delta":"hel"}' in text
