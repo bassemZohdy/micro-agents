@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 569 collected | 479 passed and 2 skipped in the default selection; 88 integration/e2e/optional tests are deselected for their dedicated CI jobs |
+| Tests | 598 collected | 504 passed in the default selection; 94 integration/e2e tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |

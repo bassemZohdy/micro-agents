@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `755cf68` on 2026-09-02.
+Baseline audited: `d6e14f7` on 2026-09-03.
 
 ## Release gate
 
@@ -27,7 +27,12 @@ blockers are complete and the relevant acceptance tests are green.
       publish job declares no GitHub environment) before creating the first
       release tag. Owner action on pypi.org (Manage → Publishing); the
       workflow side is already ready (`id-token: write` +
-      `pypa/gh-action-pypi-publish@release/v1`).
+      `pypa/gh-action-pypi-publish@release/v1`). Everything else is cut-ready:
+      the changelog `[Unreleased]` notes are folded into `[0.1.0]`, the
+      package version and deployment image pin already say `0.1.0`, and
+      `tools/validate_release.py 0.1.0` passes — once the pending publisher
+      exists, the release is `git tag v0.1.0 && git push origin v0.1.0`
+      (see "Cutting a release" in docs/DEPLOYMENT.md).
 
 ## Micro-Agent Cloud — gated future workstream
 
