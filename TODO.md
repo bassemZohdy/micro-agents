@@ -40,9 +40,18 @@ Start only after the standalone release gate is complete.
 
 ### C0 Architecture
 
-- [ ] Define boundaries between core framework and cloud services.
-- [ ] Distinguish semantic agent discovery from technical service discovery.
-- [ ] Define extension, tenancy, security, and failure models.
+- [x] Define boundaries between core framework and cloud services.
+- [x] Distinguish semantic agent discovery from technical service discovery.
+- [x] Define extension, tenancy, security, and failure models.
+
+Defined 2026-09-03 in [docs/architecture/CLOUD_ARCHITECTURE.md](docs/architecture/CLOUD_ARCHITECTURE.md)
+and [ADR 0013](docs/adr/0013-cloud-control-plane-boundary.md): cloud services
+are external control-plane deployables (the core never imports cloud code and
+serves with the control plane down), semantic descriptors derive from the
+definition and served A2A agent card and are checked against it at
+registration, tenancy follows the verified `tenant_id` claim at every plane,
+and every cloud failure mode degrades to the standalone system. Design only —
+C1+ implementation remains deferred until the release gate closes.
 
 ### C1 Registry and discovery
 
