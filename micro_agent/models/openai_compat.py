@@ -33,7 +33,7 @@ class OpenAICompatConfig:
     default.
     """
 
-    endpoint: str  # e.g. https://llm.example.com/v1
+    endpoint: str
     model_id: str = "default"
     api_key: str | None = None
     timeout_seconds: float = 30.0
@@ -55,10 +55,6 @@ class OpenAICompatProvider(ModelProvider):
         headers = {"Content-Type": "application/json", **config.default_headers}
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
-        # Keep a normalized base URL for relative use by callers while the
-        # provider below uses absolute endpoint paths. This preserves any
-        # configured prefix (for example ``/v1``) even for injected clients
-        # whose own ``base_url`` lacks a trailing slash.
         self._client = config.http_client or httpx.AsyncClient(
             base_url=f"{config.endpoint.rstrip('/')}/",
             headers=headers,
@@ -130,9 +126,8 @@ class OpenAICompatProvider(ModelProvider):
         )
 
     def capabilities(self) -> ProviderCapabilities:
-        """Chat completions supports function calling; streaming and
-        structured-output APIs are not wired yet."""
-        return ProviderCapabilities(tool_use=True)
+        """Report the chat-completions features this adapter actually wires."""
+        return ProviderCapabilities(tool_use=True, structured_output=True)
 
     async def health_check(self) -> bool:
         """GET /models as a cheap availability probe."""
