@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from micro_agent.checkpoint import SessionCheckpointStore
 from micro_agent.config.config import (
     EnvironmentConfig,
     EnvironmentOverlay,
@@ -174,12 +175,21 @@ def build_runtime(
         )
     else:
         session_provider = _build_session_provider(definition, resolved)
+        checkpoint_store = (
+            SessionCheckpointStore(
+                session_provider,
+                ttl_seconds=definition.spec.dependencies.session.ttl_seconds,
+            )
+            if session_provider is not None
+            else None
+        )
         memory_provider = _build_memory_provider(definition, resolved)
         operation_registry = _build_operation_registry(resolved)
         runtime = AdkRuntime(
             AdkRuntimeConfig(
                 model_provider=provider,
                 session_provider=session_provider,
+                checkpoint_store=checkpoint_store,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
                 operation_registry=operation_registry,

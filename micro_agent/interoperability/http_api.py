@@ -21,6 +21,7 @@ from micro_agent.core import (
     AgentRequest,
     AuthenticationError,
     AuthorizationError,
+    CheckpointNotFoundError,
     ContinuationNotFoundError,
     DefaultMicroAgent,
     DependencyUnavailableError,
@@ -53,6 +54,12 @@ class InvokeRequestModel(BaseModel):
         description="Approval continuation id from an approval_required response.",
     )
     approval_decision: Literal["approve", "deny"] | None = None
+    checkpoint_id: str | None = Field(
+        default=None,
+        description=(
+            "Replay-safe checkpoint id to resume; do not combine with approval continuation."
+        ),
+    )
 
 
 class InvokeResponseModel(BaseModel):
@@ -98,6 +105,7 @@ class InvokeRequest:
     timeout_seconds: float | None = None
     continuation_id: str | None = None
     approval_decision: str | None = None
+    checkpoint_id: str | None = None
 
 
 @dataclass
@@ -535,6 +543,7 @@ def create_app(
             user_context=identity.user if identity else None,
             continuation_id=request.continuation_id,
             approval_decision=request.approval_decision,
+            checkpoint_id=request.checkpoint_id,
         )
         if request.request_id:
             agent_request.request_id = request.request_id
@@ -565,6 +574,11 @@ def create_app(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"code": "continuation_not_found", "message": str(exc)},
+            ) from exc
+        except CheckpointNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "checkpoint_not_found", "message": str(exc)},
             ) from exc
         except ContractValidationError as exc:
             raise HTTPException(
