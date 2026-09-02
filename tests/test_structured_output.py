@@ -1,4 +1,4 @@
-from micro_agent.definition import OutputContract, ParameterDefinition
+from micro_agent.definition.models import OutputContract, ParameterDefinition
 from micro_agent.models import (
     OpenAICompatConfig,
     OpenAICompatProvider,
