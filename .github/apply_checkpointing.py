@@ -18,46 +18,6 @@ exec(compile(script, 'checkpointing-implementation', 'exec'))
 
 path = Path('runtimes/adk/runtime.py')
 text = path.read_text()
-misplaced = '''            if (
-                checkpoint_store is not None
-                and not self._tool_wave_is_replay_safe(agent, tools, response.tool_requests)
-            ):
-                await deadline.run(
-                    checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
-                )
-
-            tool_results = await self._execute_tools(
-                tools,
-                resume.tool_requests,
-'''
-corrected_resume = '''            tool_results = await self._execute_tools(
-                tools,
-                resume.tool_requests,
-'''
-if misplaced not in text:
-    raise RuntimeError('expected misplaced approval checkpoint guard not found')
-text = text.replace(misplaced, corrected_resume, 1)
-
-normal_call = '''            tool_results = await self._execute_tools(
-                tools,
-                response.tool_requests,
-'''
-normal_guard = '''            if (
-                checkpoint_store is not None
-                and not self._tool_wave_is_replay_safe(agent, tools, response.tool_requests)
-            ):
-                await deadline.run(
-                    checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
-                )
-
-            tool_results = await self._execute_tools(
-                tools,
-                response.tool_requests,
-'''
-if normal_call not in text:
-    raise RuntimeError('normal tool wave call not found')
-text = text.replace(normal_call, normal_guard, 1)
-
 approval_save = '''                await self._approval_store.save(approval)
                 raise _ApprovalPausedError(approval)
 '''
