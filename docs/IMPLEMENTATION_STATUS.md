@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last audited: 2026-09-01
+Last audited: 2026-09-02
 Documentation-audit baseline: `66f50bf929e5a7146b9c2d891149f2a91f20d5dd`
 Cleanup verification baseline: `66f50bf929e5a7146b9c2d891149f2a91f20d5dd`
 
@@ -13,11 +13,12 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 569 collected | 483 selected by the default test job; the remaining 86 run in the integration/e2e jobs (Redis and PostgreSQL service containers) |
+| Tests | 569 collected | 479 passed and 2 skipped in the default selection; 88 integration/e2e/optional tests are deselected for their dedicated CI jobs |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
 | Documentation | Pass | strict MkDocs build on pull requests; publish only from `main` |
+| Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
@@ -135,6 +136,10 @@ Implemented:
 - retry attempts are bounded by definition-level attempt and wall-clock
   budgets, with exponential backoff and optional jitter; defaults preserve one
   immediate retry
+- checkpoint persistence/resume is capability-gated: the custom runtime stores
+  exact replay-safe model boundaries, invalidates checkpoints before
+  non-read-only tools, and resumes explicitly by checkpoint id when a store is
+  configured
 
 Current custom-runtime capability matrix:
 
@@ -145,7 +150,7 @@ Current custom-runtime capability matrix:
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
 | `a2a` | false | discovery is preliminary and task protocol is not implemented |
-| `checkpointing` | false | checkpoint persistence is not implemented |
+| `checkpointing` | configured | true for the custom runtime when a checkpoint store is injected; the Google ADK adapter does not advertise it |
 
 Gaps:
 
@@ -156,6 +161,22 @@ Gaps:
   are not yet fully implemented: circuit breaking and an explicit retryable
   error taxonomy remain open, while side-effect suppression is intentionally
   conservative and does not infer that a write completed
+
+### Performance and resource budgets
+
+Implemented:
+
+- deterministic direct-runtime and in-process HTTP load scenarios using the
+  fake model, reporting error rate, p50/p95/max latency, throughput, and peak
+  traced memory
+- versioned per-scenario budgets in `benchmarks/budgets.json`, with both
+  scenarios enforced in the unit CI job and small-load regression tests
+
+Gaps:
+
+- the benchmarks intentionally exclude live model/network/tool latency,
+  distributed contention, and production capacity planning; they are
+  framework-overhead guardrails rather than production SLOs
 
 ### Models and tools
 
@@ -401,6 +422,6 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The next implementation sequence is P0.1 through P0.4 in
-[`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md),
-followed by A2A/MCP/provider interoperability and external state.
+The remaining implementation sequence is the open release-correctness items
+and the gated Micro-Agent Cloud design work in
+[`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).

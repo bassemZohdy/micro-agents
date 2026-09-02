@@ -21,6 +21,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   are checked by the release workflow and guarded by tests.
 ### Runtime
 
+- Added deterministic direct-runtime and HTTP load benchmarks using the fake
+  model, with versioned latency, throughput, error-rate, and peak-memory
+  budgets enforced in CI. These guardrails measure framework overhead and are
+  explicitly not production model or service SLOs.
 - Added capability-gated checkpoint persistence/resume for the built-in runtime. Checkpoints capture exact replay-safe model boundaries, use session-backed persistence in the executable bootstrap, are invalidated before non-read-only tool execution, and can be resumed explicitly by checkpoint id without overstating Google ADK support.
 - Added truthful end-to-end streaming for the built-in runtime: the model SPI
   now has runtime-neutral stream events, OpenAI-compatible providers consume

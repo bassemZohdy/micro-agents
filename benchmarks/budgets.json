@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "CI guardrails for framework overhead using the deterministic fake model. These are not production model/tool SLOs.",
+  "scenarios": {
+    "runtime_fake": {
+      "iterations": 200,
+      "concurrency": 20,
+      "max_error_rate": 0.0,
+      "max_p95_ms": 1000.0,
+      "min_throughput_rps": 20.0,
+      "max_peak_traced_memory_mb": 64.0
+    },
+    "http_fake": {
+      "iterations": 100,
+      "concurrency": 10,
+      "max_error_rate": 0.0,
+      "max_p95_ms": 1500.0,
+      "min_throughput_rps": 10.0,
+      "max_peak_traced_memory_mb": 96.0
+    }
+  }
+}

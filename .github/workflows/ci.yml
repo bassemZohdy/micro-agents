@@ -64,6 +64,10 @@ jobs:
       - run: pytest -m "not integration and not e2e and not otel" --cov=micro_agent --cov-report=term-missing
       - name: Verify executable bootstrap bindings
         run: pytest tests/test_bootstrap.py -q
+      - name: Enforce deterministic performance budgets
+        run: |
+          python benchmarks/run_benchmark.py --scenario runtime_fake
+          python benchmarks/run_benchmark.py --scenario http_fake
 
   integration:
     runs-on: ubuntu-latest

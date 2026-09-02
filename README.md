@@ -30,6 +30,7 @@ operated independently.
   operation-registry providers)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
 - Prometheus-compatible operational metrics at `/metrics`
+- deterministic runtime/HTTP benchmarks with versioned resource budgets
 - container and Kubernetes/OpenShift-oriented deployment examples
 
 The planned **Micro-Agent Cloud** workstream is separate from the standalone
@@ -247,6 +248,7 @@ and publish only after all verification succeeds.
 - [Getting started](docs/GETTING_STARTED.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [HTTP API](docs/API.md)
+- [Performance and resource budgets](docs/PERFORMANCE.md)
 - [Deployment guide](docs/DEPLOYMENT.md)
 - [Standards baseline](docs/STANDARDS.md)
 - [Architecture](docs/architecture/MICRO_AGENT_ARCHITECTURE.md)

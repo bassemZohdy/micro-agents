@@ -308,7 +308,10 @@ state through an external service under concurrent load.
   - [x] Add checkpointing with an explicit persistence/resume contract and
         capability-specific acceptance tests: replay-safe checkpoints persist
         exact execution state, invalidate before side effects, and resume by id.
-- [ ] Add performance/load benchmarks and resource budgets.
+- [x] Add performance/load benchmarks and resource budgets.
+      Deterministic fake-model runtime and HTTP scenarios report latency,
+      throughput, errors, and peak traced memory; versioned guardrails run in
+      CI and remain explicitly non-production SLOs (benchmarks/).
 - [x] Add upgrade, deprecation, and API compatibility policy
       (docs/COMPATIBILITY.md + ADR 0009: stability tiers, deprecation
       process, re-export retirement mechanism).

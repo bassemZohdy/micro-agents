@@ -14,6 +14,7 @@ nav:
   - Implementation Status: IMPLEMENTATION_STATUS.md
   - Configuration: CONFIGURATION.md
   - Checkpointing: CHECKPOINTING.md
+  - Performance: PERFORMANCE.md
   - Observability: OBSERVABILITY.md
   - HTTP API: API.md
   - Deployment: DEPLOYMENT.md
