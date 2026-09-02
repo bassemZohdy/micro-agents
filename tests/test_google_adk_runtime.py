@@ -565,3 +565,54 @@ async def test_policy_denies_declared_model_at_adk_startup():
             await runtime.start(agent)
     finally:
         await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_runtime_retrieves_knowledge_before_model_call():
+    from micro_agent.knowledge import InMemoryKnowledgeRetriever
+
+    class RecordingKnowledgeProvider(ModelProvider):
+        def __init__(self) -> None:
+            self.messages: list[list[dict]] = []
+
+        async def generate(self, config, messages, tools=None):
+            self.messages.append(messages)
+            return ModelResponse(content="knowledge answer")
+
+        async def health_check(self) -> bool:
+            return True
+
+    provider = RecordingKnowledgeProvider()
+    retriever = InMemoryKnowledgeRetriever(
+        {"policy-kb": ["Refund policy allows returns for thirty days."]}
+    )
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(model_provider=provider, knowledge_provider=retriever)
+    )
+    agent = await runtime.create(
+        _definition(
+            dependencies_extra={
+                "knowledge": [
+                    {
+                        "ref": "policy-kb",
+                        "max_results": 2,
+                        "max_context_characters": 1200,
+                    }
+                ]
+            }
+        )
+    )
+    try:
+        await runtime.start(agent)
+        response = await runtime.invoke(
+            agent, AgentRequest(input={"question": "What is the refund policy?"})
+        )
+        user_messages = [
+            message for message in provider.messages[0] if message.get("role") == "user"
+        ]
+        assert user_messages
+        assert "Refund policy allows returns for thirty days." in user_messages[-1]["content"]
+        assert "untrusted reference data" in user_messages[-1]["content"]
+        assert response.metadata["knowledge_entries"] == 1
+    finally:
+        await runtime.close()

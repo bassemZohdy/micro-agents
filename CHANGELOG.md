@@ -21,6 +21,11 @@ All notable changes to the Micro-Agents project are documented in this file.
   are checked by the release workflow and guarded by tests.
 ### Runtime
 
+- Added bounded runtime knowledge retrieval semantics: each source declares
+  result and context-size limits, invocation input becomes the deterministic
+  retrieval query, duplicate content is removed, and both runtime adapters
+  inject the same explicitly untrusted reference context without persisting it
+  as memory/session state.
 - Added a retryable-error taxonomy and circuit breaking: deterministic
   failures (policy denials, contract violations, authentication, timeouts)
   now fail immediately instead of consuming bounded-retry attempts; transient

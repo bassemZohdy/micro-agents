@@ -202,6 +202,22 @@
           ],
           "default": null,
           "title": "Version"
+        },
+        "max_results": {
+          "default": 5,
+          "description": "Maximum entries retrieved from this source per invocation.",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "max_context_characters": {
+          "default": 4000,
+          "description": "Maximum knowledge-content characters contributed by this source.",
+          "maximum": 32768,
+          "minimum": 256,
+          "title": "Max Context Characters",
+          "type": "integer"
         }
       },
       "required": [

@@ -323,6 +323,18 @@ class KnowledgeRef(BaseModel, extra="forbid"):
     )
     source_type: str | None = Field(None, description="Type of knowledge source.")
     version: str | None = None
+    max_results: int = Field(
+        5,
+        ge=1,
+        le=50,
+        description="Maximum entries retrieved from this source per invocation.",
+    )
+    max_context_characters: int = Field(
+        4000,
+        ge=256,
+        le=32768,
+        description="Maximum knowledge-content characters contributed by this source.",
+    )
 
 
 class MemoryRef(BaseModel, extra="forbid"):
