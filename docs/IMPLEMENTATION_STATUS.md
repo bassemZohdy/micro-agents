@@ -416,6 +416,14 @@ Gaps:
 - PyPI trusted publishing must be configured before the first tag
 - repository rulesets still need to make all main/release checks mandatory
 
+## Cloud workstream (C0, design only)
+
+Started 2026-09-03 on owner direction, ahead of the PyPI release-gate item:
+C0 defines the control-plane boundary (ADR 0013 + CLOUD_ARCHITECTURE.md)
+without implementing any cloud service or changing the core. Cloud
+implementation (C1+) remains gated on the release gate; the standalone
+product claims are unchanged by this documentation.
+
 ## Production-readiness conclusion
 
 The repository is a credible architecture prototype and contract testbed. Its

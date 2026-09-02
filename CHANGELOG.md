@@ -4,7 +4,17 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
-Nothing yet.
+### Documentation
+
+- Started the Micro-Agent Cloud workstream at C0 (architecture definition,
+  owner-directed): cloud services are specified as external control-plane
+  deployables that call agents as ordinary A2A/HTTP clients, discovery is
+  split into technical (infrastructure + readiness endpoints) and semantic
+  (versioned registry descriptors derived from the definition and served
+  agent card) halves, and extension, tenancy, security, and failure models
+  extend the core's verified-identity and degrade-to-standalone rules. See
+  `docs/architecture/CLOUD_ARCHITECTURE.md` and ADR 0013. No cloud code and
+  no core changes.
 
 ## [0.1.0] — 2026-09-03
 

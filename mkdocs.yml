@@ -23,6 +23,7 @@ nav:
   - Architecture:
       - Micro-Agent Architecture: architecture/MICRO_AGENT_ARCHITECTURE.md
       - Twelve-Factor Micro-Agent: architecture/TWELVE_FACTOR_MICRO_AGENT.md
+      - Cloud Control-Plane Architecture (C0): architecture/CLOUD_ARCHITECTURE.md
   - Schema:
       - Micro-Agent Definition v1alpha1: schemas/micro-agent-v1alpha1.json
   - Decisions:
@@ -39,3 +40,4 @@ nav:
       - 0010 Redis memory provider: adr/0010-redis-memory-provider.md
       - 0011 Redis idempotency registry: adr/0011-redis-idempotency-registry.md
       - 0012 Versioned tenant state: adr/0012-versioned-tenant-state.md
+      - 0013 Cloud control-plane boundary: adr/0013-cloud-control-plane-boundary.md
