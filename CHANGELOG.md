@@ -4,6 +4,17 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] — 2026-09-03
+
+First publishable release: the definition/bounded-autonomy framework with
+custom and Google ADK runtimes, PostgreSQL/Redis/in-memory/SQLite state
+providers, MCP and A2A interop, and the protected release pipeline. The
+previously released notes below are folded together with everything since
+the 2026-08-30 draft; no `v0.1.0` tag or PyPI distribution existed before
+this section was assembled.
+
 ### Deployment
 
 - Protected the release pipeline with two active GitHub rulesets and an
@@ -399,8 +410,6 @@ All notable changes to the Micro-Agents project are documented in this file.
   dependency audits, SBOM, strict docs build/publish, and a gated release to
   PyPI/GHCR/GitHub Releases.
 - ADRs 0001–0008 (`docs/adr/`) and MkDocs site configuration.
-
-## [0.1.0] — 2026-08-30
 
 ### Milestone 0 — Project Foundation
 - Git repository with Apache 2.0 license

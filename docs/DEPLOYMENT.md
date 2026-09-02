@@ -120,6 +120,34 @@ policy. Rate limiting is an injected `RateLimiter` integration point on
 wide limits. The native API is versioned under `/v1` and publishes the
 OpenAPI document at `/v1/openapi.json`.
 
+## Cutting a release
+
+The release pipeline is gated by two active GitHub rulesets: `main-required-CI`
+requires every PR-visible CI check before `main` advances, and
+`release-tags-immutable` makes `v*` tags undeletable and unmovable once
+created — a cut release cannot be silently rewritten.
+
+One-time setup (owner): create the pending trusted publisher on pypi.org
+(Manage → Publishing) for project `micro-agents`, owner `bassemZohdy`,
+repository `micro-agents`, workflow filename `release.yml`, and an **empty
+environment name** (the publish job declares no GitHub environment). Without
+this entry the tag-time publish job fails its OIDC exchange.
+
+Per release:
+
+1. Move the `[Unreleased]` CHANGELOG section into a `## [X.Y.Z] — date`
+   section, set `pyproject.toml` `version`, and update the pinned image tag in
+   `deploy/kubernetes/deployment.yaml` to `X.Y.Z` (the package, changelog,
+   tag, schema version, and image pin must all agree —
+   `python tools/validate_release.py X.Y.Z` checks this before you tag).
+2. Land those edits on `main` through a pull request so the required checks
+   run.
+3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `Release`
+   workflow then re-validates alignment, runs the full test suite and
+   container smoke test, publishes the distributions to PyPI via trusted
+   publishing, pushes the image to GHCR, attaches SLSA provenance and the
+   SBOM, and creates the GitHub release with generated notes.
+
 ## OpenShift
 
 The current fixed `USER 1000` image and `runAsUser: 1000` pod settings do not
