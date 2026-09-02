@@ -27,7 +27,12 @@ from micro_agent.core import (
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
 from micro_agent.health import DependencyProbe, HealthStatus
-from micro_agent.knowledge import KnowledgeRetriever, KnowledgeSource
+from micro_agent.knowledge import (
+    KnowledgeRetriever,
+    KnowledgeSource,
+    build_knowledge_query,
+    retrieve_knowledge_context,
+)
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.models import (
@@ -255,7 +260,13 @@ class AdkRuntime(AgentRuntime):
         )
         skills = definition.spec.dependencies.skills
         self._knowledge_refs = [
-            KnowledgeSource(ref=ref.ref, source_type=ref.source_type, version=ref.version)
+            KnowledgeSource(
+                ref=ref.ref,
+                source_type=ref.source_type,
+                version=ref.version,
+                max_results=ref.max_results,
+                max_context_characters=ref.max_context_characters,
+            )
             for ref in definition.spec.dependencies.knowledge
         ]
 
@@ -705,9 +716,21 @@ class AdkRuntime(AgentRuntime):
                 )
 
         inner_start = time.monotonic()
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self._system_prompt(definition, skills)}
-        ]
+        knowledge_context = ""
+        knowledge_counts: dict[str, int] = {}
+        if resume is None and self._config.knowledge_provider is not None and self._knowledge_refs:
+            knowledge_context, knowledge_counts = await deadline.run(
+                retrieve_knowledge_context(
+                    self._config.knowledge_provider,
+                    build_knowledge_query(input_payload),
+                    self._knowledge_refs,
+                )
+            )
+
+        system_prompt = self._system_prompt(definition, skills)
+        if knowledge_context:
+            system_prompt += "\n\n" + knowledge_context
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         if session is not None:
             history_tail = session.messages[-_MAX_SESSION_HISTORY_MESSAGES:]
             history_tail_length = len(history_tail)
@@ -941,6 +964,8 @@ class AdkRuntime(AgentRuntime):
                 "iterations": iterations,
                 "max_iterations_reached": max_iterations_reached,
                 "unresolved_tools": agent._internal["unresolved_tools"],
+                "knowledge_entries": sum(knowledge_counts.values()),
+                "knowledge_sources": knowledge_counts,
             },
         )
 

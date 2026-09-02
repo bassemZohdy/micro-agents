@@ -16,9 +16,10 @@ Declared services map onto ADK-native constructs:
   :class:`McpConnectionManager`,
 - telemetry maps to spans, metrics, and structured logs around the runner.
 
-Declarations the adapter cannot map (knowledge providers, credential
-references, external state bindings) keep failing fast in the bootstrap
-instead of being silently ignored.
+Declarations the adapter cannot map (credential references and external
+state bindings) keep failing fast in the bootstrap instead of being silently
+ignored. Knowledge providers use the same runtime-neutral retrieval contract as
+the custom runtime and are injected as bounded reference context per invocation.
 """
 
 # Google ADK is intentionally optional.  The dedicated ADK CI job installs its
@@ -49,7 +50,12 @@ from micro_agent.core import (
 )
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.health import DependencyProbe, HealthStatus
-from micro_agent.knowledge import KnowledgeRetriever, KnowledgeSource
+from micro_agent.knowledge import (
+    KnowledgeRetriever,
+    KnowledgeSource,
+    build_knowledge_query,
+    retrieve_knowledge_context,
+)
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
 from micro_agent.models import ModelConfig, ModelProvider
@@ -210,7 +216,13 @@ class GoogleAdkRuntime(AgentRuntime):
             else None
         )
         self._knowledge_refs = [
-            KnowledgeSource(ref=ref.ref, source_type=ref.source_type, version=ref.version)
+            KnowledgeSource(
+                ref=ref.ref,
+                source_type=ref.source_type,
+                version=ref.version,
+                max_results=ref.max_results,
+                max_context_characters=ref.max_context_characters,
+            )
             for ref in definition.spec.dependencies.knowledge
         ]
         return RuntimeAgent(
@@ -478,7 +490,15 @@ class GoogleAdkRuntime(AgentRuntime):
                 )
             else:
                 await _ensure_session(service, app_name, user_id, session_id)
-                content = _user_content(request.input)
+                knowledge_context = ""
+                knowledge_counts: dict[str, int] = {}
+                if self._config.knowledge_provider is not None and self._knowledge_refs:
+                    knowledge_context, knowledge_counts = await retrieve_knowledge_context(
+                        self._config.knowledge_provider,
+                        build_knowledge_query(request.input),
+                        self._knowledge_refs,
+                    )
+                content = _user_content(request.input, knowledge_context=knowledge_context)
             events: list[Any] = []
             async for event in runner.run_async(
                 user_id=user_id,
@@ -524,7 +544,16 @@ class GoogleAdkRuntime(AgentRuntime):
                 request_id=request.request_id,
                 session_id=session_id,
                 status="success",
-                metadata={"runtime": "google-adk", "event_count": len(events)},
+                metadata={
+                    "runtime": "google-adk",
+                    "event_count": len(events),
+                    "knowledge_entries": sum(knowledge_counts.values())
+                    if request.continuation_id is None
+                    else 0,
+                    "knowledge_sources": knowledge_counts
+                    if request.continuation_id is None
+                    else {},
+                },
             )
 
         timeout = _shortest_timeout(
@@ -920,14 +949,17 @@ async def _ensure_session(service: Any, app_name: str, user_id: str, session_id:
         )
 
 
-def _user_content(payload: dict[str, Any]) -> Any:
+def _user_content(payload: dict[str, Any], *, knowledge_context: str = "") -> Any:
     try:
         from google.genai import types
     except ImportError as exc:  # pragma: no cover - guarded by ``_load_adk``
         raise GoogleAdkError("Google GenAI content types are unavailable") from exc
+    payload_text = json.dumps(payload, default=str)
+    if knowledge_context:
+        payload_text = f"{knowledge_context}\n\nUser input:\n{payload_text}"
     return types.Content(
         role="user",
-        parts=[types.Part.from_text(text=json.dumps(payload, default=str))],
+        parts=[types.Part.from_text(text=payload_text)],
     )
 
 

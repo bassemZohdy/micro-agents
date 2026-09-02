@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `66f50bf` on 2026-09-01. Completed work is removed rather
+Baseline audited: `de6e0a0` on 2026-09-01. Completed work is removed rather
 than retained as checked boxes.
 
 ## Release gate
@@ -241,7 +241,7 @@ state through an external service under concurrent load.
       every tool as a side effect.
 - [x] Persist Redis idempotency records atomically with status and expiry.
 - [x] Do not retry an entire invocation after an unknown write outcome.
-- [ ] Add backoff, jitter, retry budgets, circuit breaking, and error
+- [x] Add backoff, jitter, retry budgets, circuit breaking, and error
       classification.
   - [x] Bound retry attempts and retry wall-clock budget with exponential
         backoff and optional jitter.
@@ -295,7 +295,7 @@ state through an external service under concurrent load.
       entry points, merged over built-ins and overridden by programmatic
       injection; resolution order and naming rules are documented in
       docs/CONFIGURATION.md.
-- [ ] Define knowledge-provider configuration and runtime retrieval semantics.
+- [x] Define knowledge-provider configuration and runtime retrieval semantics.
 - [ ] Add structured output, streaming, and checkpointing only behind truthful
       runtime capabilities.
 - [ ] Add performance/load benchmarks and resource budgets.

@@ -5,7 +5,9 @@ from micro_agent.knowledge.knowledge import (
     KnowledgeEntry,
     KnowledgeRetriever,
     KnowledgeSource,
+    build_knowledge_query,
     compute_content_hash,
+    retrieve_knowledge_context,
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "KnowledgeEntry",
     "KnowledgeRetriever",
     "KnowledgeSource",
+    "build_knowledge_query",
     "compute_content_hash",
+    "retrieve_knowledge_context",
 ]

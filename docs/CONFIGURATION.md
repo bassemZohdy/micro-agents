@@ -67,6 +67,42 @@ and writing a stale snapshot raises `StateConflictError`; zero-version writes
 retain the legacy unconditional behavior. The Google ADK runtime rejects this
 binding until its distributed idempotency mapping is implemented.
 
+## Knowledge retrieval
+
+Knowledge is externally supplied, read-only domain context; it is not memory
+and is never persisted into session state. Each declared source has bounded
+retrieval controls:
+
+```yaml
+spec:
+  dependencies:
+    knowledge:
+      - ref: policy-kb
+        source_type: document
+        version: "2026.09"
+        max_results: 5
+        max_context_characters: 4000
+```
+
+At invocation time the runtime deterministically flattens the complete input
+object into the retrieval query, visits sources in declaration order, and
+preserves each provider's result ordering. Exact duplicate content is removed.
+Each source is capped by `max_results` and `max_context_characters`; the merged
+context is also capped at 32,768 content characters. Retrieval errors fail the
+invocation rather than silently removing declared knowledge. Source health is
+probed before readiness.
+
+Both the custom runtime and Google ADK adapter use the same
+`KnowledgeRetriever` SPI and context builder. Retrieved content is framed as
+untrusted reference data: it cannot override system instructions, security
+policy, or the caller request. The custom runtime appends this context to the
+system prompt without persisting it; the Google ADK adapter injects the same
+framed context into the per-invocation user content because ADK system
+instructions are constructed when the agent is created. Deployments may inject
+a `KnowledgeRetriever` into `build_runtime`; without one, a declared source
+uses the empty in-memory retriever and therefore fails its startup health check
+instead of pretending knowledge is available.
+
 HTTP CORS is disabled unless `MICRO_AGENT_CORS_ORIGINS` is set. The executable
 passes this allowlist to `create_app`; application embedders can use the same
 policy with `create_app(cors_origins=[...])`. The default policy never enables
