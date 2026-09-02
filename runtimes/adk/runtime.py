@@ -18,12 +18,14 @@ from dataclasses import dataclass, field
 from typing import Any, TypeVar
 from uuid import uuid4
 
+from micro_agent.checkpoint import CheckpointRecord, CheckpointStore
 from micro_agent.core import (
     AgentCapabilities,
     AgentIdentity,
     AgentRequest,
     AgentResponse,
     AgentStreamEvent,
+    CheckpointNotFoundError,
     ContinuationNotFoundError,
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
@@ -183,6 +185,7 @@ class AdkRuntimeConfig:
     fake_model_config: FakeModelConfig = field(default_factory=FakeModelConfig)
     model_provider: ModelProvider | None = None
     session_provider: SessionProvider | None = None
+    checkpoint_store: CheckpointStore | None = None
     memory_provider: MemoryProvider | None = None
     memory_policy: MemoryPolicy | None = None
     knowledge_provider: KnowledgeRetriever | None = None
@@ -233,6 +236,7 @@ class AdkRuntime(AgentRuntime):
             mcp=self._config.mcp_manager is not None,
             a2a=False,
             structured_output=self._model_provider.capabilities().structured_output,
+            checkpointing=self._config.checkpoint_store is not None,
         )
 
     async def create(self, definition: MicroAgentDefinition) -> RuntimeAgent:
@@ -315,6 +319,15 @@ class AdkRuntime(AgentRuntime):
                 await session_provider.list_active()
             except Exception as exc:  # noqa: BLE001 — normalize startup failures
                 raise RuntimeError("session provider failed its health check at startup") from exc
+
+        checkpoint_store = self._config.checkpoint_store
+        if checkpoint_store is not None:
+            try:
+                healthy = await checkpoint_store.health_check()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("checkpoint store failed its health check at startup") from exc
+            if not healthy:
+                raise RuntimeError("checkpoint store failed its health check at startup")
 
         memory_provider = self._config.memory_provider
         if memory_provider is not None:
@@ -720,12 +733,32 @@ class AdkRuntime(AgentRuntime):
         skills = agent._internal["skills"]
         session_provider: SessionProvider | None = agent._internal["session_provider"]
         session_ttl: int | None = agent._internal["session_ttl"]
+        checkpoint_store = self._config.checkpoint_store
         memory_provider: MemoryProvider | None = agent._internal["memory_provider"]
         memory_scope: str = agent._internal["memory_scope"]
 
         semantics = definition.spec.runtime
         max_iterations = semantics.max_iterations or self._config.default_max_iterations
         labels = {"agent": definition.metadata.name}
+
+        bound_identity = get_invocation_identity()
+        tenant_id = (
+            bound_identity.user.tenant_id
+            if bound_identity is not None and bound_identity.user is not None
+            else None
+        )
+
+        checkpoint: CheckpointRecord | None = None
+        if request.checkpoint_id is not None:
+            if checkpoint_store is None:
+                raise CheckpointNotFoundError("checkpointing is not configured for this runtime")
+            checkpoint = await deadline.run(
+                checkpoint_store.get(request.checkpoint_id, tenant_id=tenant_id)
+            )
+            if checkpoint is None or checkpoint.agent_id != agent.identity.agent_id:
+                raise CheckpointNotFoundError("unknown, expired, or foreign checkpoint")
+            if request.input:
+                raise ValueError("checkpoint resume must not include new input")
 
         # Approval continuation: restore the paused conversation state before
         # anything else. Unknown, expired, or foreign continuations fail fast.
@@ -738,17 +771,12 @@ class AdkRuntime(AgentRuntime):
             await self._approval_store.delete(request.continuation_id)
             approved = request.approval_decision == "approve"
 
-        session_id = request.session_id or (resume.session_id if resume else None)
-        input_payload: dict[str, Any] = (
-            resume.input_payload if resume is not None else request.input
-        )
-
-        bound_identity = get_invocation_identity()
-        tenant_id = (
-            bound_identity.user.tenant_id
-            if bound_identity is not None and bound_identity.user is not None
-            else None
-        )
+        if checkpoint is not None:
+            session_id = checkpoint.session_id
+            input_payload = dict(checkpoint.input_payload)
+        else:
+            session_id = request.session_id or (resume.session_id if resume else None)
+            input_payload = resume.input_payload if resume is not None else request.input
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
@@ -786,7 +814,12 @@ class AdkRuntime(AgentRuntime):
         inner_start = time.monotonic()
         knowledge_context = ""
         knowledge_counts: dict[str, int] = {}
-        if resume is None and self._config.knowledge_provider is not None and self._knowledge_refs:
+        if (
+            resume is None
+            and checkpoint is None
+            and self._config.knowledge_provider is not None
+            and self._knowledge_refs
+        ):
             knowledge_context, knowledge_counts = await deadline.run(
                 retrieve_knowledge_context(
                     self._config.knowledge_provider,
@@ -795,15 +828,19 @@ class AdkRuntime(AgentRuntime):
                 )
             )
 
-        system_prompt = self._system_prompt(definition, skills)
-        if knowledge_context:
-            system_prompt += "\n\n" + knowledge_context
-        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-        if session is not None:
-            history_tail = session.messages[-_MAX_SESSION_HISTORY_MESSAGES:]
-            history_tail_length = len(history_tail)
-            messages.extend(history_tail)
-        messages.append({"role": "user", "content": json.dumps(input_payload, default=str)})
+        if checkpoint is not None:
+            messages = [dict(message) for message in checkpoint.messages]
+            history_tail_length = checkpoint.history_tail_length
+        else:
+            system_prompt = self._system_prompt(definition, skills)
+            if knowledge_context:
+                system_prompt += "\n\n" + knowledge_context
+            messages = [{"role": "system", "content": system_prompt}]
+            if session is not None:
+                history_tail = session.messages[-_MAX_SESSION_HISTORY_MESSAGES:]
+                history_tail_length = len(history_tail)
+                messages.extend(history_tail)
+            messages.append({"role": "user", "content": json.dumps(input_payload, default=str)})
 
         model_ref = definition.spec.dependencies.model
         model_config = ModelConfig(
@@ -828,9 +865,11 @@ class AdkRuntime(AgentRuntime):
             for tool in tools.values()
         ]
 
-        all_tool_results: list[dict[str, Any]] = []
-        usage: dict[str, int] = {}
-        iterations = 0
+        all_tool_results: list[dict[str, Any]] = (
+            list(checkpoint.all_tool_results) if checkpoint is not None else []
+        )
+        usage: dict[str, int] = dict(checkpoint.usage) if checkpoint is not None else {}
+        iterations = checkpoint.iterations if checkpoint is not None else 0
         max_iterations_reached = False
 
         if resume is not None:
@@ -889,6 +928,26 @@ class AdkRuntime(AgentRuntime):
                         "content": json.dumps(result["error"] or result["output"], default=str),
                     }
                 )
+
+        checkpoint_id = request.checkpoint_id or request.request_id
+        if checkpoint_store is not None:
+            await deadline.run(
+                checkpoint_store.save(
+                    CheckpointRecord(
+                        checkpoint_id=checkpoint_id,
+                        agent_id=agent.identity.agent_id,
+                        request_id=request.request_id,
+                        session_id=session_id,
+                        input_payload=dict(input_payload),
+                        messages=[dict(message) for message in messages],
+                        all_tool_results=list(all_tool_results),
+                        iterations=iterations,
+                        usage=dict(usage),
+                        history_tail_length=history_tail_length,
+                        tenant_id=tenant_id,
+                    )
+                )
+            )
 
         while True:
             iterations += 1
@@ -982,7 +1041,14 @@ class AdkRuntime(AgentRuntime):
                     input_payload=dict(input_payload),
                 )
                 await self._approval_store.save(approval)
+                if checkpoint_store is not None:
+                    await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
                 raise _ApprovalPausedError(approval)
+
+            if checkpoint_store is not None and not self._tool_wave_is_replay_safe(
+                agent, tools, response.tool_requests
+            ):
+                await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
 
             tool_results = await self._execute_tools(
                 tools,
@@ -1003,6 +1069,24 @@ class AdkRuntime(AgentRuntime):
                         "name": result["tool"],
                         "content": json.dumps(result["error"] or result["output"], default=str),
                     }
+                )
+            if checkpoint_store is not None:
+                await deadline.run(
+                    checkpoint_store.save(
+                        CheckpointRecord(
+                            checkpoint_id=checkpoint_id,
+                            agent_id=agent.identity.agent_id,
+                            request_id=request.request_id,
+                            session_id=session_id,
+                            input_payload=dict(input_payload),
+                            messages=[dict(message) for message in messages],
+                            all_tool_results=list(all_tool_results),
+                            iterations=iterations,
+                            usage=dict(usage),
+                            history_tail_length=history_tail_length,
+                            tenant_id=tenant_id,
+                        )
+                    )
                 )
 
         if session is not None:
@@ -1026,7 +1110,7 @@ class AdkRuntime(AgentRuntime):
                     MemoryEntry(
                         key=f"invocation:{request.request_id or uuid4()}",
                         value={
-                            "input": request.input,
+                            "input": input_payload,
                             "output": response.content,
                         },
                         scope=memory_scope,
@@ -1034,6 +1118,9 @@ class AdkRuntime(AgentRuntime):
                     ),
                 )
             )
+
+        if checkpoint_store is not None:
+            await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
 
         agent_span.set_attribute("iterations", iterations)
         agent_span.add_event(
@@ -1057,12 +1144,33 @@ class AdkRuntime(AgentRuntime):
                 "unresolved_tools": agent._internal["unresolved_tools"],
                 "knowledge_entries": sum(knowledge_counts.values()),
                 "knowledge_sources": knowledge_counts,
+                "resumed_from_checkpoint": request.checkpoint_id,
             },
         )
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _tool_wave_is_replay_safe(
+        self,
+        agent: RuntimeAgent,
+        tools: dict[str, Tool],
+        tool_requests: list[dict[str, Any]],
+    ) -> bool:
+        """Return true only when replay cannot repeat a declared side effect."""
+        side_effects = agent._internal.get("tool_side_effects") or {}
+        for tool_request in tool_requests:
+            tool_name = str(tool_request.get("name", ""))
+            tool = tools.get(tool_name)
+            if tool is None:
+                continue
+            classification = normalize_tool_side_effect(
+                side_effects.get(tool_name) or tool.metadata.side_effect
+            )
+            if classification != "read_only":
+                return False
+        return True
 
     def _approval_needed(
         self,

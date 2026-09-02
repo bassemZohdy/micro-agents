@@ -296,7 +296,7 @@ state through an external service under concurrent load.
       injection; resolution order and naming rules are documented in
       docs/CONFIGURATION.md.
 - [x] Define knowledge-provider configuration and runtime retrieval semantics.
-- [ ] Add structured output, streaming, and checkpointing only behind truthful
+- [x] Add structured output, streaming, and checkpointing only behind truthful
       runtime capabilities.
   - [x] Add provider-native structured output for the built-in runtime when the
         selected model provider advertises support; translate output contracts
@@ -305,8 +305,9 @@ state through an external service under concurrent load.
         public HTTP transport: OpenAI-compatible SSE and opt-in fake-provider
         streams flow through the runtime-neutral SPI to `/v1/invoke`; unsupported
         providers/runtimes remain false, and retries are suppressed after output.
-  - [ ] Add checkpointing with an explicit persistence/resume contract and
-        capability-specific acceptance tests.
+  - [x] Add checkpointing with an explicit persistence/resume contract and
+        capability-specific acceptance tests: replay-safe checkpoints persist
+        exact execution state, invalidate before side effects, and resume by id.
 - [ ] Add performance/load benchmarks and resource budgets.
 - [x] Add upgrade, deprecation, and API compatibility policy
       (docs/COMPATIBILITY.md + ADR 0009: stability tiers, deprecation

@@ -70,6 +70,7 @@ class AgentRequest:
     user_context: UserContext | None = None
     continuation_id: str | None = None
     approval_decision: str | None = None
+    checkpoint_id: str | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid caller-provided deadlines before runtime work starts."""
@@ -82,6 +83,10 @@ class AgentRequest:
             raise ValueError("approval_decision must be 'approve' or 'deny'")
         if self.continuation_id is not None and self.approval_decision is None:
             raise ValueError("continuation_id requires approval_decision")
+        if self.checkpoint_id is not None and not self.checkpoint_id.strip():
+            raise ValueError("checkpoint_id must not be empty")
+        if self.checkpoint_id is not None and self.continuation_id is not None:
+            raise ValueError("checkpoint_id cannot be combined with continuation_id")
 
 
 @dataclass
@@ -126,6 +131,10 @@ class DependencyUnavailableError(ConnectionError):
 
 class ContinuationNotFoundError(RuntimeError):
     """Raised when an approval continuation is unknown, expired, or foreign."""
+
+
+class CheckpointNotFoundError(RuntimeError):
+    """Raised when a checkpoint is unknown, expired, foreign, or unavailable."""
 
 
 # ---------------------------------------------------------------------------
