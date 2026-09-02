@@ -1,8 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-02
-Documentation-audit baseline: `66f50bf929e5a7146b9c2d891149f2a91f20d5dd`
-Cleanup verification baseline: `66f50bf929e5a7146b9c2d891149f2a91f20d5dd`
+Documentation-audit baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
+Cleanup verification baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -46,16 +46,15 @@ Implemented:
   mutating the logical definition
 - a canonical `v1alpha1` compatibility fixture and migration guidance; the
   loader continues to reject unsupported API versions and unknown fields
+- the bootstrap resolves model provider, endpoint, model ID, and credentials;
+  built-in memory and SQLite/in-memory session bindings plus optional Redis
+  external memory/session bindings, the built-in/plugin tool registry, MCP
+  connection manager, knowledge provider, credential provider, telemetry, and
+  the custom runtime's optional Redis operation registry are constructed from
+  configuration; unsupported external schemes fail fast
 
 Gaps:
 
-- the bootstrap resolves model provider, endpoint, model ID, and credentials;
-  built-in memory and SQLite/in-memory session bindings plus optional Redis
-  external memory/session bindings, the built-in tool
-  registry, the MCP connection manager, the knowledge provider, the
-  credential provider, telemetry, and the custom runtime's optional Redis
-  operation registry are constructed from configuration; unsupported external
-  schemes fail fast and the Google ADK runtime rejects the binding until mapped
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
 - only `microagents.io/v1alpha1` is currently supported; a future API version
@@ -67,7 +66,8 @@ Implemented:
 
 - small runtime-neutral `AgentRuntime` SPI
 - custom async model/tool loop with overall/model/tool timeouts
-- one retry or fallback behavior
+- bounded retry/fallback behavior with error classification, backoff, jitter,
+  retry budgets, and circuit breaking
 - session history, optional memory auto-store, injected policy, and telemetry
 - concurrency-safe service lifecycle, failure recovery, and in-flight drain on
   stop
@@ -145,11 +145,11 @@ Current custom-runtime capability matrix:
 
 | Capability | Availability | Notes |
 |---|---|---|
-| `streaming` | false | streaming is not implemented |
-| `structured_output` | false | declared contracts are validated, but model structured-output APIs are not wired |
+| `streaming` | provider-dependent | true for OpenAI-compatible providers and a fake provider configured with stream chunks; the Google ADK adapter remains false |
+| `structured_output` | provider-dependent | true for the OpenAI-compatible provider; unsupported providers and the Google ADK adapter remain false |
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
-| `a2a` | false | discovery is preliminary and task protocol is not implemented |
+| `a2a` | transport-level | the runtime flag remains false; the official SDK transport provides the non-streaming task protocol separately |
 | `checkpointing` | configured | true for the custom runtime when a checkpoint store is injected; the Google ADK adapter does not advertise it |
 
 Gaps:
@@ -157,10 +157,9 @@ Gaps:
 - policy references cannot yet resolve from external policy *stores*; the
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
-- retry budgets/backoff, circuit breaking, and crash / replay reconciliation
-  are not yet fully implemented: circuit breaking and an explicit retryable
-  error taxonomy remain open, while side-effect suppression is intentionally
-  conservative and does not infer that a write completed
+- the Google ADK adapter does not yet advertise streaming, structured output,
+  or checkpointing, and it rejects distributed idempotency/session mappings
+  that have not been implemented through native ADK services
 
 ### Performance and resource budgets
 
@@ -184,7 +183,9 @@ Implemented:
 
 - deterministic fake provider
 - injectable OpenAI-compatible chat-completions provider
-- built-in `echo` tool and injected MCP tool adapters
+- built-in `echo` tool, installed-package extensions through
+  `micro_agent.tools` entry points, programmatic tool injection, and injected
+  MCP tool adapters
 
 Implemented (additions):
 
@@ -203,9 +204,11 @@ Implemented (additions):
 
 Gaps:
 
-- broader provider credentials and endpoints are not yet supported
-- only `echo` resolves from the built-in map; the residency example's native
-  tools remain unresolved
+- the built-in provider set is intentionally limited to fake and
+  OpenAI-compatible chat completions; other model families require additional
+  provider adapters
+- `echo` is the only bundled native tool; conceptual examples that declare
+  domain tools require installed plugins or programmatic injection
 
 ### MCP
 
@@ -317,9 +320,6 @@ Gaps:
   database-backed audit arrives with production state providers
 - the approval store is process-local; production approval state arrives
   with production state providers
-- Redis operation idempotency is available in the custom runtime, with claims
-  scoped by verified tenant when present; late completion is owner-checked and
-  the Google ADK adapter rejects the binding
 
 ### State and knowledge
 
@@ -342,9 +342,6 @@ Implemented:
 
 Gaps:
 
-- bootstrap constructs in-memory or Redis memory, in-memory/SQLite sessions,
-  Redis external sessions, and the custom runtime's Redis operation registry;
-  unsupported idempotency schemes are rejected
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store
 - no production knowledge provider; state providers scope records by verified
@@ -386,8 +383,9 @@ Implemented:
 
 Gaps:
 
-- no response streaming implementation; runtimes currently advertise
-  `streaming: false`
+- response streaming is implemented for the built-in runtime when its model
+  provider advertises it; the Google ADK adapter and A2A transport remain
+  non-streaming and advertise that limitation
 - dashboards and alert thresholds remain deployment-owned; the full metric
   inventory, recommended dashboard panels, and PromQL alert examples are
   documented in docs/OBSERVABILITY.md (guarded by a source-vs-docs test), and
@@ -406,13 +404,8 @@ Implemented:
 
 Gaps:
 
-- release does not yet validate schema/image/changelog alignment
 - PyPI trusted publishing must be configured before the first tag
 - repository rulesets still need to make all main/release checks mandatory
-- fixed UID assumptions are not OpenShift arbitrary-UID friendly
-- sample Secret contains an empty value and no secret-manager workflow
-- deployment image uses `latest` and the example declares integrations that
-  bootstrap does not wire
 
 ## Production-readiness conclusion
 

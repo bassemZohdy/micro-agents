@@ -127,8 +127,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   failure from replaying an unknown write outcome.
 - Added definition-level retry controls: bounded retry attempts and wall-clock
   budgets, exponential backoff, and optional jitter. Defaults preserve the
-  existing single immediate retry; circuit breaking and a configurable
-  retryable-error taxonomy remain open follow-up work.
+  existing single immediate retry. The later resilience work in this release
+  completes circuit breaking and the retryable-error taxonomy.
 
 ### Bootstrap
 
