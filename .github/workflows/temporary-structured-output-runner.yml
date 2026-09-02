@@ -1,0 +1,83 @@
+name: Temporary structured output runner
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.head_ref == 'feat/structured-output-20260902'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Apply runtime/docs patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('runtimes/adk/runtime.py')
+          text = path.read_text()
+          text = text.replace(
+              '    ModelProvider,\n)',
+              '    ModelProvider,\n    structured_output_generation,\n)',
+              1,
+          )
+          text = text.replace(
+              '            structured_output=False,\n        )',
+              '            structured_output=self._model_provider.capabilities().structured_output,\n        )',
+              1,
+          )
+          old = '            generation=model_ref.generation if model_ref else {},\n            timeout_seconds=model_ref.timeout_seconds if model_ref else None,\n'
+          new = '''            generation=structured_output_generation(\n                model_ref.generation if model_ref else {},\n                definition.spec.behavior.output_contract,\n                model_provider.capabilities(),\n            ),\n            timeout_seconds=model_ref.timeout_seconds if model_ref else None,\n'''
+          if old not in text:
+              raise SystemExit('model generation block not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          path = Path('TODO.md')
+          text = path.read_text()
+          old = '''- [ ] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.\n'''
+          new = '''- [ ] Add structured output, streaming, and checkpointing only behind truthful\n      runtime capabilities.\n  - [x] Add provider-native structured output for the built-in runtime when the\n        selected model provider advertises support; translate output contracts\n        to JSON Schema and keep unsupported runtime/provider paths false.\n  - [ ] Add streaming behind a runtime/provider capability that is exercised by\n        the public transport rather than inferred from an SDK feature.\n  - [ ] Add checkpointing with an explicit persistence/resume contract and\n        capability-specific acceptance tests.\n'''
+          if old not in text:
+              raise SystemExit('TODO target not found')
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          marker = '### Runtime\n\n'
+          addition = '''### Runtime\n\n- Added truthful provider-native structured output for the built-in runtime:\n  OpenAI-compatible providers advertise JSON-schema structured output, agent\n  output contracts are translated into strict `response_format` constraints,\n  explicit provider response-format settings are preserved, and unsupported\n  runtimes/providers continue to advertise the capability as false.\n'''
+          if marker not in text:
+              raise SystemExit('changelog runtime marker not found')
+          path.write_text(text.replace(marker, addition, 1))
+          PY
+      - name: Install development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Format
+        run: ruff format micro_agent/models/structured.py micro_agent/models/__init__.py micro_agent/models/openai_compat.py runtimes/adk/runtime.py tests/test_structured_output.py
+      - name: Lint
+        run: ruff check .
+      - name: Typecheck
+        run: mypy micro_agent runtimes
+      - name: Focused tests
+        run: pytest tests/test_structured_output.py -q
+      - name: Default tests
+        run: pytest -m "not integration and not e2e and not otel and not adk" -q
+      - name: Commit and remove temporary workflow
+        run: |
+          git rm .github/workflows/temporary-structured-output-runner.yml
+          git add micro_agent runtimes tests TODO.md CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: add truthful structured output capability"
+          git pull --rebase origin feat/structured-output-20260902
+          git push origin HEAD:feat/structured-output-20260902
