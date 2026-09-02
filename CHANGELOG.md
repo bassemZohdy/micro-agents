@@ -21,6 +21,11 @@ All notable changes to the Micro-Agents project are documented in this file.
   are checked by the release workflow and guarded by tests.
 ### Runtime
 
+- Added truthful provider-native structured output for the built-in runtime:
+  OpenAI-compatible providers advertise JSON-schema structured output, agent
+  output contracts are translated into strict `response_format` constraints,
+  explicit provider response-format settings are preserved, and unsupported
+  runtimes/providers continue to advertise the capability as false.
 - Added bounded runtime knowledge retrieval semantics: each source declares
   result and context-size limits, invocation input becomes the deterministic
   retrieval query, duplicate content is removed, and both runtime adapters

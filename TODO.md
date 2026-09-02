@@ -298,6 +298,13 @@ state through an external service under concurrent load.
 - [x] Define knowledge-provider configuration and runtime retrieval semantics.
 - [ ] Add structured output, streaming, and checkpointing only behind truthful
       runtime capabilities.
+  - [x] Add provider-native structured output for the built-in runtime when the
+        selected model provider advertises support; translate output contracts
+        to JSON Schema and keep unsupported runtime/provider paths false.
+  - [ ] Add streaming behind a runtime/provider capability that is exercised by
+        the public transport rather than inferred from an SDK feature.
+  - [ ] Add checkpointing with an explicit persistence/resume contract and
+        capability-specific acceptance tests.
 - [ ] Add performance/load benchmarks and resource budgets.
 - [x] Add upgrade, deprecation, and API compatibility policy
       (docs/COMPATIBILITY.md + ADR 0009: stability tiers, deprecation
