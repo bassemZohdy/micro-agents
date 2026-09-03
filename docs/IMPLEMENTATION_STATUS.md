@@ -418,11 +418,17 @@ Gaps:
 
 ## Cloud workstream (C0, design only)
 
-Started 2026-09-03 on owner direction, ahead of the PyPI release-gate item:
-C0 defines the control-plane boundary (ADR 0013 + CLOUD_ARCHITECTURE.md)
-without implementing any cloud service or changing the core. Cloud
-implementation (C1+) remains gated on the release gate; the standalone
-product claims are unchanged by this documentation.
+Started 2026-09-03 on owner direction, ahead of the PyPI release-gate item.
+C0 defined the control-plane boundary (ADR 0013 + CLOUD_ARCHITECTURE.md) and
+C1 implemented the minimal registry/discovery slice in the top-level `cloud`
+package (ADR 0014 + CLOUD_REGISTRY.md): v1alpha1 descriptors derived from
+the definition and served A2A card, a lease-based in-memory registry with
+tenant/skill-filtered queries, and an outage-tolerant discovery client.
+Limitations: the registry store is in-memory and its API is deliberately
+unauthenticated (persistence and edge auth are C2/C3 work), and the `cloud`
+package is not part of the published `micro-agents` distribution. The core
+framework neither imports nor depends on any cloud code; standalone product
+claims are unchanged.
 
 ## Production-readiness conclusion
 

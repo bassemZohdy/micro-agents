@@ -55,8 +55,19 @@ C1+ implementation remains deferred until the release gate closes.
 
 ### C1 Registry and discovery
 
-- [ ] Define versioned agent/skill descriptors.
-- [ ] Build a minimal registry and health-aware discovery client.
+- [x] Define versioned agent/skill descriptors.
+- [x] Build a minimal registry and health-aware discovery client.
+
+Done 2026-09-03 in the top-level `cloud` package (core untouched, boundary
+per ADR 0013; see [docs/CLOUD_REGISTRY.md](docs/CLOUD_REGISTRY.md)):
+`v1alpha1` descriptors derived from the definition and served A2A agent card
+(card contradictions are rejected at registration), a lease-based in-memory
+registry with a FastAPI surface (register/heartbeat/deregister/query with
+tenant and skill filters, stale-with-age entries, 422 identity checks), and
+a discovery client that degrades to per-query cached snapshots marked stale
+when the registry is down. 10 tests; `cloud` joined the strict mypy gate.
+Deliberately deferred: registry authentication (C3 gateway) and persistence
+(C2 config plane).
 
 ### C2 Distributed configuration
 

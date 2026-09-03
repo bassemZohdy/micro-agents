@@ -4,6 +4,19 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Cloud (C1)
+
+- Added the minimal cloud registry and discovery client in a new top-level
+  `cloud` package (the core framework is untouched and never imports it, per
+  ADR 0013): versioned `v1alpha1` agent/skill descriptors derived from the
+  definition and the served A2A agent card with registration-time
+  contradiction checks, a lease-based in-memory registry behind a small
+  FastAPI surface (tenant/skill-filtered queries that keep stale entries
+  with a stated age), and a health-aware discovery client that serves
+  per-query cached snapshots marked stale during registry outages. The
+  `cloud` package joined the strict mypy gate; 10 dedicated tests. See
+  `docs/CLOUD_REGISTRY.md` and ADR 0014.
+
 ### Documentation
 
 - Started the Micro-Agent Cloud workstream at C0 (architecture definition,
