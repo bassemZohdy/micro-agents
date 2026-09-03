@@ -35,7 +35,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: python -m pip install -e ".[dev]"
-      - run: mypy micro_agent runtimes
+      - run: mypy micro_agent cloud runtimes
 
   schema:
     runs-on: ubuntu-latest
