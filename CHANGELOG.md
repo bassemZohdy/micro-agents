@@ -4,6 +4,41 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Cloud (C2)
+
+- Added the versioned distributed-configuration plane to the `cloud`
+  package: append-only per-agent definition and overlay histories validated
+  with the core's own definition loader and `EnvironmentOverlay` model,
+  monotonic versions with content digests, rollbacks that append (never
+  rewrite) history, a `SecretResolver` protocol integrating existing
+  secret-management systems at use time while the plane stores references
+  only, a small FastAPI surface, and a client that degrades to the last
+  good payload during config-plane outages. See `docs/CLOUD_CONFIG.md` and
+  ADR 0015.
+
+### Cloud (C3)
+
+- Added the minimal A2A gateway to the `cloud` package: `/{agent}/...`
+  routing with a pluggable edge authenticator (static bearer tokens mapping
+  to tenant claims), per-route tenant authorization, per-tenant rate-limit
+  buckets, and the resilience set — round-robin load balancing with ordered
+  fallbacks, per-target circuit breakers (half-open probes, health
+  reporting), per-target bulkheads that skip saturated targets instead of
+  queueing, and retries restricted to safe or idempotency-keyed calls so a
+  side effect can never replay across targets. Original credentials are
+  forwarded end to end; agent-local enforcement is untouched. See
+  `docs/CLOUD_GATEWAY.md` and ADR 0016.
+
+### Cloud (C4)
+
+- Added the distributed-observability aggregation plane to the `cloud`
+  package: batch event ingest aggregated into cross-agent traces, a
+  caller-to-callee topology view, per-agent/tenant token-and-cost rollups,
+  and an append-only, tenant-filterable audit view. Agents keep writing
+  telemetry and audit locally at the source; the plane is read-mostly and
+  never required for serving. See `docs/CLOUD_OBSERVABILITY.md` and
+  ADR 0017.
+
 ### Cloud (C1)
 
 - Added the minimal cloud registry and discovery client in a new top-level
