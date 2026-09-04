@@ -34,6 +34,177 @@ blockers are complete and the relevant acceptance tests are green.
       exists, the release is `git tag v0.1.0 && git push origin v0.1.0`
       (see "Cutting a release" in docs/DEPLOYMENT.md).
 
+## Standalone framework backlog
+
+Remaining standalone production-readiness work, grouped by area. Each item
+references its source in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
+or the relevant ADR.
+
+### P1 — Test coverage
+
+- [ ] Add unit tests for `micro_agent/session/sqlite.py` — the SQLite
+      session provider has no direct tests (only exercised indirectly).
+- [ ] Add unit tests for `micro_agent/__main__.py` — the CLI entrypoint
+      (`parse_args`, `run`, `main`) is untested.
+- [ ] Add dedicated unit tests for `micro_agent/security/approvals.py` —
+      `InMemoryApprovalStore` (save/get/delete + TTL expiry) is only
+      exercised indirectly via integration tests.
+- [ ] Add dedicated unit tests for `micro_agent/security/credentials.py` —
+      `EnvironmentCredentialProvider` and `StaticCredentialProvider` have no
+      direct assertion tests.
+- [ ] Add tests for `micro_agent/tools/plugin.py` — `load_plugin_tools()`
+      is only indirectly called by runtimes.
+- [ ] Add tests for `micro_agent/interoperability/a2a_server.py` — no test
+      file references this module.
+- [ ] Expand Google ADK adapter tests (`runtimes/google_adk/runtime.py`,
+      1100 lines, 15 tests): timeout handling, `stop()`/`shutdown()`
+      lifecycle, health probes for model/memory/knowledge, session reuse,
+      tool argument validation, model failure mid-invocation, and helper
+      functions (`_adk_name`, `_messages_from_adk`, `_tools_from_adk`,
+      `_event_text`, `_entry_text`, `_has_pending_confirmation`,
+      `_approval_metadata`).
+- [ ] Expand custom runtime tests (`runtimes/adk/runtime.py`, 1500 lines,
+      6 tests): tool calls, policy enforcement, approval flow, retry/error
+      policy, circuit breaker, knowledge retrieval, memory auto-store,
+      checkpointing, streaming, session management, max-iterations,
+      deadline/timeout, tool argument validation, operation registry.
+- [ ] Add coverage threshold to `pyproject.toml` (`[tool.coverage.report]`
+      with `fail_under`) to guard against regressions.
+- [ ] Add missing submodules to the import smoke test (`test_imports.py`):
+      `micro_agent.security.approvals`, `micro_agent.security.credentials`,
+      `micro_agent.session.sqlite`, `micro_agent.interoperability.a2a_server`,
+      `micro_agent.tools.plugin`.
+
+### P1 — Runtime (Google ADK adapter)
+
+- [ ] Advertise streaming in the Google ADK adapter when the underlying
+      model provider supports it. Currently always reports `streaming: false`.
+- [ ] Advertise structured output in the Google ADK adapter. Currently
+      always reports `structured_output: false`.
+- [ ] Advertise checkpointing in the Google ADK adapter. Currently does not
+      support it.
+- [ ] Implement distributed idempotency mapping for the Google ADK adapter.
+      Currently rejects `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`.
+      See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).
+- [ ] Implement external session state bindings for the Google ADK adapter.
+      Currently rejects SQLite and remote session persistence.
+- [ ] Implement model credential reference resolution for the Google ADK
+      adapter. Currently fails on credential refs on the model dependency.
+- [ ] Prove runtime portability: run the same definition through both the
+      custom loop and the Google ADK adapter under shared contract tests
+      (ADR 0001 consequence).
+
+### P1 — A2A protocol
+
+- [ ] Implement A2A streaming tasks. The card currently advertises streaming
+      as unavailable.
+      See [docs/API.md](docs/API.md).
+- [ ] Implement A2A push notifications.
+- [ ] Implement A2A extended authenticated cards.
+- [ ] Add durable A2A task store. Currently in-memory only; production state
+      arrives with external state providers.
+- [ ] Wire A2A task cancellation to the runtime invocation cancellation path.
+      Currently not connected.
+- [ ] Validate full A2A v1.0.1 conformance with the official SDK (beyond the
+      tested non-streaming subset).
+      See [docs/STANDARDS.md](docs/STANDARDS.md).
+
+### P1 — Security and policy
+
+- [ ] Implement downstream token delegation (token exchange toward MCP
+      servers). Currently the verified principal is observable to operations
+      but not forwarded through per-protocol delegation.
+- [ ] Evaluate generic `PolicyRule` conditions. The condition field on policy
+      rules is not processed.
+- [ ] Implement external policy-store integration. Policy references cannot
+      resolve from external stores; the bootstrap only accepts an injected
+      policy or a policy resolver callable.
+- [ ] Add durable approval store. Currently process-local; production
+      approval state needs an external backend.
+      See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).
+- [ ] Add database-backed audit sink. Currently persists to stdout or a local
+      file only.
+- [ ] Validate OpenShift arbitrary-UID compatibility: group-writable paths,
+      no pinned runtime UID, restricted SCC testing.
+      See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+### P1 — State and knowledge
+
+- [ ] Implement a production knowledge provider. Currently only an in-memory
+      keyword retriever exists.
+      See [ADR 0012](docs/adr/0012-versioned-tenant-state.md).
+- [ ] Implement a durable knowledge backend with versioned, tenant-scoped
+      records.
+
+### P2 — MCP
+
+- [ ] Surface MCP notifications as application-level events. Currently
+      consumed by the SDK session but invisible to the application layer.
+- [ ] Add remote production MCP load testing. Currently only loopback HTTP
+      and local stdio servers are tested.
+      See [docs/STANDARDS.md](docs/STANDARDS.md).
+
+### P2 — Models and tools
+
+- [ ] Add additional model provider adapters beyond fake and OpenAI-compatible
+      chat completions (Anthropic, Google Gemini native, Azure OpenAI, etc.).
+- [ ] Add bundled native tools beyond `echo`. Domain tools currently require
+      installed plugins or programmatic injection.
+- [ ] Add credential provider integrations beyond environment bindings and
+      `StaticCredentialProvider` (HashiCorp Vault, AWS Secrets Manager, cloud
+      KMS).
+
+### P2 — Definition and configuration
+
+- [ ] Design a versioned resource/catalog contract for model alias resolution.
+      Currently `model_alias` and `model_provider_id` are separate fields
+      with no catalog mechanism.
+- [ ] Design `v1beta1` or `v1` API version: separate model, schema,
+      compatibility fixture, migration policy, and versioned loader.
+      Currently only `microagents.io/v1alpha1` is supported.
+
+### P2 — HTTP and observability
+
+- [ ] Implement response streaming for the Google ADK adapter and A2A
+      transport. Currently only the built-in runtime supports it.
+- [ ] Add latency histogram support. Current latency metrics are gauges
+      (latest value), not histograms; percentile dashboards require a native
+      OTel histogram exporter.
+      See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
+- [ ] Add built-in rate-limiter implementation. Currently only an injected
+      hook; no built-in algorithm or local counter exists. Shared
+      gateway or datastore implementation required for replica-wide limits.
+      See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+- [ ] Define proxy policy for production deployments. The OpenAI-compatible
+      client defaults to `trust_env=False`; deployments requiring a proxy
+      must opt in through provider configuration.
+
+### P2 — Deployment hardening
+
+- [ ] Generate hermetic hash-pinned `requirements.txt` for reproducible
+      container builds. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- [ ] Define shutdown deadline and cancellation policy for requests that do
+      not drain in time.
+- [ ] Configure request-body limit and deadline budget enforcement at the
+      ingress/gateway layer.
+- [ ] Validate arbitrary-UID and read-only-filesystem execution in production
+      images.
+- [ ] Define resource requests/limits, disruption budgets, autoscaling,
+      topology spread, and NetworkPolicy for production deployments.
+- [ ] Scrape `/metrics` and define deployment-owned latency/error/readiness/
+      token/cost dashboards and alerts.
+      See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
+- [ ] Perform rollback and compatibility-tested release validation.
+- [ ] Validate immutable image, SBOM, signature, and SLSA provenance in
+      production deployments.
+
+### P2 — Benchmarks
+
+- [ ] Add live-model/network/tool latency benchmarks. Current benchmarks
+      intentionally exclude these and measure framework-overhead guardrails
+      only, not production SLOs.
+- [ ] Add distributed contention and production capacity-planning scenarios.
+
 ## Micro-Agent Cloud — gated future workstream
 
 Start only after the standalone release gate is complete.
@@ -113,6 +284,35 @@ audit view. Agents keep writing telemetry/audit locally and tamper-evident
 at the source; the plane is read-mostly and losing it costs visibility,
 never agents. In-memory store by design for the minimal slice; durable
 backends replace it later.
+
+### C5 — Cloud hardening (deferred)
+
+- [ ] Add durable persistence for the cloud registry (replace in-memory
+      store). See [ADR 0014](docs/adr/0014-minimal-cloud-registry.md).
+- [ ] Add durable persistence for the cloud config plane (replace in-memory
+      store). See [ADR 0015](docs/adr/0015-versioned-cloud-config-plane.md).
+- [ ] Add durable persistence for the cloud observability plane with
+      retention/eviction policy. See [ADR 0017](docs/adr/0017-observability-aggregation.md).
+- [ ] Add shared-state backends for gateway circuit-breaker, rate-limit, and
+      bulkhead state (multi-replica production). See
+      [docs/CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
+- [ ] Implement gateway streaming pass-through (currently buffers entire
+      request/response bodies at 10 MB max). See
+      [docs/CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
+- [ ] Implement gateway response-header propagation.
+- [ ] Add OIDC-backed gateway authenticator (replace static bearer tokens).
+      See [ADR 0016](docs/adr/0016-gateway-edge-policy.md).
+- [ ] Add Vault and cloud-managed secret-store resolvers (replace
+      environment-only `SecretResolver`). See
+      [cloud/config.py](cloud/config.py).
+- [ ] Authenticate cloud plane APIs (registry, config, observability).
+      Currently all planes are unauthenticated.
+- [ ] Add formal schema and compatibility policy for cloud descriptors,
+      config plane, and observability aggregation schemas.
+- [ ] Re-export C2/C3/C4 public symbols from `cloud/__init__.py`. Currently
+      only C1 symbols are exported.
+- [ ] Evaluate splitting `cloud` into its own repository/deployment package.
+      See [ADR 0014](docs/adr/0014-minimal-cloud-registry.md).
 
 ## Deferred
 
