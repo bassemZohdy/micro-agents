@@ -424,6 +424,10 @@ C1 implemented the minimal registry/discovery slice in the top-level `cloud`
 package (ADR 0014 + CLOUD_REGISTRY.md): v1alpha1 descriptors derived from
 the definition and served A2A card, a lease-based in-memory registry with
 tenant/skill-filtered queries, and an outage-tolerant discovery client.
+C4 added the observability aggregation plane (ADR 0017 +
+CLOUD_OBSERVABILITY.md): cross-agent traces, topology edges, cost rollups,
+and an append-only audit view over pushed events, with an in-memory store
+as the documented C4 limit.
 C3 added the gateway (ADR 0016 + CLOUD_GATEWAY.md): edge authentication and
 tenant authorization, rate limits, and the resilience set (load balancing,
 fallbacks, circuit breakers, bulkheads, side-effect-safe retries), with

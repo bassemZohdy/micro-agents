@@ -101,8 +101,18 @@ Shared-state backends and streaming pass-through are later work.
 
 ### C4 Distributed observability
 
-- [ ] Provide cross-agent tracing, cost/usage aggregation, topology, and audit
+- [x] Provide cross-agent tracing, cost/usage aggregation, topology, and audit
       views.
+
+Done 2026-09-04 in the `cloud` package
+([docs/CLOUD_OBSERVABILITY.md](docs/CLOUD_OBSERVABILITY.md), ADR 0017):
+batch event ingestion aggregated into cross-agent traces (via
+`caller_agent` span attributes), a caller→callee topology view with call
+counts, per-agent/tenant cost rollups, and an append-only tenant-filterable
+audit view. Agents keep writing telemetry/audit locally and tamper-evident
+at the source; the plane is read-mostly and losing it costs visibility,
+never agents. In-memory store by design for the minimal slice; durable
+backends replace it later.
 
 ## Deferred
 

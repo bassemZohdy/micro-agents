@@ -21,6 +21,7 @@ nav:
   - Cloud Registry: CLOUD_REGISTRY.md
   - Cloud Configuration: CLOUD_CONFIG.md
   - Cloud Gateway: CLOUD_GATEWAY.md
+  - Cloud Observability: CLOUD_OBSERVABILITY.md
   - Compatibility: COMPATIBILITY.md
   - Standards: STANDARDS.md
   - Architecture:
@@ -47,3 +48,4 @@ nav:
       - 0014 Minimal cloud registry and discovery: adr/0014-minimal-cloud-registry.md
       - 0015 Versioned cloud config plane: adr/0015-versioned-cloud-config-plane.md
       - 0016 Gateway edge policy and resilience: adr/0016-gateway-edge-policy.md
+      - 0017 Read-mostly observability aggregation: adr/0017-observability-aggregation.md
