@@ -71,8 +71,16 @@ Deliberately deferred: registry authentication (C3 gateway) and persistence
 
 ### C2 Distributed configuration
 
-- [ ] Store versioned definitions and environment overlays.
-- [ ] Integrate existing secret-management systems.
+- [x] Store versioned definitions and environment overlays.
+- [x] Integrate existing secret-management systems.
+
+Done 2026-09-03 in the `cloud` package ([docs/CLOUD_CONFIG.md](docs/CLOUD_CONFIG.md),
+ADR 0015): append-only per-agent version histories validated by the core's
+own definition loader and `EnvironmentOverlay` model, rollbacks that append
+rather than rewrite, and a `SecretResolver` protocol (environment resolver
+included) so secret-management systems integrate at use time while the
+plane stores references only. Durable backends replace the in-memory store
+in a later slice; edge auth is C3.
 
 ### C3 Gateway and resilience
 

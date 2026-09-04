@@ -424,9 +424,13 @@ C1 implemented the minimal registry/discovery slice in the top-level `cloud`
 package (ADR 0014 + CLOUD_REGISTRY.md): v1alpha1 descriptors derived from
 the definition and served A2A card, a lease-based in-memory registry with
 tenant/skill-filtered queries, and an outage-tolerant discovery client.
-Limitations: the registry store is in-memory and its API is deliberately
-unauthenticated (persistence and edge auth are C2/C3 work), and the `cloud`
-package is not part of the published `micro-agents` distribution. The core
+C2 added the versioned configuration plane (ADR 0015 + CLOUD_CONFIG.md):
+append-only definition/overlay histories validated by the core's loader,
+rollback-as-append, secret references resolved at use time via the
+`SecretResolver` protocol, and a last-good-fallback client. Limitations: the
+registry and config stores are in-memory and the plane APIs are deliberately
+unauthenticated (durable storage and edge auth are later slices), and the
+`cloud` package is not part of the published `micro-agents` distribution. The core
 framework neither imports nor depends on any cloud code; standalone product
 claims are unchanged.
 

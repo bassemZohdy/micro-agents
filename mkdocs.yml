@@ -19,6 +19,7 @@ nav:
   - HTTP API: API.md
   - Deployment: DEPLOYMENT.md
   - Cloud Registry: CLOUD_REGISTRY.md
+  - Cloud Configuration: CLOUD_CONFIG.md
   - Compatibility: COMPATIBILITY.md
   - Standards: STANDARDS.md
   - Architecture:
@@ -43,3 +44,4 @@ nav:
       - 0012 Versioned tenant state: adr/0012-versioned-tenant-state.md
       - 0013 Cloud control-plane boundary: adr/0013-cloud-control-plane-boundary.md
       - 0014 Minimal cloud registry and discovery: adr/0014-minimal-cloud-registry.md
+      - 0015 Versioned cloud config plane: adr/0015-versioned-cloud-config-plane.md
