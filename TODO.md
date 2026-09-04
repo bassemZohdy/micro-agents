@@ -84,10 +84,20 @@ in a later slice; edge auth is C3.
 
 ### C3 Gateway and resilience
 
-- [ ] Route A2A traffic with authentication, authorization, rate limits, and
+- [x] Route A2A traffic with authentication, authorization, rate limits, and
       policy.
-- [ ] Provide retries, circuit breakers, bulkheads, load balancing, and
+- [x] Provide retries, circuit breakers, bulkheads, load balancing, and
       fallbacks at the appropriate layer.
+
+Done 2026-09-04 in the `cloud` package ([docs/CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md),
+ADR 0016): `/{agent}/...` routing through a pluggable edge authenticator
+(static bearer tokens → tenant claims), per-route tenant authorization,
+per-tenant token-bucket rate limits, and the full resilience set —
+round-robin load balancing, ordered fallbacks, per-target circuit breakers
+with half-open probes, per-target bulkheads that skip (never queue) when
+saturated, and retries confined to safe or idempotency-keyed calls.
+Agent-local enforcement is untouched; credentials are forwarded end to end.
+Shared-state backends and streaming pass-through are later work.
 
 ### C4 Distributed observability
 

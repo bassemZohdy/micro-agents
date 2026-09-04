@@ -424,6 +424,11 @@ C1 implemented the minimal registry/discovery slice in the top-level `cloud`
 package (ADR 0014 + CLOUD_REGISTRY.md): v1alpha1 descriptors derived from
 the definition and served A2A card, a lease-based in-memory registry with
 tenant/skill-filtered queries, and an outage-tolerant discovery client.
+C3 added the gateway (ADR 0016 + CLOUD_GATEWAY.md): edge authentication and
+tenant authorization, rate limits, and the resilience set (load balancing,
+fallbacks, circuit breakers, bulkheads, side-effect-safe retries), with
+in-memory per-process state and non-streaming pass-through as the documented
+C3 limits.
 C2 added the versioned configuration plane (ADR 0015 + CLOUD_CONFIG.md):
 append-only definition/overlay histories validated by the core's loader,
 rollback-as-append, secret references resolved at use time via the
