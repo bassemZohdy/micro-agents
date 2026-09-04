@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last audited: 2026-09-02
+Last audited: 2026-09-04
 Documentation-audit baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
 Cleanup verification baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
 
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 598 collected | 504 passed in the default selection; 94 integration/e2e tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 629 collected | 535 passed in the default selection; 94 integration/e2e tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -22,7 +22,7 @@ readiness or protocol compliance.
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
-| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry |
+| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry (an owner action on pypi.org) |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
 so ambient proxy variables cannot unexpectedly route model traffic or loopback
@@ -414,9 +414,8 @@ Implemented:
 Gaps:
 
 - PyPI trusted publishing must be configured before the first tag
-- repository rulesets still need to make all main/release checks mandatory
 
-## Cloud workstream (C0, design only)
+## Cloud workstream (C0–C4)
 
 Started 2026-09-03 on owner direction, ahead of the PyPI release-gate item.
 C0 defined the control-plane boundary (ADR 0013 + CLOUD_ARCHITECTURE.md) and
@@ -451,6 +450,11 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The remaining implementation sequence is the open release-correctness items
-and the gated Micro-Agent Cloud design work in
+The remaining implementation sequence is the PyPI trusted-publisher
+configuration (an owner action on pypi.org) and the deferred standalone
+production gaps in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).
+The Micro-Agent Cloud C0–C4 workstream (architecture, registry/discovery,
+configuration plane, gateway/resilience, and observability) is implemented in
+the `cloud` package; the core framework and standalone product claims are
+unchanged.

@@ -626,13 +626,18 @@ this section was assembled.
 
 ### Known Limitations
 
-The 0.1.0 slice was intentionally minimal. Later work implemented useful
-interfaces and test seams, but the following production boundaries remain:
+The 0.1.0 framework is functionally complete for a standalone agent with
+real providers, but the following production boundaries remain:
 
-- MCP ships a client integration seam (manager + security + fake client), but
-  no production wire-protocol client or official-SDK interoperability test
-- OpenTelemetry export is not integrated yet; the in-tree `Telemetry` facade
-  is the single swap point
-- the current A2A-shaped discovery path/card is not A2A v1 compliant and no
-  full task protocol is implemented
-- executable provider/configuration/state/security bootstrap remains absent
+- MCP notifications are consumed by the SDK session but not surfaced as
+  events; tests exercise loopback and local stdio servers, not remote
+  production deployments
+- A2A streaming tasks, push notifications, durable task state, and
+  cancellation are not implemented (the card advertises streaming as
+  unavailable)
+- downstream delegation (for example token exchange toward MCP servers) is
+  not implemented; caller identity is observable to operations but not
+  forwarded through per-protocol delegation
+- the approval store, operation registry (in non-Redis mode), and audit sink
+  are process-local; production state arrives with external state providers
+- generic `PolicyRule` conditions are not evaluated
