@@ -22,9 +22,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 _MAX_EVENTS_PER_BATCH = 1000
+_MAX_AUDIT_LIMIT = 1000
 _EVENT_KINDS = {"span", "usage", "audit"}
 _REQUIRED = {"trace_id", "agent", "kind"}
 
@@ -66,21 +67,29 @@ class InMemoryObservabilityStore:
         self._lock = asyncio.Lock()
 
     async def ingest(self, events: list[dict[str, Any]]) -> int:
-        """Validate and aggregate a batch; returns the accepted count."""
+        """Validate and aggregate a batch; returns the accepted count.
+
+        The batch is validated and normalized in full before anything is
+        stored, so a rejected batch never leaves partial data behind.
+        """
         if len(events) > _MAX_EVENTS_PER_BATCH:
             raise ValueError(f"batch exceeds {_MAX_EVENTS_PER_BATCH} events")
-        accepted = 0
-        async with self._lock:
-            for event in events:
-                kind = event.get("kind")
-                if kind not in _EVENT_KINDS:
-                    raise ValueError(f"event kind must be one of {sorted(_EVENT_KINDS)}")
-                missing = _REQUIRED - set(event) - {"kind"}
-                if missing:
-                    raise ValueError(f"event missing fields: {sorted(missing)}")
-                tenant = event.get("tenant")
-                if kind == "span":
-                    span = TraceSpan(
+        spans: list[TraceSpan] = []
+        usage: list[UsageRecord] = []
+        audit: list[dict[str, Any]] = []
+        for event in events:
+            if not isinstance(event, dict):
+                raise ValueError("event must be an object")
+            kind = event.get("kind")
+            if kind not in _EVENT_KINDS:
+                raise ValueError(f"event kind must be one of {sorted(_EVENT_KINDS)}")
+            missing = _REQUIRED - set(event) - {"kind"}
+            if missing:
+                raise ValueError(f"event missing fields: {sorted(missing)}")
+            tenant = event.get("tenant")
+            if kind == "span":
+                spans.append(
+                    TraceSpan(
                         trace_id=str(event["trace_id"]),
                         agent=str(event["agent"]),
                         span_id=str(event.get("span_id", "")),
@@ -95,31 +104,35 @@ class InMemoryObservabilityStore:
                         duration_ms=float(event.get("duration_ms", 0.0)),
                         status=str(event.get("status", "ok")),
                     )
-                    self._spans.setdefault(span.trace_id, []).append(span)
-                elif kind == "usage":
-                    self._usage.append(
-                        UsageRecord(
-                            trace_id=str(event["trace_id"]),
-                            agent=str(event["agent"]),
-                            tenant=str(tenant) if tenant else None,
-                            input_tokens=int(event.get("input_tokens", 0)),
-                            output_tokens=int(event.get("output_tokens", 0)),
-                            cost_usd=float(event.get("cost_usd", 0.0)),
-                        )
+                )
+            elif kind == "usage":
+                usage.append(
+                    UsageRecord(
+                        trace_id=str(event["trace_id"]),
+                        agent=str(event["agent"]),
+                        tenant=str(tenant) if tenant else None,
+                        input_tokens=int(event.get("input_tokens", 0)),
+                        output_tokens=int(event.get("output_tokens", 0)),
+                        cost_usd=float(event.get("cost_usd", 0.0)),
                     )
-                else:
-                    self._audit.append(
-                        {
-                            "trace_id": str(event["trace_id"]),
-                            "agent": str(event["agent"]),
-                            "tenant": str(tenant) if tenant else None,
-                            "action": str(event.get("action", "")),
-                            "decision": str(event.get("decision", "")),
-                            "received_at": time.time(),
-                        }
-                    )
-                accepted += 1
-        return accepted
+                )
+            else:
+                audit.append(
+                    {
+                        "trace_id": str(event["trace_id"]),
+                        "agent": str(event["agent"]),
+                        "tenant": str(tenant) if tenant else None,
+                        "action": str(event.get("action", "")),
+                        "decision": str(event.get("decision", "")),
+                        "received_at": time.time(),
+                    }
+                )
+        async with self._lock:
+            for span in spans:
+                self._spans.setdefault(span.trace_id, []).append(span)
+            self._usage.extend(usage)
+            self._audit.extend(audit)
+        return len(events)
 
     async def trace(self, trace_id: str) -> list[TraceSpan]:
         async with self._lock:
@@ -169,6 +182,8 @@ class InMemoryObservabilityStore:
     async def audit_events(
         self, *, tenant: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
+        if not 1 <= limit <= _MAX_AUDIT_LIMIT:
+            raise ValueError(f"limit must be between 1 and {_MAX_AUDIT_LIMIT}")
         async with self._lock:
             events = list(self._audit)
         if tenant is not None:
@@ -226,7 +241,10 @@ def create_observability_app(
         return await obs.costs(tenant=tenant, agent=agent)
 
     @app.get("/observability/audit")
-    async def get_audit(tenant: str | None = None, limit: int = 100) -> dict[str, Any]:
+    async def get_audit(
+        tenant: str | None = None,
+        limit: int = Query(default=100, ge=1, le=_MAX_AUDIT_LIMIT),
+    ) -> dict[str, Any]:
         return {"events": await obs.audit_events(tenant=tenant, limit=limit)}
 
     @app.get("/health/ready")
