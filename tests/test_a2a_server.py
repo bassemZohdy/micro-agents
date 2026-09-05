@@ -93,9 +93,7 @@ class FakeAgent:
 
 
 def test_payload_from_supports_json_and_plain_text() -> None:
-    assert a2a_server._payload_from(FakeContext('{"question": "ping"}')) == {
-        "question": "ping"
-    }
+    assert a2a_server._payload_from(FakeContext('{"question": "ping"}')) == {"question": "ping"}
     assert a2a_server._payload_from(FakeContext("ping")) == {"message": "ping"}
     assert a2a_server._payload_from(FakeContext("")) == {}
 

@@ -96,9 +96,7 @@ async def test_run_starts_and_closes_the_agent(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(main_module.uvicorn, "Config", lambda *args, **kwargs: config)
     monkeypatch.setattr(main_module.uvicorn, "Server", lambda value: FakeServer(calls, value))
 
-    await main_module.run(
-        Namespace(definition=Path("agent.yaml"), port=9000, host="127.0.0.1")
-    )
+    await main_module.run(Namespace(definition=Path("agent.yaml"), port=9000, host="127.0.0.1"))
 
     assert calls == [
         "agent.initialize",
