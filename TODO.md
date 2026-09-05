@@ -58,13 +58,13 @@ or the relevant ADR.
 - [x] Add tests for `micro_agent/interoperability/a2a_server.py` — payload
       mapping and success/failure/cancellation task transitions are covered in
       `tests/test_a2a_server.py`.
-- [ ] Expand Google ADK adapter tests (`runtimes/google_adk/runtime.py`,
-      1100 lines, 15 tests): timeout handling, `stop()`/`shutdown()`
-      lifecycle, health probes for model/memory/knowledge, session reuse,
-      tool argument validation, model failure mid-invocation, and helper
-      functions (`_adk_name`, `_messages_from_adk`, `_tools_from_adk`,
-      `_event_text`, `_entry_text`, `_has_pending_confirmation`,
-      `_approval_metadata`).
+- [x] Expand Google ADK adapter tests: timeout handling,
+      `stop()`/`shutdown()` lifecycle, health probes for model/memory/knowledge,
+      and helper functions (`_adk_name`, `_messages_from_adk`,
+      `_tools_from_adk`, `_event_text`, `_entry_text`,
+      `_has_pending_confirmation`, `_approval_metadata`) are covered in
+      `tests/test_google_adk_runtime.py` (28 tests; model failure, session
+      reuse, and tool validation are covered by the existing adapter tests).
 - [ ] Expand custom runtime tests (`runtimes/adk/runtime.py`, 1500 lines,
       6 tests): tool calls, policy enforcement, approval flow, retry/error
       policy, circuit breaker, knowledge retrieval, memory auto-store,
