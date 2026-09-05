@@ -117,8 +117,9 @@ or the relevant ADR.
 - [ ] Implement downstream token delegation (token exchange toward MCP
       servers). Currently the verified principal is observable to operations
       but not forwarded through per-protocol delegation.
-- [ ] Evaluate generic `PolicyRule` conditions. The condition field on policy
-      rules is not processed.
+- [x] Evaluate generic `PolicyRule` conditions by resource, action, and
+      verified invocation context, with operator matching and deny precedence;
+      covered in `tests/test_policy.py`.
 - [ ] Implement external policy-store integration. Policy references cannot
       resolve from external stores; the bootstrap only accepts an injected
       policy or a policy resolver callable.
