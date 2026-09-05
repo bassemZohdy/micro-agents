@@ -236,7 +236,7 @@ per ADR 0013; see [docs/CLOUD_REGISTRY.md](docs/CLOUD_REGISTRY.md)):
 registry with a FastAPI surface (register/heartbeat/deregister/query with
 tenant and skill filters, stale-with-age entries, 422 identity checks), and
 a discovery client that degrades to per-query cached snapshots marked stale
-when the registry is down. 10 tests; `cloud` joined the strict mypy gate.
+when the registry is down. 15 tests; `cloud` joined the strict mypy gate.
 Deliberately deferred: registry authentication (C3 gateway) and persistence
 (C2 config plane).
 
@@ -340,7 +340,6 @@ beyond the documented C1-C4 scope.
 - [ ] Implement gateway streaming pass-through (currently buffers entire
       request/response bodies at 10 MB max). See
       [docs/CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
-- [ ] Implement gateway response-header propagation.
 - [ ] Add OIDC-backed gateway authenticator (replace static bearer tokens).
       See [ADR 0016](docs/adr/0016-gateway-edge-policy.md).
 - [ ] Add Vault and cloud-managed secret-store resolvers (replace

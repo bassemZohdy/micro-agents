@@ -54,7 +54,8 @@ a cache the client raises `ConfigPlaneUnreachableError`.
 
 ## Verification
 
-5 tests in `tests/test_cloud_config.py` cover append-only versioning,
+7 tests in `tests/test_cloud_config.py` cover append-only versioning,
 core-side validation rejections (422), pinned/latest fetch, rollback-as-new-
 version, the secret-reference contract, the HTTP surface, and outage
-degradation. The `cloud` package remains under the strict mypy gate.
+degradation, including authoritative client-side errors and server-error
+fallback behavior. The `cloud` package remains under the strict mypy gate.

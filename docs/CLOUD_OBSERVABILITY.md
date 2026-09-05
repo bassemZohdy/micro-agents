@@ -41,6 +41,8 @@ gateway):
 
 ## Verification
 
-6 tests in `tests/test_cloud_observability.py` cover invalid-event
+9 tests in `tests/test_cloud_observability.py` cover invalid-event
 rejection, cross-agent trace assembly, topology edge counting, per-tenant
 cost rollups, append-only tenant-filtered audit, and the HTTP surface.
+They also cover atomic malformed-batch rejection, non-object event
+validation, and audit-limit validation at the HTTP boundary.

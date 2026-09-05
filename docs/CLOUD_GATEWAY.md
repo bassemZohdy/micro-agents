@@ -39,13 +39,15 @@ Routes map an agent name to ordered upstream targets:
 
 All state is in-memory and per-process — the minimal credible C3 form.
 Production deployments add a shared store for breaker/rate state behind the
-same interfaces. Streaming pass-through and response-header propagation are
-deliberately deferred.
+same interfaces. Streaming pass-through remains deliberately deferred.
+Successful upstream responses preserve safe end-to-end headers; hop-by-hop,
+content-length, and content-encoding headers are stripped before forwarding.
 
 ## Verification
 
-10 tests in `tests/test_cloud_gateway.py`: 401/403/429 edges, tenant
-authorization, unknown routes, fallback on 5xx, the no-retry rule for
-non-idempotent calls, idempotency-key replay to the fallback, breaker
-open/half-open with a controlled clock, success-reset, and the
-saturated-bulkhead skip.
+16 tests in `tests/test_cloud_gateway.py`: 401/403/429 edges, tenant
+authorization, health routing, query forwarding, unknown routes, fallback on
+5xx, the no-retry rule for non-idempotent calls, idempotency-key replay to the
+fallback, safe response-header propagation, bounded rate-limit state,
+constant-time token comparison, breaker open/half-open with a controlled
+clock, success-reset, and the saturated-bulkhead skip.
