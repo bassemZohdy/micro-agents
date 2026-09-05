@@ -249,6 +249,8 @@ Implemented:
 - the JSON-RPC transport with a complete non-streaming task lifecycle
   (submitted → working → completed/failed) bridged onto Micro-Agent
   invocations through an AgentExecutor
+- cancellation of in-flight executor tasks is wired through to the runtime
+  invocation and transitions the A2A task to `canceled`
 - transport authentication shared with the native API guards A2A
   interactions when caller identity is required; the card advertises the
   configured OIDC scheme
@@ -264,8 +266,6 @@ Gaps:
   not implemented (card advertises streaming as unavailable)
 - task store is in-memory; durable task state arrives with production state
   providers
-- cancellation of in-flight invocations is not wired to the A2A task
-  cancellation path
 
 
 ### Security and policy

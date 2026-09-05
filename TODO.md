@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `d6e14f7` on 2026-09-03.
+Baseline audited: `7ada9d4` on 2026-09-05.
 
 ## Release gate
 
@@ -65,11 +65,16 @@ or the relevant ADR.
       `_has_pending_confirmation`, `_approval_metadata`) are covered in
       `tests/test_google_adk_runtime.py` (28 tests; model failure, session
       reuse, and tool validation are covered by the existing adapter tests).
-- [ ] Expand custom runtime tests (`runtimes/adk/runtime.py`, 1500 lines,
-      6 tests): tool calls, policy enforcement, approval flow, retry/error
-      policy, circuit breaker, knowledge retrieval, memory auto-store,
-      checkpointing, streaming, session management, max-iterations,
-      deadline/timeout, tool argument validation, operation registry.
+- [x] Expand custom runtime tests (`runtimes/adk/runtime.py`): behavior
+      coverage is distributed across `tests/test_runtime_behavior.py`,
+      `tests/test_policy_integration.py`, `tests/test_resilience.py`,
+      `tests/test_knowledge_retrieval.py`, `tests/test_checkpointing.py`,
+      `tests/test_streaming.py`, `tests/test_session.py`,
+      `tests/test_side_effects.py`, and `tests/test_approvals.py`; it covers
+      tool calls, policy/approval flow, retry/error policy, circuit breaking,
+      knowledge, memory auto-store, checkpointing, streaming, sessions,
+      max-iterations, deadlines/timeouts, argument validation, and operation
+      registry behavior.
 - [x] Add coverage threshold to `pyproject.toml` (`[tool.coverage.report]`
       with `fail_under = 80`) to guard against regressions.
 - [x] Add missing submodules to the import smoke test (`test_imports.py`):

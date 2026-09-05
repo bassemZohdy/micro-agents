@@ -19,6 +19,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Expanded Google ADK adapter coverage for identifier/message/tool mapping,
   confirmation metadata, timeout handling, lifecycle cleanup, and dependency
   health probes.
+- Reconciled custom-runtime behavior coverage across the dedicated runtime,
+  policy, resilience, state, streaming, session, and side-effect test modules;
+  the backlog item now reflects the existing contract coverage.
 - Implemented conditional `PolicyRule` evaluation with resource/action
   matching, identity-backed conditions, supported comparison operators, and
   deny-over-allow precedence.
@@ -654,12 +657,12 @@ real providers, but the following production boundaries remain:
 - MCP notifications are consumed by the SDK session but not surfaced as
   events; tests exercise loopback and local stdio servers, not remote
   production deployments
-- A2A streaming tasks, push notifications, durable task state, and
-  cancellation are not implemented (the card advertises streaming as
-  unavailable)
+- A2A streaming tasks, push notifications, and durable task state are not
+  implemented (the card advertises streaming as unavailable); cancellation
+  of in-flight runtime work is wired through to the task transition
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; caller identity is observable to operations but not
   forwarded through per-protocol delegation
-- the approval store, operation registry (in non-Redis mode), and audit sink
-  are process-local; production state arrives with external state providers
-- generic `PolicyRule` conditions are not evaluated
+- the default approval store and operation registry remain process-local, with
+  optional Redis-backed approval and idempotency stores; database-backed audit
+  and broader production state integrations remain open
