@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 712 collected | 611 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 713 collected | 612 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -146,7 +146,7 @@ Current custom-runtime capability matrix:
 
 | Capability | Availability | Notes |
 |---|---|---|
-| `streaming` | provider-dependent | true for OpenAI-compatible providers and a fake provider configured with stream chunks; the Google ADK adapter remains false |
+| `streaming` | provider-dependent | true for OpenAI-compatible providers, a fake provider configured with stream chunks, and the Google ADK adapter when its injected provider advertises streaming; native ADK model selection remains conservative |
 | `structured_output` | provider-dependent | true for the OpenAI-compatible provider; unsupported providers and the Google ADK adapter remain false |
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
@@ -158,9 +158,9 @@ Gaps:
 - policy references cannot yet resolve from external policy *stores*; the
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
-- the Google ADK adapter does not yet advertise streaming, structured output,
-  or checkpointing, and it rejects distributed idempotency/session mappings
-  that have not been implemented through native ADK services
+- the Google ADK adapter does not yet advertise structured output or
+  checkpointing, and it rejects distributed idempotency/session mappings that
+  have not been implemented through native ADK services
 
 ### Performance and resource budgets
 
@@ -393,9 +393,9 @@ Implemented:
 
 Gaps:
 
-- response streaming is implemented for the built-in runtime when its model
-  provider advertises it, and the A2A transport forwards those chunks; the
-  Google ADK adapter remains non-streaming and advertises that limitation
+- response streaming is implemented for the built-in and Google ADK runtimes
+  when their model providers advertise it, and both HTTP and A2A transports
+  forward those chunks
 - dashboards and alert thresholds remain deployment-owned; the full metric
   inventory, recommended dashboard panels, and PromQL alert examples are
   documented in docs/OBSERVABILITY.md (guarded by a source-vs-docs test), and

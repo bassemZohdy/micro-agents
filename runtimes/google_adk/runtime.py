@@ -36,7 +36,7 @@ import asyncio
 import json
 import re
 import time
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
@@ -46,6 +46,7 @@ from micro_agent.core import (
     AgentIdentity,
     AgentRequest,
     AgentResponse,
+    AgentStreamEvent,
     ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
@@ -132,8 +133,11 @@ class GoogleAdkRuntime(AgentRuntime):
 
     def capabilities(self) -> RuntimeCapabilities:
         """Report only capabilities implemented by this adapter path."""
+        provider_capabilities = (
+            self._model_provider.capabilities() if self._model_provider is not None else None
+        )
         return RuntimeCapabilities(
-            streaming=False,
+            streaming=bool(provider_capabilities and provider_capabilities.streaming),
             memory=self._config.memory_provider is not None,
             mcp=self._config.mcp_manager is not None,
             a2a=False,
@@ -440,7 +444,63 @@ class GoogleAdkRuntime(AgentRuntime):
         finally:
             reset_invocation_identity(token)
 
-    async def _invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
+    async def stream(
+        self, agent: RuntimeAgent, request: AgentRequest
+    ) -> AsyncGenerator[AgentStreamEvent, None]:
+        """Stream provider deltas through ADK's SSE execution mode."""
+        if not self.capabilities().streaming:
+            raise RuntimeError("Runtime does not support streaming")
+
+        queue: asyncio.Queue[AgentStreamEvent | BaseException | None] = asyncio.Queue()
+
+        async def emit(delta: str) -> None:
+            if delta:
+                await queue.put(AgentStreamEvent(delta=delta))
+
+        async def run() -> None:
+            token = set_invocation_identity(
+                InvocationIdentity(
+                    caller=request.caller_identity,
+                    user=request.user_context,
+                    workload=self._workload_identity,
+                )
+            )
+            try:
+                response = await self._invoke(
+                    agent,
+                    request,
+                    emit_delta=emit,
+                    streaming=True,
+                )
+                await queue.put(AgentStreamEvent(response=response))
+            except BaseException as exc:
+                await queue.put(exc)
+            finally:
+                reset_invocation_identity(token)
+                await queue.put(None)
+
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def _invoke(
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        *,
+        emit_delta: Callable[[str], Awaitable[None]] | None = None,
+        streaming: bool = False,
+    ) -> AgentResponse:
         """Invoke ADK's runner and translate the terminal model event."""
         if agent._internal is None:
             raise RuntimeError("runtime agent has been shut down")
@@ -500,13 +560,18 @@ class GoogleAdkRuntime(AgentRuntime):
                     )
                 content = _user_content(request.input, knowledge_context=knowledge_context)
             events: list[Any] = []
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                invocation_id=request.request_id or None,
-                new_message=content,
-            ):
+            run_kwargs: dict[str, Any] = {
+                "user_id": user_id,
+                "session_id": session_id,
+                "invocation_id": request.request_id or None,
+                "new_message": content,
+            }
+            if streaming:
+                run_kwargs["run_config"] = _adk_streaming_run_config()
+            async for event in runner.run_async(**run_kwargs):
                 events.append(event)
+                if emit_delta is not None and getattr(event, "partial", False):
+                    await emit_delta(_event_text(event))
             await self._auto_store(agent, service, app_name, user_id, session_id)
             approval = _approval_metadata(events)
             if approval is not None:
@@ -739,27 +804,85 @@ def _provider_model(provider: ModelProvider, config: ModelConfig) -> Any:
         ) -> AsyncGenerator[Any, None]:
             messages = _messages_from_adk(llm_request)
             tools = _tools_from_adk(llm_request)
-            response = await self._provider.generate(self._config, messages, tools=tools or None)
-            parts: list[Any] = []
-            if response.content:
-                parts.append(types.Part.from_text(text=response.content))
-            for tool_request in response.tool_requests:
-                call_id = str(tool_request.get("id") or f"micro-agent-call-{uuid4()}")
-                parts.append(
-                    types.Part(
-                        function_call=types.FunctionCall(
-                            id=call_id,
-                            name=str(tool_request.get("name", "")),
-                            args=dict(tool_request.get("arguments") or {}),
+            if stream and self._provider.capabilities().streaming:
+                final_response = None
+                async for stream_event in self._provider.stream(
+                    self._config, messages, tools=tools or None
+                ):
+                    if stream_event.delta:
+                        yield _llm_response(
+                            stream_event.delta,
+                            None,
+                            types=types,
+                            llm_response_cls=LlmResponse,
+                            partial=True,
                         )
-                    )
+                    if stream_event.response is not None:
+                        final_response = stream_event.response
+                if final_response is None:
+                    raise GoogleAdkError("model provider stream ended without a final response")
+                yield _llm_response(
+                    "",
+                    final_response,
+                    types=types,
+                    llm_response_cls=LlmResponse,
+                    partial=False,
                 )
-            yield LlmResponse(
-                content=types.Content(role="model", parts=parts),
-                finish_reason=cast(Any, response.finish_reason),
+                return
+
+            response = await self._provider.generate(self._config, messages, tools=tools or None)
+            yield _llm_response(
+                "",
+                response,
+                types=types,
+                llm_response_cls=LlmResponse,
+                partial=False,
             )
 
     return ProviderLlm(provider, config)
+
+
+def _llm_response(
+    delta: str,
+    response: Any,
+    *,
+    types: Any,
+    llm_response_cls: Any,
+    partial: bool,
+) -> Any:
+    """Translate one runtime-neutral model event into an ADK response."""
+    parts: list[Any] = []
+    if delta:
+        parts.append(types.Part.from_text(text=delta))
+    if response is not None:
+        if response.content:
+            parts.append(types.Part.from_text(text=response.content))
+        for tool_request in response.tool_requests:
+            call_id = str(tool_request.get("id") or f"micro-agent-call-{uuid4()}")
+            parts.append(
+                types.Part(
+                    function_call=types.FunctionCall(
+                        id=call_id,
+                        name=str(tool_request.get("name", "")),
+                        args=dict(tool_request.get("arguments") or {}),
+                    )
+                )
+            )
+    return llm_response_cls(
+        content=types.Content(role="model", parts=parts),
+        finish_reason=cast(Any, getattr(response, "finish_reason", "stop")),
+        partial=partial,
+    )
+
+
+def _adk_streaming_run_config() -> Any:
+    """Build the optional ADK run configuration that enables SSE output."""
+    try:
+        from google.adk.agents._streaming_mode import StreamingMode
+        from google.adk.agents.run_config import RunConfig
+    except ImportError as exc:  # pragma: no cover - guarded by _load_adk
+        raise GoogleAdkError("Google ADK streaming APIs are unavailable") from exc
+    return RunConfig(streaming_mode=StreamingMode.SSE)
 
 
 def _messages_from_adk(llm_request: Any) -> list[dict[str, Any]]:

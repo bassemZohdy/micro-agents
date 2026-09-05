@@ -108,12 +108,13 @@ definition's overall timeout, and each model/tool timeout. Cancellation of any
 in-flight model, tool (including MCP adapters), session, or memory operation
 releases its resources and propagates to that provider.
 
-The current invoke wire format is JSON only. A request with
-`Accept: text/event-stream` receives HTTP 406 and `detail.code:
-streaming_unsupported` when the selected runtime advertises
-`streaming: false`. The default and current built-in runtimes advertise
-`streaming: false`; no streaming response endpoint is claimed until an adapter
-implements it.
+The current invoke wire format accepts JSON requests with either a normal JSON
+response or Server-Sent Events. A request with `Accept: text/event-stream`
+receives HTTP 406 and `detail.code: streaming_unsupported` when the selected
+runtime advertises `streaming: false`. The custom runtime, and the Google ADK
+adapter when its injected model provider supports streaming, expose the
+runtime-neutral delta/final event contract described in
+[`docs/STREAMING.md`](STREAMING.md).
 
 ## Distributed operation idempotency
 
