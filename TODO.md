@@ -88,8 +88,10 @@ or the relevant ADR.
       injected model provider supports it. ADK SSE execution now forwards
       runtime-neutral deltas and the terminal response, covered by
       `tests/test_google_adk_runtime.py`.
-- [ ] Advertise structured output in the Google ADK adapter. Currently
-      always reports `structured_output: false`.
+- [x] Advertise structured output in the Google ADK adapter when the injected
+      provider supports it. The runtime-neutral output contract is translated
+      to strict JSON Schema generation settings, covered by
+      `tests/test_google_adk_runtime.py`.
 - [ ] Advertise checkpointing in the Google ADK adapter. Currently does not
       support it.
 - [ ] Implement distributed idempotency mapping for the Google ADK adapter.

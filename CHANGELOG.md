@@ -12,7 +12,7 @@ All notable changes to the Micro-Agents project are documented in this file.
   80% coverage floor in `pyproject.toml`.
 - Re-exported the implemented C1-C4 cloud control-plane surfaces from the
   top-level `cloud` package and verified the public API contract. The current
-  verification baseline is 713 collected tests, 612 passing in the default
+  verification baseline is 714 collected tests, 613 passing in the default
   selection, 101 deselected integration/E2E/OTel tests, and 83.82% coverage.
 - Wired A2A executor cancellation to cancel the in-flight Micro-Agent task,
   with a regression test for the canceled task transition.
@@ -27,6 +27,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   agent card now reflects the bound runtime's streaming capability.
 - Added Google ADK streaming for injected model providers that advertise it;
   ADK SSE execution now forwards runtime-neutral deltas and terminal responses.
+- Added Google ADK structured-output support for injected providers that
+  advertise it; output contracts now reach the provider as strict JSON Schema.
 - Implemented conditional `PolicyRule` evaluation with resource/action
   matching, identity-backed conditions, supported comparison operators, and
   deny-over-allow precedence.

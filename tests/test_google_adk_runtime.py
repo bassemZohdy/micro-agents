@@ -17,6 +17,7 @@ from micro_agent.models import (
     ModelConfig,
     ModelProvider,
     ModelResponse,
+    ProviderCapabilities,
 )
 from runtimes.google_adk import GoogleAdkError, GoogleAdkRuntime, GoogleAdkRuntimeConfig
 from runtimes.google_adk.runtime import (
@@ -39,6 +40,7 @@ def _definition(
     provider: str | None = None,
     include_tool: bool = False,
     dependencies_extra: dict | None = None,
+    output_contract: dict | None = None,
 ):
     model = {"ref": "test-model"}
     if provider is not None:
@@ -48,13 +50,16 @@ def _definition(
         dependencies["tools"] = [{"name": "echo", "source": "native"}]
     if dependencies_extra:
         dependencies.update(dependencies_extra)
+    behavior = {"instructions": "Use the declared tools safely."}
+    if output_contract is not None:
+        behavior["output_contract"] = output_contract
     return load_definition_from_dict(
         {
             "apiVersion": "microagents.io/v1alpha1",
             "kind": "MicroAgent",
             "metadata": {"name": "adk-test-agent", "version": "1.0.0"},
             "spec": {
-                "behavior": {"instructions": "Use the declared tools safely."},
+                "behavior": behavior,
                 "dependencies": dependencies,
             },
         }
@@ -97,6 +102,13 @@ class UnhealthyProvider(ModelProvider):
 
     async def health_check(self) -> bool:
         return False
+
+
+class StructuredProvider(FakeModelProvider):
+    """Provider double that accepts the runtime-neutral response format."""
+
+    def capabilities(self):
+        return ProviderCapabilities(tool_use=True, structured_output=True)
 
 
 @pytest.mark.asyncio
@@ -157,6 +169,39 @@ async def test_adk_runtime_streams_provider_deltas_and_final_response():
         assert final.output["content"] == "hello"
         assert final.session_id == "stream-session"
         assert provider.invocations
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_runtime_maps_output_contract_to_structured_provider():
+    provider = StructuredProvider(FakeModelConfig(response='{"answer":"ok"}'))
+    runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+    definition = _definition(
+        output_contract={
+            "parameters": [
+                {"name": "answer", "type": "string", "required": True},
+            ]
+        }
+    )
+    agent = await runtime.create(definition)
+    try:
+        assert runtime.capabilities().structured_output is True
+        await runtime.invoke(agent, AgentRequest(input={"message": "format"}))
+        generation = provider.invocations[0]["config"].generation
+        assert generation["response_format"] == {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "micro_agent_output",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                    "additionalProperties": False,
+                    "required": ["answer"],
+                },
+            },
+        }
     finally:
         await runtime.close()
 
