@@ -207,6 +207,25 @@ async def test_adk_runtime_maps_output_contract_to_structured_provider():
 
 
 @pytest.mark.asyncio
+async def test_native_adk_model_uses_resolved_credential_and_closes_client():
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_api_key="native-secret",
+        )
+    )
+    agent = await runtime.create(_definition(provider="google"))
+    try:
+        model = agent._internal["adk_agent"].model
+        assert model.__class__.__name__ == "Gemini"
+        assert model.client is runtime._native_model_clients[0]
+        assert model.client._api_client.api_key == "native-secret"
+    finally:
+        client = runtime._native_model_clients[0]
+        await runtime.close()
+        assert client._api_client._httpx_client.is_closed is True
+
+
+@pytest.mark.asyncio
 async def test_adk_tool_call_preserves_result_and_provider_tool_id():
     provider = SequencedProvider()
     runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
