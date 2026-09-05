@@ -22,7 +22,12 @@
       "Shell(python -m pytest tests/test_default_agent.py::TestHTTPAuthentication::test_health_and_discovery_routes_stay_public -q 2 >& 1)",
       "Shell(python -c  from micro_agent.a2a import a2a_well_known_path print(a2a_well_known_path())  2 > /dev/null)",
       "Shell(cd /Users/bassem/Code/micro-agents && python -c \"import a2a; print(a2a.__version__ if hasattr(a2a,'__version__') else 'installed')\" 2>&1; python -c \"import redis; print('redis lib ok')\" 2>&1; grep -rn \"skipif\\|skip\" tests/test_redis_session.py | head -5; grep -rn \"redis\" tests/test_redis_session.py | head -10)",
-      "Shell(python -m pytest tests/test_mcp_sdk.py::test_streamable_http_interop_discover_and_call -q 2 >& 1)"
+      "Shell(python -m pytest tests/test_mcp_sdk.py::test_streamable_http_interop_discover_and_call -q 2 >& 1)",
+      "Shell(python -m pytest -m not integration and not e2e --cov --cov-report=term-missing -q --tb=short 2 >& 1)",
+      "Shell(python -c import sys; lines = sys.stdin.readlines(); print(''.join(lines[-30:])))",
+      "Shell(python -m pytest tests/test_imports.py -v --tb=short)",
+      "Shell(python -m pytest tests/test_credentials.py -v --tb=short)",
+      "Shell(python -m pytest tests/test_approvals.py -v --tb=short)"
     ],
     "deny": [],
     "defaultMode": "default"

@@ -81,8 +81,9 @@ for hit in hits:
 
 ## Verification
 
-10 tests in `tests/test_cloud_registry.py` cover derivation, card-mismatch
+15 tests in `tests/test_cloud_registry.py` cover derivation, card-mismatch
 rejection, schema round-trips, lease expiry with a controlled clock,
 tenant/skill filtering, the HTTP surface (including the 422 identity
-mismatch), and outage degradation to a stale snapshot. The `cloud` package
-is part of the strict `mypy` gate in CI.
+mismatch), deterministic ordering, TTL validation, clean 404 details, and
+outage degradation to a stale snapshot. The `cloud` package is part of the
+strict `mypy` gate in CI.

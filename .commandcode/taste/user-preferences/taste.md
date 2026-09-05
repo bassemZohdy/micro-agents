@@ -15,3 +15,6 @@
 - Prefers concise, action-oriented communication — minimal preamble, direct to execution. Confidence: 0.85
 - Expects code reviews to cover the full deployment/runtime story (Dockerfile, k8s manifests, entrypoints, signal handling, health probes) — not just test-passing application code. Confidence: 0.85
 - Comfortable with milestone-driven project management and TODO tracking. Confidence: 0.85
+- Prefers backlog items organized by priority level (P0/P1/P2) and functional area (runtime, security, tests, etc.), not flat lists. Confidence: 0.8
+- Expects project reviews to produce concrete, actionable backlog items — not prose summaries or status reports. Confidence: 0.8
+- Prefers each backlog item to include provenance: cite the source document (IMPLEMENTATION_STATUS.md, ADR, docs/) where the gap was identified. Confidence: 0.75

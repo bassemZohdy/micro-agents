@@ -103,3 +103,20 @@ markers = [
     "otel: OpenTelemetry integration tests (requires the optional otel extra)",
     "postgres: PostgreSQL state provider tests (requires MICRO_AGENT_TEST_PG_DSN)",
 ]
+
+[tool.coverage.run]
+source = ["micro_agent", "runtimes"]
+omit = [
+    "micro_agent/definition/schema.py",
+    "runtimes/google_adk/*",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]

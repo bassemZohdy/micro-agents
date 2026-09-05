@@ -33,10 +33,11 @@ operated independently.
 - deterministic runtime/HTTP benchmarks with versioned resource budgets
 - container and Kubernetes/OpenShift-oriented deployment examples
 
-The planned **Micro-Agent Cloud** workstream is separate from the standalone
-framework. It may later add registry, discovery, distributed configuration,
-gateway, resilience, and cross-agent observability. It is not required to run
-one Micro-Agent and is gated until the standalone runtime is production-ready.
+The **Micro-Agent Cloud** workstream is separate from the standalone framework.
+The `cloud` package implements registry, discovery, distributed configuration,
+gateway, resilience, and cross-agent observability (C0–C4). It is not required
+to run one Micro-Agent and is not part of the published `micro-agents`
+distribution.
 
 ## Architecture
 
@@ -230,8 +231,8 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite collects 518 tests: 433 pass in the default development
-selection (plus two expected optional-dependency skips), while 83
+The current suite collects 629 tests: 535 pass in the default development
+selection (plus two expected optional-dependency skips), while 94
 integration/E2E/optional tests are deselected by that job. The Redis extra adds
 three live integration tests in the Redis-enabled CI job, the optional Google
 ADK adapter adds 15 tests, and the optional OpenTelemetry extra adds five
