@@ -102,5 +102,20 @@ class TestToolPluginContract:
         with pytest.raises(ToolPluginError, match="does not produce a Tool"):
             load_plugin_tools(discovered=[entry_point])
 
+    def test_class_plugin_is_instantiated_and_builtin_collision_is_preserved(self):
+        from importlib.metadata import EntryPoint
+
+        from micro_agent.tools.plugin import load_plugin_tools
+
+        entry_point = EntryPoint(
+            name="echo",
+            value="micro_agent.tools.tool:EchoTool",
+            group="micro_agent.tools",
+        )
+
+        tools = load_plugin_tools(discovered=[entry_point])
+
+        assert type(tools["echo"]) is EchoTool
+
 
 not_a_tool = 42

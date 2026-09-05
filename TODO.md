@@ -42,20 +42,22 @@ or the relevant ADR.
 
 ### P1 — Test coverage
 
-- [ ] Add unit tests for `micro_agent/session/sqlite.py` — the SQLite
-      session provider has no direct tests (only exercised indirectly).
-- [ ] Add unit tests for `micro_agent/__main__.py` — the CLI entrypoint
-      (`parse_args`, `run`, `main`) is untested.
-- [ ] Add dedicated unit tests for `micro_agent/security/approvals.py` —
-      `InMemoryApprovalStore` (save/get/delete + TTL expiry) is only
-      exercised indirectly via integration tests.
-- [ ] Add dedicated unit tests for `micro_agent/security/credentials.py` —
-      `EnvironmentCredentialProvider` and `StaticCredentialProvider` have no
-      direct assertion tests.
-- [ ] Add tests for `micro_agent/tools/plugin.py` — `load_plugin_tools()`
-      is only indirectly called by runtimes.
-- [ ] Add tests for `micro_agent/interoperability/a2a_server.py` — no test
-      file references this module.
+- [x] Add unit tests for `micro_agent/session/sqlite.py` — direct coverage now
+      exercises concurrent creation, close idempotence, tenant isolation, and
+      optimistic version conflicts in `tests/test_session.py`.
+- [x] Add unit tests for `micro_agent/__main__.py` — `parse_args`, `run`, and
+      `main` are covered in `tests/test_main.py`.
+- [x] Add dedicated unit tests for `micro_agent/security/approvals.py` —
+      `InMemoryApprovalStore` save/get/delete and TTL behavior are covered in
+      `tests/test_approvals.py`.
+- [x] Add dedicated unit tests for `micro_agent/security/credentials.py` —
+      environment and static providers are covered in `tests/test_credentials.py`.
+- [x] Add tests for `micro_agent/tools/plugin.py` — class factories, callable
+      factories, collision behavior, and invalid plugins are covered in
+      `tests/test_examples.py`.
+- [x] Add tests for `micro_agent/interoperability/a2a_server.py` — payload
+      mapping and success/failure/cancellation task transitions are covered in
+      `tests/test_a2a_server.py`.
 - [ ] Expand Google ADK adapter tests (`runtimes/google_adk/runtime.py`,
       1100 lines, 15 tests): timeout handling, `stop()`/`shutdown()`
       lifecycle, health probes for model/memory/knowledge, session reuse,
@@ -68,9 +70,9 @@ or the relevant ADR.
       policy, circuit breaker, knowledge retrieval, memory auto-store,
       checkpointing, streaming, session management, max-iterations,
       deadline/timeout, tool argument validation, operation registry.
-- [ ] Add coverage threshold to `pyproject.toml` (`[tool.coverage.report]`
-      with `fail_under`) to guard against regressions.
-- [ ] Add missing submodules to the import smoke test (`test_imports.py`):
+- [x] Add coverage threshold to `pyproject.toml` (`[tool.coverage.report]`
+      with `fail_under = 80`) to guard against regressions.
+- [x] Add missing submodules to the import smoke test (`test_imports.py`):
       `micro_agent.security.approvals`, `micro_agent.security.credentials`,
       `micro_agent.session.sqlite`, `micro_agent.interoperability.a2a_server`,
       `micro_agent.tools.plugin`.
