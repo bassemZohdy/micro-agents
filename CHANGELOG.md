@@ -31,6 +31,9 @@ All notable changes to the Micro-Agents project are documented in this file.
   advertise it; output contracts now reach the provider as strict JSON Schema.
 - Added Google ADK native model credential resolution through the configured
   credential provider and an owned Google GenAI API-key client.
+- Added capability-gated Google ADK checkpointing: failed resumable
+  invocations persist ADK event/state snapshots and can resume by checkpoint
+  id without replaying pending non-read-only tools.
 - Implemented conditional `PolicyRule` evaluation with resource/action
   matching, identity-backed conditions, supported comparison operators, and
   deny-over-allow precedence.

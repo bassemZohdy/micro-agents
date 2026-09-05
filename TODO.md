@@ -92,8 +92,10 @@ or the relevant ADR.
       provider supports it. The runtime-neutral output contract is translated
       to strict JSON Schema generation settings, covered by
       `tests/test_google_adk_runtime.py`.
-- [ ] Advertise checkpointing in the Google ADK adapter. Currently does not
-      support it.
+  - [x] Advertise checkpointing in the Google ADK adapter. Store-backed
+        runners enable ADK resumability and persist/restore replay-safe event
+        snapshots, covered by `tests/test_google_adk_runtime.py` and bootstrap
+        coverage.
 - [ ] Implement distributed idempotency mapping for the Google ADK adapter.
       Currently rejects `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`.
       See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).

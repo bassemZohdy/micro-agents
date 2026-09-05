@@ -121,6 +121,7 @@ def test_google_adk_runtime_accepts_in_memory_session_persistence(monkeypatch):
     try:
         assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
         assert bootstrap.runtime.capabilities().memory is False
+        assert bootstrap.runtime.capabilities().checkpointing is True
     finally:
         import asyncio
 

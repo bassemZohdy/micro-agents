@@ -25,6 +25,7 @@ class CheckpointRecord:
     usage: dict[str, int] = field(default_factory=dict)
     history_tail_length: int = 0
     tenant_id: str | None = None
+    runtime_state: dict[str, Any] = field(default_factory=dict)
 
 
 class CheckpointStore(ABC):
@@ -117,6 +118,7 @@ class SessionCheckpointStore(CheckpointStore):
             "iterations": checkpoint.iterations,
             "usage": dict(checkpoint.usage),
             "history_tail_length": checkpoint.history_tail_length,
+            "runtime_state": deepcopy(checkpoint.runtime_state),
         }
         await self._provider.update(context, ttl_seconds=self._ttl_seconds)
 
@@ -141,6 +143,7 @@ class SessionCheckpointStore(CheckpointStore):
             usage={str(k): int(v) for k, v in (payload.get("usage") or {}).items()},
             history_tail_length=int(payload.get("history_tail_length") or 0),
             tenant_id=context.tenant_id,
+            runtime_state=deepcopy(payload.get("runtime_state") or {}),
         )
 
     async def delete(self, checkpoint_id: str, *, tenant_id: str | None = None) -> None:

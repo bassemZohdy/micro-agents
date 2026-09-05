@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from micro_agent.checkpoint import InMemoryCheckpointStore
 from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.knowledge import InMemoryKnowledgeRetriever
@@ -109,6 +110,32 @@ class StructuredProvider(FakeModelProvider):
 
     def capabilities(self):
         return ProviderCapabilities(tool_use=True, structured_output=True)
+
+
+class _FailOnceProvider(ModelProvider):
+    """Provider double for ADK resumability after a transient model error."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.messages: list[list[dict[str, object]]] = []
+
+    def capabilities(self):
+        return ProviderCapabilities()
+
+    async def generate(
+        self,
+        config: ModelConfig,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]] | None = None,
+    ) -> ModelResponse:
+        self.calls += 1
+        self.messages.append([dict(message) for message in messages])
+        if self.calls == 1:
+            raise ConnectionError("transient ADK model failure")
+        return ModelResponse(content="resumed by ADK")
+
+    async def health_check(self) -> bool:
+        return True
 
 
 @pytest.mark.asyncio
@@ -223,6 +250,62 @@ async def test_native_adk_model_uses_resolved_credential_and_closes_client():
         client = runtime._native_model_clients[0]
         await runtime.close()
         assert client._api_client._httpx_client.is_closed is True
+
+
+def test_adk_checkpoint_capability_requires_a_checkpoint_store():
+    assert GoogleAdkRuntime().capabilities().checkpointing is False
+    runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(checkpoint_store=InMemoryCheckpointStore()))
+    try:
+        assert runtime.capabilities().checkpointing is True
+    finally:
+        asyncio.run(runtime.close())
+
+
+@pytest.mark.asyncio
+async def test_adk_checkpoint_resumes_failed_invocation_across_runtime_instances():
+    definition = _definition()
+    provider = _FailOnceProvider()
+    store = InMemoryCheckpointStore()
+
+    runtime1 = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(model_provider=provider, checkpoint_store=store)
+    )
+    agent1 = await runtime1.create(definition)
+    try:
+        assert agent1._internal["adk_runner"].resumability_config.is_resumable is True
+        with pytest.raises(ConnectionError, match="transient ADK"):
+            await runtime1.invoke(
+                agent1,
+                AgentRequest(input={"question": "status"}, request_id="adk-req-1"),
+            )
+    finally:
+        await runtime1.close()
+
+    checkpoint = await store.get("adk-req-1")
+    assert checkpoint is not None
+    assert checkpoint.input_payload == {"question": "status"}
+    adk_state = checkpoint.runtime_state["google_adk"]
+    assert adk_state["version"] == 1
+    assert adk_state["events"]
+    assert any(message["role"] == "user" for message in checkpoint.messages)
+
+    runtime2 = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(model_provider=provider, checkpoint_store=store)
+    )
+    agent2 = await runtime2.create(definition)
+    try:
+        response = await runtime2.invoke(
+            agent2,
+            AgentRequest(input={}, request_id="adk-resume-1", checkpoint_id="adk-req-1"),
+        )
+        assert response.status == "success"
+        assert response.output["content"] == "resumed by ADK"
+        assert response.metadata["resumed_from_checkpoint"] == "adk-req-1"
+        assert provider.calls == 2
+        assert provider.messages[0] == provider.messages[1]
+        assert await store.get("adk-req-1") is None
+    finally:
+        await runtime2.close()
 
 
 @pytest.mark.asyncio

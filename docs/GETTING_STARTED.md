@@ -140,7 +140,9 @@ runtime-neutral `AgentRuntime` contracts are exposed to callers. Memory, MCP,
 policy, knowledge, credential, and telemetry mappings are validated at startup;
 unsupported external session bindings fail fast, while model credential
 references resolve through the configured provider and native Google models
-use an owned GenAI API-key client.
+use an owned GenAI API-key client. Set the definition's session persistence to
+`memory` to enable process-local ADK checkpointing; resume by sending a request
+with the failed request's `checkpoint_id` and an empty input.
 
 ## Container
 
