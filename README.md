@@ -231,11 +231,11 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite collects 629 tests: 535 pass in the default development
-selection (plus two expected optional-dependency skips), while 94
-integration/E2E/optional tests are deselected by that job. The Redis extra adds
-three live integration tests in the Redis-enabled CI job, the optional Google
-ADK adapter adds 15 tests, and the optional OpenTelemetry extra adds five
+The current suite collects 683 tests: 584 pass in the default CI selection
+(`not integration`, `not e2e`, and `not otel`), while 99 integration/E2E/OTel
+tests are deselected for their dedicated CI jobs. The Redis extra adds three
+live integration tests in the Redis-enabled CI job, the optional Google ADK
+adapter adds 15 tests, and the optional OpenTelemetry extra adds five
 integration tests when those extras are installed. CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release

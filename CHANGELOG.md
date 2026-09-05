@@ -10,6 +10,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   approval and credential stores, plugin loading, and the A2A server bridge.
   Added import smoke coverage for the remaining runtime submodules and an
   80% coverage floor in `pyproject.toml`.
+- Re-exported the implemented C1-C4 cloud control-plane surfaces from the
+  top-level `cloud` package and verified the public API contract. The current
+  verification baseline is 683 collected tests, 584 passing in the default
+  selection, 99 deselected integration/E2E/OTel tests, and 83.68% coverage.
 
 ### Cloud (C2)
 

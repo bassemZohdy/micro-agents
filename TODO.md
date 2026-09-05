@@ -351,8 +351,8 @@ beyond the documented C1-C4 scope.
       Currently all planes are unauthenticated.
 - [ ] Add formal schema and compatibility policy for cloud descriptors,
       config plane, and observability aggregation schemas.
-- [ ] Re-export C2/C3/C4 public symbols from `cloud/__init__.py`. Currently
-      only C1 symbols are exported.
+- [x] Re-export C2/C3/C4 public symbols from `cloud/__init__.py`, with a
+      top-level API contract test in `tests/test_cloud_api.py`.
 - [ ] Evaluate splitting `cloud` into its own repository/deployment package.
       See [ADR 0014](docs/adr/0014-minimal-cloud-registry.md).
 

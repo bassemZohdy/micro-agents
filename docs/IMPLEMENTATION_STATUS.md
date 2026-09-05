@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last audited: 2026-09-04
+Last audited: 2026-09-05
 Documentation-audit baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
 Cleanup verification baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
 
@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 629 collected | 535 passed in the default selection; 94 integration/e2e tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 683 collected | 584 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 99 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
