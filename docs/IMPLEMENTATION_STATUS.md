@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 696 collected | 597 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 99 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 709 collected | 609 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 100 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -283,7 +283,8 @@ Implemented:
   metadata is never used as identity, enforced by a source-level guard test
 - approval/confirmation continuation in the built-in runtime: approval-gated
   operations pause with a continuation id and resume on approve/deny; the
-  approval store is an SPI with an in-memory default
+  approval store is an SPI with an in-memory default and an optional durable
+  Redis implementation wired through `MICRO_AGENT_APPROVAL_ENDPOINT`
 - Google ADK approval continuations use the native experimental
   `ToolConfirmation` protocol: approval-gated ADK tools emit a continuation
   with pending tool metadata and resume through the original session without
@@ -321,8 +322,6 @@ Gaps:
   official MCP/A2A integrations
 - the audit sink persists to the platform log pipeline or a local file;
   database-backed audit arrives with production state providers
-- the approval store is process-local; production approval state arrives
-  with production state providers
 
 ### State and knowledge
 

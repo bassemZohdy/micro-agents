@@ -8,6 +8,7 @@ from micro_agent.security.approvals import (
     ApprovalStore,
     InMemoryApprovalStore,
     PendingApproval,
+    RedisApprovalStore,
 )
 from micro_agent.security.auth import (
     AuthenticatedIdentity,
@@ -72,6 +73,7 @@ __all__ = [
     "PolicyEvaluator",
     "PendingApproval",
     "PolicyRule",
+    "RedisApprovalStore",
     "RetryClassification",
     "RedisOperationRegistry",
     "RuntimeIdentity",

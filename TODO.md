@@ -123,9 +123,9 @@ or the relevant ADR.
 - [ ] Implement external policy-store integration. Policy references cannot
       resolve from external stores; the bootstrap only accepts an injected
       policy or a policy resolver callable.
-- [ ] Add durable approval store. Currently process-local; production
-      approval state needs an external backend.
-      See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).
+- [x] Add durable Redis approval store with TTL-safe serialization, health
+      checks, and bootstrap wiring through `MICRO_AGENT_APPROVAL_ENDPOINT`;
+      direct injection remains available for other `ApprovalStore` backends.
 - [ ] Add database-backed audit sink. Currently persists to stdout or a local
       file only.
 - [ ] Validate OpenShift arbitrary-UID compatibility: group-writable paths,

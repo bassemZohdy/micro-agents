@@ -28,6 +28,7 @@ the service becomes ready.
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
+| `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 | `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
 | `MICRO_AGENT_OTEL_ENABLED` | telemetry bootstrap | wired; opt-in OpenTelemetry instrumentation (`true`/`false`, default `false`) |
@@ -75,6 +76,14 @@ tenant boundary. Reads return a versioned snapshot (starting at version 1),
 and writing a stale snapshot raises `StateConflictError`; zero-version writes
 retain the legacy unconditional behavior. The Google ADK runtime rejects this
 binding until its distributed idempotency mapping is implemented.
+
+Approval continuations are process-local by default. Set
+`MICRO_AGENT_APPROVAL_ENDPOINT` to a `redis://` or `rediss://` URL, or inject
+`RedisApprovalStore`/another `ApprovalStore` into `build_runtime`, to share
+pending approvals across custom-runtime replicas. Records carry an absolute
+expiry timestamp as well as a Redis TTL, so expired or malformed records are
+discarded safely after worker restarts. The Google ADK runtime uses its native
+approval-continuation protocol and rejects this binding.
 
 ## Knowledge retrieval
 

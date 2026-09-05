@@ -11,7 +11,9 @@ from micro_agent.security.approvals import (
     ApprovalStore,
     InMemoryApprovalStore,
     PendingApproval,
+    RedisApprovalStore,
 )
+from tests.fake_redis import FakeRedis, FakeRedisBackend
 
 
 def _make_approval(
@@ -119,9 +121,74 @@ class TestInMemoryApprovalStore:
         assert retrieved.agent_id == "agent-2"
 
 
+class TestRedisApprovalStore:
+    @pytest.mark.asyncio
+    async def test_replicas_share_approval_and_preserve_payload(self):
+        backend = FakeRedisBackend()
+        replica_a = RedisApprovalStore(client=FakeRedis(backend), default_ttl_seconds=60)
+        replica_b = RedisApprovalStore(client=FakeRedis(backend), default_ttl_seconds=60)
+        approval = _make_approval(
+            all_tool_results=[{"tool": "read", "output": {"ok": True}}],
+            iterations=2,
+            request_id="request-1",
+            session_id="session-1",
+            input_payload={"question": "status"},
+        )
+
+        await replica_a.save(approval)
+        retrieved = await replica_b.get("cont-1")
+
+        assert retrieved is not None
+        assert retrieved.agent_id == approval.agent_id
+        assert retrieved.tool_requests == approval.tool_requests
+        assert retrieved.messages == approval.messages
+        assert retrieved.all_tool_results == approval.all_tool_results
+        assert retrieved.iterations == 2
+        assert retrieved.request_id == "request-1"
+        assert retrieved.session_id == "session-1"
+        assert retrieved.input_payload == {"question": "status"}
+        await replica_a.aclose()
+        await replica_b.aclose()
+
+    @pytest.mark.asyncio
+    async def test_expired_and_malformed_records_are_removed(self):
+        client = FakeRedis(FakeRedisBackend())
+        store = RedisApprovalStore(client=client)
+        expired = _make_approval(expires_at=monotonic() - 1)
+        await store.save(expired)
+        assert await store.get("cont-1") is None
+
+        await client.set(store._key("broken"), "not-json")
+        assert await store.get("broken") is None
+        assert await client.get(store._key("broken")) is None
+        await store.aclose()
+
+    @pytest.mark.asyncio
+    async def test_delete_health_and_injected_client_ownership(self):
+        client = FakeRedis(FakeRedisBackend())
+        store = RedisApprovalStore(client=client)
+        await store.save(_make_approval())
+        await store.delete("cont-1")
+        assert await store.get("cont-1") is None
+        assert await store.health_check() is True
+        await store.aclose()
+        assert client.closed is False
+
+    def test_configuration_is_validated(self):
+        with pytest.raises(ValueError, match="Redis session endpoint"):
+            RedisApprovalStore("https://approvals.example.test")
+        with pytest.raises(ValueError, match="default_ttl_seconds must be positive"):
+            RedisApprovalStore(default_ttl_seconds=0, client=FakeRedis(FakeRedisBackend()))
+        with pytest.raises(ValueError, match="namespace"):
+            RedisApprovalStore(namespace=" bad", client=FakeRedis(FakeRedisBackend()))
+
+
 class TestApprovalStoreInterface:
     def test_in_memory_store_is_subclass(self):
         assert issubclass(InMemoryApprovalStore, ApprovalStore)
+
+    def test_redis_store_is_subclass(self):
+        assert issubclass(RedisApprovalStore, ApprovalStore)
 
     def test_cannot_instantiate_abstract(self):
         try:

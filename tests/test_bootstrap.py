@@ -8,7 +8,7 @@ from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
-from micro_agent.security import AgentPolicy, RedisOperationRegistry
+from micro_agent.security import AgentPolicy, RedisApprovalStore, RedisOperationRegistry
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
 from micro_agent.session.postgres import PostgresSessionProvider
 from runtimes.adk import AdkRuntime
@@ -409,10 +409,39 @@ async def test_external_redis_idempotency_registry_is_constructed(monkeypatch):
         await bootstrap.runtime.close()
 
 
+@pytest.mark.asyncio
+async def test_external_redis_approval_store_is_constructed(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        pass
+
+    fake_client = FakeRedisClient()
+    monkeypatch.setattr(
+        "micro_agent.security.approvals._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: fake_client),
+    )
+    monkeypatch.setenv("MICRO_AGENT_APPROVAL_ENDPOINT", "redis://approvals.example.test/0")
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        store = bootstrap.runtime._config.approval_store
+        assert isinstance(store, RedisApprovalStore)
+        assert store._endpoint == "redis://approvals.example.test/0"
+    finally:
+        await bootstrap.runtime.close()
+
+
 def test_google_adk_rejects_distributed_idempotency(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
     monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://operations.example.test/0")
     with pytest.raises(BootstrapError, match="does not yet map distributed idempotency"):
+        build_runtime(_definition(provider="fake"))
+
+
+def test_google_adk_rejects_durable_approval_store(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("MICRO_AGENT_APPROVAL_ENDPOINT", "redis://approvals.example.test/0")
+    with pytest.raises(BootstrapError, match="native approval continuations"):
         build_runtime(_definition(provider="fake"))
 
 

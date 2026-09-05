@@ -345,6 +345,15 @@ class AdkRuntime(AgentRuntime):
             if not healthy:
                 raise RuntimeError("operation registry failed its health check at startup")
 
+        approval_store = self._config.approval_store
+        if approval_store is not None:
+            try:
+                healthy = await approval_store.health_check()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("approval store failed its health check at startup") from exc
+            if not healthy:
+                raise RuntimeError("approval store failed its health check at startup")
+
         knowledge_provider = self._config.knowledge_provider
         if knowledge_provider is not None:
             for source in self._knowledge_refs:
@@ -437,6 +446,7 @@ class AdkRuntime(AgentRuntime):
             self._config.session_provider,
             self._config.memory_provider,
             self._config.operation_registry,
+            self._config.approval_store,
         ):
             provider_close = getattr(provider, "aclose", None)
             if provider_close is not None:
@@ -488,6 +498,9 @@ class AdkRuntime(AgentRuntime):
 
         if operation_registry is not None:
             probes["operation_registry"] = _operation_probe
+        approval_store = self._config.approval_store
+        if approval_store is not None:
+            probes["approval_store"] = approval_store.health_check
         if knowledge_provider is not None:
             probes["knowledge"] = _knowledge_probe
         if self._config.mcp_manager is not None:

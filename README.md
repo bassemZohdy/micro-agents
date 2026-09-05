@@ -231,8 +231,8 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite collects 696 tests: 597 pass in the default CI selection
-(`not integration`, `not e2e`, and `not otel`), while 99 integration/E2E/OTel
+The current suite collects 709 tests: 609 pass in the default CI selection
+(`not integration`, `not e2e`, and `not otel`), while 100 integration/E2E/OTel
 tests are deselected for their dedicated CI jobs. The Redis extra adds three
 live integration tests in the Redis-enabled CI job, the optional Google ADK
 adapter adds 15 tests, and the optional OpenTelemetry extra adds five
