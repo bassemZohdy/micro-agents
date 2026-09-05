@@ -35,6 +35,7 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
+    approval_endpoint: str | None = None
     log_level: str | None = None
     auth: str | None = None
     auth_issuer: str | None = None
@@ -59,6 +60,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
+    approval_endpoint: str | None = None
 
     @classmethod
     def _validate_http_endpoint(cls, value: str, field_name: str) -> str:
@@ -91,6 +93,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             memory_endpoint=self.memory_endpoint,
             session_endpoint=self.session_endpoint,
             idempotency_endpoint=self.idempotency_endpoint,
+            approval_endpoint=self.approval_endpoint,
         )
 
 
@@ -110,6 +113,7 @@ class ResolvedConfig:
     memory_endpoint: str | None = None
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
+    approval_endpoint: str | None = None
     log_level: str = "INFO"
     auth: str | None = None
     auth_issuer: str | None = None
@@ -189,6 +193,8 @@ def resolve_config(
             config.session_endpoint = env_config.session_endpoint
         if env_config.idempotency_endpoint:
             config.idempotency_endpoint = env_config.idempotency_endpoint
+        if env_config.approval_endpoint:
+            config.approval_endpoint = env_config.approval_endpoint
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
         if env_config.auth:
@@ -241,6 +247,10 @@ def resolve_config(
     env_idempotency_endpoint = _read_env("idempotency_endpoint")
     if env_idempotency_endpoint:
         config.idempotency_endpoint = env_idempotency_endpoint
+
+    env_approval_endpoint = _read_env("approval_endpoint")
+    if env_approval_endpoint:
+        config.approval_endpoint = env_approval_endpoint
 
     env_auth = _read_env("auth")
     if env_auth:

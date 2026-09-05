@@ -62,9 +62,11 @@ from micro_agent.observability.audit import AuditSink
 from micro_agent.runtime import AgentRuntime
 from micro_agent.security import (
     AgentPolicy,
+    ApprovalStore,
     CredentialProvider,
     EnvironmentCredentialProvider,
     OperationRegistryProtocol,
+    RedisApprovalStore,
     RedisOperationRegistry,
 )
 from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
@@ -115,6 +117,7 @@ def build_runtime(
     credential_provider: CredentialProvider | None = None,
     knowledge_retriever: KnowledgeRetriever | None = None,
     environment: EnvironmentConfig | EnvironmentOverlay | None = None,
+    approval_store: ApprovalStore | None = None,
 ) -> RuntimeBootstrap:
     """Build the current runtime from a definition and environment.
 
@@ -185,6 +188,7 @@ def build_runtime(
         )
         memory_provider = _build_memory_provider(definition, resolved)
         operation_registry = _build_operation_registry(resolved)
+        effective_approval_store = approval_store or _build_approval_store(resolved)
         runtime = AdkRuntime(
             AdkRuntimeConfig(
                 model_provider=provider,
@@ -193,6 +197,7 @@ def build_runtime(
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
                 operation_registry=operation_registry,
+                approval_store=effective_approval_store,
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
                 policy=effective_policy,
@@ -248,6 +253,11 @@ def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: Reso
         raise BootstrapError(
             "Google ADK runtime does not yet map distributed idempotency; use "
             "the custom runtime for MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
+        )
+    if config.approval_endpoint:
+        raise BootstrapError(
+            "Google ADK runtime uses native approval continuations and does not map "
+            "MICRO_AGENT_APPROVAL_ENDPOINT; use the custom runtime for durable approvals"
         )
 
 
@@ -497,6 +507,22 @@ def _build_operation_registry(config: ResolvedConfig) -> OperationRegistryProtoc
         "external idempotency provider supports redis://, rediss://, postgres://, or "
         "postgresql:// endpoints; install the 'redis' or 'postgres' extra and "
         "configure MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
+    )
+
+
+def _build_approval_store(config: ResolvedConfig) -> ApprovalStore | None:
+    """Construct the optional durable approval continuation store."""
+    endpoint = config.approval_endpoint
+    if not endpoint:
+        return None
+    if endpoint.startswith(("redis://", "rediss://")):
+        try:
+            return RedisApprovalStore(endpoint=endpoint)
+        except (RuntimeError, ValueError) as exc:
+            raise BootstrapError(str(exc)) from exc
+    raise BootstrapError(
+        "external approval provider supports redis:// or rediss:// endpoints; "
+        "install the 'redis' extra and configure MICRO_AGENT_APPROVAL_ENDPOINT"
     )
 
 

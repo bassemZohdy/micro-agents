@@ -49,6 +49,11 @@ class TestResolveConfig:
         config = resolve_config()
         assert config.idempotency_endpoint == "redis://redis.example.test/0"
 
+    def test_approval_endpoint_environment_override(self, monkeypatch):
+        monkeypatch.setenv("MICRO_AGENT_APPROVAL_ENDPOINT", "redis://redis.example.test/0")
+        config = resolve_config()
+        assert config.approval_endpoint == "redis://redis.example.test/0"
+
     def test_cors_origins_environment_override(self, monkeypatch):
         monkeypatch.setenv(
             "MICRO_AGENT_CORS_ORIGINS",

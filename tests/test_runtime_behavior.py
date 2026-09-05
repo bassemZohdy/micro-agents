@@ -23,7 +23,7 @@ from micro_agent.observability import (
     OperationRegistry,
     Telemetry,
 )
-from micro_agent.security import UserContext
+from micro_agent.security import InMemoryApprovalStore, UserContext
 from micro_agent.session import InMemorySessionProvider
 from micro_agent.tools import Tool, ToolInputSchema, ToolMetadata, ToolOutputSchema, ToolResult
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -548,6 +548,18 @@ class TestHealthProbes:
         result = await checker.probe_readiness()
         assert result.is_ready
         assert all(d.status == HealthStatus.HEALTHY for d in result.dependencies)
+
+    @pytest.mark.asyncio
+    async def test_configured_approval_store_has_startup_and_readiness_probe(self):
+        config = AdkRuntimeConfig(approval_store=InMemoryApprovalStore())
+        runtime = AdkRuntime(config)
+        agent = await runtime.create(_definition())
+
+        await runtime.start(agent)
+
+        probes = runtime.health_probes()
+        assert "approval_store" in probes
+        assert await probes["approval_store"]() is True
 
     @pytest.mark.asyncio
     async def test_probe_failure_makes_not_ready(self):
