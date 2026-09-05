@@ -135,6 +135,33 @@ async def test_constructs_native_adk_agent_and_invokes_provider():
 
 
 @pytest.mark.asyncio
+async def test_adk_runtime_streams_provider_deltas_and_final_response():
+    from micro_agent.models import FakeModelConfig, FakeModelProvider
+
+    provider = FakeModelProvider(FakeModelConfig(response="hello", stream_chunks=["hel", "lo"]))
+    runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+    agent = await runtime.create(_definition())
+    try:
+        assert runtime.capabilities().streaming is True
+        await runtime.start(agent)
+        events = [
+            event
+            async for event in runtime.stream(
+                agent,
+                AgentRequest(input={"message": "stream"}, session_id="stream-session"),
+            )
+        ]
+        assert [event.delta for event in events if event.delta] == ["hel", "lo"]
+        final = events[-1].response
+        assert final is not None
+        assert final.output["content"] == "hello"
+        assert final.session_id == "stream-session"
+        assert provider.invocations
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
 async def test_adk_tool_call_preserves_result_and_provider_tool_id():
     provider = SequencedProvider()
     runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))

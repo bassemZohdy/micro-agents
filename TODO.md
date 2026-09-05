@@ -84,8 +84,10 @@ or the relevant ADR.
 
 ### P1 — Runtime (Google ADK adapter)
 
-- [ ] Advertise streaming in the Google ADK adapter when the underlying
-      model provider supports it. Currently always reports `streaming: false`.
+- [x] Advertise and expose streaming in the Google ADK adapter when the
+      injected model provider supports it. ADK SSE execution now forwards
+      runtime-neutral deltas and the terminal response, covered by
+      `tests/test_google_adk_runtime.py`.
 - [ ] Advertise structured output in the Google ADK adapter. Currently
       always reports `structured_output: false`.
 - [ ] Advertise checkpointing in the Google ADK adapter. Currently does not
@@ -175,9 +177,10 @@ or the relevant ADR.
 
 ### P2 — HTTP and observability
 
-- [ ] Implement response streaming for the Google ADK adapter. The A2A
-      transport now streams when the bound runtime advertises streaming, while
-      the Google ADK adapter remains non-streaming.
+- [x] Implement response streaming for the Google ADK adapter. The A2A and
+      HTTP transports stream when the bound runtime advertises streaming;
+      Google ADK now forwards injected-provider SSE output through its
+      runtime-neutral stream contract.
 - [ ] Add latency histogram support. Current latency metrics are gauges
       (latest value), not histograms; percentile dashboards require a native
       OTel histogram exporter.
