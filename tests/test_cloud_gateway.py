@@ -232,6 +232,7 @@ class TestCircuitBreakerAndBulkhead:
             path_params = {"agent": "greeter", "path": "x"}
             method = "GET"
             headers = httpx.Headers()
+            url = httpx.URL("http://gateway.test/greeter/x")
 
             async def body(self) -> bytes:
                 return b""
@@ -246,3 +247,124 @@ class TestCircuitBreakerAndBulkhead:
         assert first_response.status_code == 200
         assert second_response.status_code == 503
         assert entered == 1
+
+
+class TestGatewayHardening:
+    """Hardening fixes from the 2026-09-04 cloud review."""
+
+    def test_gateway_health_route_is_reachable(self):
+        """`/gateway/health` must not be swallowed by the /{agent}/... catch-all."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"ok": True})
+
+        gateway = _make_gateway(_routes(), handler, tokens=_default_tokens())
+        with TestClient(create_gateway_app(gateway)) as http:
+            response = http.get("/gateway/health")
+            assert response.status_code == 200
+            assert "greeter" in response.json()["targets"]
+
+    def test_query_string_is_forwarded_to_upstream(self):
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.url.query.decode())
+            return httpx.Response(200, json={"ok": True})
+
+        gateway = _make_gateway(_routes(), handler, tokens=_default_tokens())
+        with TestClient(create_gateway_app(gateway)) as http:
+            response = http.get(
+                "/greeter/search?q=x&p=2",
+                headers={"Authorization": "Bearer acme-token"},
+            )
+            assert response.status_code == 200
+            assert seen == ["q=x&p=2"]
+
+        # A call without a query string must not send an empty "?".
+        with TestClient(create_gateway_app(gateway)) as http:
+            http.get("/greeter/plain", headers={"Authorization": "Bearer acme-token"})
+            assert seen[-1] == ""
+
+    def test_non_retryable_failure_returns_executed_target_response(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, json={"detail": "boom", "target": "primary"})
+
+        gateway = _make_gateway(_routes(), handler, tokens=_default_tokens())
+        with TestClient(create_gateway_app(gateway)) as http:
+            response = http.post(
+                "/greeter/invoke",
+                json={"x": 1},
+                headers={"Authorization": "Bearer acme-token"},
+            )
+        # Consistent with single-target routes: the executed target's actual
+        # response, not a generic stand-in message.
+        assert response.status_code == 500
+        assert response.json() == {"detail": "boom", "target": "primary"}
+
+    def test_safe_upstream_headers_are_propagated(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"ok": True},
+                headers={
+                    "x-request-id": "up-123",
+                    "content-type": "application/json",
+                    "content-length": "999",  # must be recomputed, not forwarded
+                },
+            )
+
+        gateway = _make_gateway(_routes(), handler, tokens=_default_tokens())
+        with TestClient(create_gateway_app(gateway)) as http:
+            response = http.get("/greeter/hello", headers={"Authorization": "Bearer acme-token"})
+        assert response.status_code == 200
+        assert response.headers["x-request-id"] == "up-123"
+        assert response.headers["content-type"].startswith("application/json")
+        # The forwarded content-length (999) cannot match the real body.
+        assert int(response.headers["content-length"]) != 999
+
+    def test_rate_limit_buckets_are_bounded(self, monkeypatch):
+        clock = [1000.0]
+        monkeypatch.setattr("cloud.gateway.time.monotonic", lambda: clock[0])
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"ok": True})
+
+        tokens = {f"token-{i}": (f"tenant-{i}", "subject") for i in range(6)}
+        routes = [GatewayRoute(agent="greeter", targets=[Target(base_url="http://t.test")])]
+        gateway = _make_gateway(routes, handler, tokens=tokens)
+        gateway._rate_limit_max_buckets = 3
+        gateway._rate_limit_idle_seconds = 60.0
+
+        with TestClient(create_gateway_app(gateway)) as http:
+            for i in range(6):
+                response = http.get(
+                    "/greeter/x",
+                    headers={"Authorization": f"Bearer token-{i}"},
+                )
+                assert response.status_code == 200
+                assert gateway.rate_limit_bucket_count() <= 3
+
+        # Idle eviction: advance past the idle window and touch one key —
+        # the stale buckets are reclaimable.
+        clock[0] += 120.0
+        assert gateway._rate_limit(routes[0], Caller(tenant="tenant-0"))
+        assert gateway.rate_limit_bucket_count() <= 3
+
+    def test_token_comparison_is_constant_time_correct(self):
+        authenticator = StaticTokenAuthenticator(
+            {"alpha-token": ("a", "s1"), "beta-token": ("b", "s2")}
+        )
+        # Correct tokens still authenticate; unknown same-length tokens do not.
+        assert (
+            authenticator.authenticate(httpx.Headers({"Authorization": "Bearer alpha-token"}))
+            is not None
+        )
+        assert (
+            authenticator.authenticate(httpx.Headers({"Authorization": "Bearer beta-token"}))
+            is not None
+        )
+        assert (
+            authenticator.authenticate(httpx.Headers({"Authorization": "Bearer gamma-token"}))
+            is None
+        )
+        assert authenticator.authenticate(httpx.Headers({"Authorization": "Bearer "})) is None
