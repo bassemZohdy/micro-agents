@@ -6,6 +6,12 @@ from micro_agent.observability import (
     PolicyEvaluator,
     PolicyRule,
 )
+from micro_agent.security import (
+    CallerIdentity,
+    InvocationIdentity,
+    UserContext,
+    invocation_identity,
+)
 
 
 class TestPolicyEffect:
@@ -154,4 +160,103 @@ class TestPolicyEvaluator:
         policy = AgentPolicy(model_restrictions={"allowed_providers": ["openai"]})
         evaluator = PolicyEvaluator(policy)
         decision = evaluator.evaluate_model("reasoning-model", None, "anthropic")
+        assert decision.allowed is False
+
+    def test_conditional_rule_matches_context_and_skips_non_matching_context(self):
+        policy = AgentPolicy(
+            rules=[
+                PolicyRule(
+                    effect=PolicyEffect.DENY,
+                    resource="tool:charge-card",
+                    actions=["invoke"],
+                    conditions={"tenant_id": "restricted"},
+                )
+            ]
+        )
+        evaluator = PolicyEvaluator(policy)
+
+        denied = evaluator.evaluate_tool("charge-card", context={"tenant_id": "restricted"})
+        allowed = evaluator.evaluate_tool("charge-card", context={"tenant_id": "public"})
+
+        assert denied.allowed is False
+        assert denied.rule is policy.rules[0]
+        assert allowed.allowed is True
+        assert allowed.rule is None
+
+    def test_condition_operators_and_resource_wildcards_are_supported(self):
+        policy = AgentPolicy(
+            rules=[
+                PolicyRule(
+                    effect=PolicyEffect.ALLOW,
+                    resource="tool:*",
+                    actions=["invoke"],
+                    conditions={
+                        "user.tenant_id": {"equals": "trusted"},
+                        "roles": {"contains_all": ["operator", "auditor"]},
+                        "caller_type": {"in": ["user", "service"]},
+                    },
+                )
+            ]
+        )
+        evaluator = PolicyEvaluator(policy)
+
+        decision = evaluator.evaluate_tool(
+            "lookup",
+            context={
+                "user": {"tenant_id": "trusted"},
+                "roles": ["operator", "auditor", "reviewer"],
+                "caller_type": "service",
+            },
+        )
+
+        assert decision.allowed is True
+        assert decision.rule is policy.rules[0]
+
+    def test_matching_deny_rule_wins_over_matching_allow_rule(self):
+        policy = AgentPolicy(
+            rules=[
+                PolicyRule(
+                    effect=PolicyEffect.ALLOW,
+                    resource="tool:delete",
+                    actions=["invoke"],
+                    conditions={"roles": {"contains": "operator"}},
+                ),
+                PolicyRule(
+                    effect=PolicyEffect.DENY,
+                    resource="tool:delete",
+                    actions=["invoke"],
+                    conditions={"tenant_id": "restricted"},
+                ),
+            ]
+        )
+        decision = PolicyEvaluator(policy).evaluate_tool(
+            "delete",
+            context={"roles": ["operator"], "tenant_id": "restricted"},
+        )
+
+        assert decision.allowed is False
+        assert decision.rule is policy.rules[1]
+
+    def test_verified_invocation_identity_overrides_untrusted_context_values(self):
+        policy = AgentPolicy(
+            rules=[
+                PolicyRule(
+                    effect=PolicyEffect.DENY,
+                    resource="tool:pay",
+                    actions=["invoke"],
+                    conditions={"tenant_id": "verified-tenant"},
+                )
+            ]
+        )
+
+        with invocation_identity(
+            InvocationIdentity(
+                caller=CallerIdentity(caller_id="caller-1"),
+                user=UserContext(user_id="user-1", tenant_id="verified-tenant"),
+            )
+        ):
+            decision = PolicyEvaluator(policy).evaluate_tool(
+                "pay", context={"tenant_id": "spoofed-tenant"}
+            )
+
         assert decision.allowed is False

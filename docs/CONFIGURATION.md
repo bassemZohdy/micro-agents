@@ -199,6 +199,29 @@ policy level: through an injected `AgentPolicy` or a configured policy
 resolver callable. Unresolved policy references fail startup rather than
 silently running without the declared policy.
 
+`AgentPolicy.rules` adds conditional, resource-scoped decisions on top of the
+legacy allow/deny lists. Resources use `skill:<id>`, `tool:<name>`,
+`mcp:<ref>`, `model:<ref>`, or `side_effect:<name>`; actions are `invoke`,
+`connect`, or `execute`. All fields in `conditions` must match. Conditions
+can compare values directly or use `equals`, `not_equals`, `in`, `not_in`,
+`contains`, `contains_any`, `contains_all`, `matches` (shell-style wildcard),
+and `exists` operators. For example:
+
+```python
+PolicyRule(
+    effect=PolicyEffect.DENY,
+    resource="tool:charge-card",
+    actions=["invoke"],
+    conditions={"tenant_id": "restricted", "roles": {"contains": "guest"}},
+)
+```
+
+During an authenticated invocation, `tenant_id`, `user_id`, `roles`,
+`caller_id`, `caller_type`, and workload identity fields come from the
+verified invocation context. A matching deny rule wins over matching allow
+rules; missing condition fields simply prevent that conditional rule from
+matching, while the existing explicit policy lists remain authoritative.
+
 ## Transport authentication
 
 Inbound authentication is selected through external configuration, behind an

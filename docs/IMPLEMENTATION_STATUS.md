@@ -309,6 +309,9 @@ Implemented:
   through the configured credential provider before runtime creation
 - skill and model-restriction enforcement alongside tool and MCP policy;
   denied declared skills, models, or MCP servers fail startup
+- conditional `PolicyRule` evaluation by resource, action, and verified
+  invocation identity context, including deterministic operator matching and
+  deny-over-allow precedence
 
 Gaps:
 
@@ -316,7 +319,6 @@ Gaps:
   not implemented; propagation currently makes the verified principal
   observable to operations, and per-protocol delegation arrives with the
   official MCP/A2A integrations
-- generic `PolicyRule` conditions are not evaluated
 - the audit sink persists to the platform log pipeline or a local file;
   database-backed audit arrives with production state providers
 - the approval store is process-local; production approval state arrives

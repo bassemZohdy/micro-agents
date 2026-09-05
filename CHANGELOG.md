@@ -19,6 +19,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Expanded Google ADK adapter coverage for identifier/message/tool mapping,
   confirmation metadata, timeout handling, lifecycle cleanup, and dependency
   health probes.
+- Implemented conditional `PolicyRule` evaluation with resource/action
+  matching, identity-backed conditions, supported comparison operators, and
+  deny-over-allow precedence.
 
 ### Cloud (C2)
 
