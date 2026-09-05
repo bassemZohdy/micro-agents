@@ -27,7 +27,7 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
-| `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for the custom runtime's distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
+| `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
 | `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 | `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
@@ -63,8 +63,9 @@ losing its update. Other endpoints fail fast; the declaration is never
 silently downgraded to local state. An endpoint without a matching definition
 is also rejected so configuration cannot be accidentally ignored.
 
-The custom runtime can share operation reservations and completed results across
-replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`. Redis (`redis://` or
+The custom runtime and Google ADK adapter can share operation reservations and
+completed results across replicas with `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`.
+Redis (`redis://` or
 `rediss://`) is supported when the optional client is installed, and
 PostgreSQL (`postgres://`/`postgresql://`) when the optional `postgres` extra
 is installed. Reservations are claimed with one atomic write (Redis `SET ...
@@ -74,8 +75,8 @@ keys are namespaced by that tenant; unverified/local calls retain the legacy
 provider-wide namespace. Session and memory records use the same verified
 tenant boundary. Reads return a versioned snapshot (starting at version 1),
 and writing a stale snapshot raises `StateConflictError`; zero-version writes
-retain the legacy unconditional behavior. The Google ADK runtime rejects this
-binding until its distributed idempotency mapping is implemented.
+retain the legacy unconditional behavior. Google ADK wraps non-read-only ADK
+tool calls with the same registry claim and result-replay contract.
 
 Approval continuations are process-local by default. Set
 `MICRO_AGENT_APPROVAL_ENDPOINT` to a `redis://` or `rediss://` URL, or inject
@@ -461,14 +462,14 @@ and declared MCP server, declared MCP servers surface discovered tools as ADK
 tools, and telemetry spans/metrics/logs wrap the runner. Both runtimes
 construct knowledge and credential providers from configuration and validate
 declared knowledge sources and credential references; native tools outside
-the built-in registry also fail fast in both runtimes. Declarations that
-still cannot be mapped under Google ADK — external (SQLite or remote)
-session state — fail fast; model credential references are resolved at
-bootstrap and native Gemini receives the resolved API key through an
-owned Google GenAI client. When the definition selects in-memory session
-persistence, bootstrap also enables process-local checkpointing; a
-checkpoint resume restores the ADK event/state snapshot and continues
-the original invocation.
+the built-in registry also fail fast in both runtimes. Google ADK session
+state is persisted through the runtime-neutral session-provider bridge;
+SQLite, Redis, and PostgreSQL providers restore ADK event/state transcripts
+across process boundaries. Distributed idempotency uses the configured
+operation registry for non-read-only ADK tools. Model credential references
+are resolved at bootstrap and native Gemini receives the resolved API key
+through an owned Google GenAI client. Checkpoint resumes restore the ADK
+event/state snapshot and continue the original invocation.
 
 OpenAI-compatible model endpoints preserve any path prefix in the configured
 URL. For example, `https://llm.example.com/v1` is probed at

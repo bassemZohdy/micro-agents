@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from micro_agent.checkpoint import InMemoryCheckpointStore
+from micro_agent.checkpoint import InMemoryCheckpointStore, SessionCheckpointStore
 from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.knowledge import InMemoryKnowledgeRetriever
@@ -20,10 +20,14 @@ from micro_agent.models import (
     ModelResponse,
     ProviderCapabilities,
 )
+from micro_agent.security import OperationRegistry
+from micro_agent.session import InMemorySessionProvider
+from micro_agent.tools import EchoTool
 from runtimes.google_adk import GoogleAdkError, GoogleAdkRuntime, GoogleAdkRuntimeConfig
 from runtimes.google_adk.runtime import (
     _adk_name,
     _approval_metadata,
+    _as_adk_tool,
     _entry_text,
     _event_text,
     _has_pending_confirmation,
@@ -306,6 +310,87 @@ async def test_adk_checkpoint_resumes_failed_invocation_across_runtime_instances
         assert await store.get("adk-req-1") is None
     finally:
         await runtime2.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_external_session_provider_restores_checkpoint_across_instances():
+    definition = _definition()
+    provider = _FailOnceProvider()
+    sessions = InMemorySessionProvider()
+    checkpoints = SessionCheckpointStore(sessions)
+
+    runtime1 = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=provider,
+            session_provider=sessions,
+            checkpoint_store=checkpoints,
+        )
+    )
+    agent1 = await runtime1.create(definition)
+    try:
+        with pytest.raises(ConnectionError, match="transient ADK"):
+            await runtime1.invoke(
+                agent1,
+                AgentRequest(
+                    input={"question": "durable status"},
+                    request_id="durable-adk-req",
+                    session_id="durable-adk-session",
+                ),
+            )
+    finally:
+        await runtime1.close()
+
+    runtime2 = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=provider,
+            session_provider=sessions,
+            checkpoint_store=checkpoints,
+        )
+    )
+    agent2 = await runtime2.create(definition)
+    try:
+        response = await runtime2.invoke(
+            agent2,
+            AgentRequest(
+                input={},
+                request_id="durable-adk-resume",
+                checkpoint_id="durable-adk-req",
+            ),
+        )
+        assert response.status == "success"
+        assert response.output["content"] == "resumed by ADK"
+        assert await checkpoints.get("durable-adk-req") is None
+        session = await agent2._internal["adk_session_service"].get_session(
+            app_name=agent2._internal["app_name"],
+            user_id=agent2._internal["user_id"],
+            session_id="durable-adk-session",
+        )
+        assert session is not None
+        assert session.events
+    finally:
+        await runtime2.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_operation_registry_deduplicates_side_effect_tool_calls():
+    registry = OperationRegistry()
+    adapter = _as_adk_tool(
+        EchoTool(),
+        operation_registry=registry,
+        side_effect="idempotent",
+    )
+    context = SimpleNamespace()
+    first = await adapter.run_async(
+        args={"message": "once", "idempotency_key": "adk-operation-1"},
+        tool_context=context,
+    )
+    second = await adapter.run_async(
+        args={"message": "once", "idempotency_key": "adk-operation-1"},
+        tool_context=context,
+    )
+    assert first == {"echoed": "once"}
+    assert second["was_deduplicated"] is True
+    assert second["output"] == {"echoed": "once"}
 
 
 @pytest.mark.asyncio

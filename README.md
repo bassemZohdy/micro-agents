@@ -151,9 +151,9 @@ fallback for a bare model reference.
 Runtime selection is deployment configuration. The custom loop is the default;
 set `MICRO_AGENT_RUNTIME=google-adk` (with the optional `adk` extra installed)
 to select the Google ADK adapter. Memory, policy, MCP, knowledge, credentials,
-and telemetry mappings are validated at bootstrap; unsupported external session
-bindings (anything other than the optional Redis provider) fail before startup
-rather than being silently ignored. Model credential references are resolved
+and telemetry mappings are validated at bootstrap; external session bindings
+use the runtime-neutral session-provider bridge and fail before startup when
+their endpoint or optional dependency is invalid. Model credential references are resolved
 through the configured provider and native Google models receive an owned GenAI
 API-key client. Install
 `micro-agents[redis]` and set
@@ -166,8 +166,8 @@ writes use transactional pipelines and key TTLs so
 independently scaled processes share state. Operation, session, and memory
 records are scoped by the verified tenant when one is available. Provider reads
 return versioned snapshots; updates advance the version and reject stale
-snapshots with `StateConflictError`. The Google ADK runtime rejects the
-idempotency binding until its mapping is implemented.
+snapshots with `StateConflictError`. Google ADK uses the same operation
+registry to deduplicate non-read-only tool calls across replicas.
 
 For an OpenAI-compatible endpoint, keep credentials out of the definition:
 
@@ -202,7 +202,7 @@ state, or A2A task interoperability.
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming/streaming task lifecycles with authenticated integration tests and runtime-wired cancellation | push notifications, durable task store |
-| State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions, durable approval continuations, plus custom-runtime operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | Google ADK idempotency mapping |
+| State | definition-wired in-memory memory/session, SQLite development sessions, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | durable Google ADK approval state |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, and redacted audit events | downstream delegation, external policy stores, and database-backed audit persistence |
 | Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, and token/cost conventions | operational dashboards/alerts |
 | Operations | container, package/release gates, versioned OpenAPI, request-size guard, opt-in CORS, rate-limit hook, and sample manifests | production bootstrap and OpenShift hardening |

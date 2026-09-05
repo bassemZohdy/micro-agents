@@ -113,10 +113,9 @@ Implemented:
 - caller-supplied request metadata is never used to construct caller, user,
   or workload identity; a source-level guard test enforces this boundary
 - executable bootstrap selects the custom loop by default or the Google ADK
-  adapter through `MICRO_AGENT_RUNTIME`; ADK declarations that still cannot
-  be mapped (external session state) fail fast rather than being silently
-  ignored, while native model credentials are resolved into an owned GenAI
-  client
+  adapter through `MICRO_AGENT_RUNTIME`; ADK session providers bridge SQLite,
+  Redis, and PostgreSQL state into durable event/state transcripts, while
+  native model credentials are resolved into an owned GenAI client
 - declared MCP servers connect through the official SDK wire client at
   startup when the `mcp` extra is installed; without it, startup fails with
   an installation message instead of silently ignoring the declarations
@@ -142,6 +141,8 @@ Implemented:
   replay-safe boundaries and resume explicitly by checkpoint id when a store
   is configured; the Google ADK adapter persists an ADK event/state snapshot
   and invalidates checkpoints before a pending non-read-only tool can replay
+- Google ADK non-read-only tools use the configured operation registry for
+  tenant-scoped atomic idempotency claims and stored-result replay
 
 Current runtime capability matrix:
 
@@ -159,8 +160,8 @@ Gaps:
 - policy references cannot yet resolve from external policy *stores*; the
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
-- the Google ADK adapter still rejects distributed idempotency/session mappings
-  that have not been implemented through native ADK services
+- the Google ADK adapter still uses native approval continuations, so the
+  durable `MICRO_AGENT_APPROVAL_ENDPOINT` remains a custom-runtime binding
 
 ### Performance and resource budgets
 
