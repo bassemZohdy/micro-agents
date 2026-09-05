@@ -22,7 +22,7 @@ jobs:
         run: python tools/validate_release.py "${GITHUB_REF_NAME#v}"
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy micro_agent runtimes
+      - run: mypy micro_agent cloud runtimes
       - run: pytest -q
       - run: python -m micro_agent.definition.schema
       - run: git diff --exit-code docs/schemas/
