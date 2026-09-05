@@ -150,3 +150,49 @@ class TestHttp:
 
             audit = http.get("/observability/audit").json()["events"]
             assert audit[0]["action"] == "invoke"
+
+
+class TestHttpHardening:
+    """Batch ingest is atomic and validated; audit limits hold at the boundary."""
+
+    def _client(self) -> TestClient:
+        return TestClient(create_observability_app())
+
+    def test_malformed_batch_is_atomic_422_without_partial_writes(self):
+        with self._client() as http:
+            batch = {
+                "events": [
+                    {"kind": "audit", "trace_id": "t1", "agent": "a", "action": "allow"},
+                    "not-an-object",
+                    {"kind": "span", "trace_id": "t2", "agent": "a"},
+                ]
+            }
+            response = http.post("/observability/events", json=batch)
+            assert response.status_code == 422
+            # Nothing from the batch leaked into the store.
+            assert http.get("/observability/audit").json()["events"] == []
+            assert http.get("/observability/traces/t2").status_code == 404
+
+    def test_non_dict_event_returns_422_not_500(self):
+        with self._client() as http:
+            response = http.post("/observability/events", json={"events": ["oops"]})
+            assert response.status_code == 422
+
+    def test_audit_limit_validated_at_http_boundary(self):
+        with self._client() as http:
+            http.post(
+                "/observability/events",
+                json={
+                    "events": [
+                        {"kind": "audit", "trace_id": f"t{i}", "agent": "a", "action": "allow"}
+                        for i in range(3)
+                    ]
+                },
+            )
+            for bad_limit in ("0", "-1", "1001"):
+                assert (
+                    http.get("/observability/audit", params={"limit": bad_limit}).status_code == 422
+                )
+            ok = http.get("/observability/audit", params={"limit": 2})
+            assert ok.status_code == 200
+            assert len(ok.json()["events"]) == 2

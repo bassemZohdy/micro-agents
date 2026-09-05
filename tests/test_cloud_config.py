@@ -148,3 +148,60 @@ class TestConfigClient:
                 await client.get("greeter", "secrets")
         finally:
             await client.aclose()
+
+
+class TestConfigClientHardening:
+    async def test_client_side_errors_are_authoritative_not_cached(self):
+        """A 4xx from the config plane is an answer, not an outage: it must
+        propagate even though a cached payload for this key exists."""
+        app = create_config_app()
+        asgi = httpx.ASGITransport(app=app)
+        state = {"reject": False}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if state["reject"] and request.url.path.startswith("/config/agents/greeter/definition"):
+                return httpx.Response(404, json={"detail": "no such key"})
+            return await asgi.handle_async_request(request)
+
+        client = ConfigClient(
+            "http://config.test",
+            client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=""),
+        )
+        try:
+            await client.put_definition("greeter", _definition_payload())
+            got = await client.get("greeter", "definition")
+            assert not got.get("from_cache", False)
+
+            state["reject"] = True
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                await client.get("greeter", "definition")
+            assert exc_info.value.response.status_code == 404
+        finally:
+            await client.aclose()
+
+    async def test_server_errors_still_degrade_to_cache(self):
+        """5xx remains a plane outage: serve the cached payload."""
+        app = create_config_app()
+        asgi = httpx.ASGITransport(app=app)
+        state = {"reject": False}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if state["reject"] and request.url.path.startswith("/config/agents/greeter/definition"):
+                return httpx.Response(503, json={"detail": "overloaded"})
+            return await asgi.handle_async_request(request)
+
+        client = ConfigClient(
+            "http://config.test",
+            client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=""),
+        )
+        try:
+            await client.put_definition("greeter", _definition_payload())
+            primed = await client.get("greeter", "definition")  # populates cache
+            assert not primed.get("from_cache", False)
+
+            state["reject"] = True
+            stale = await client.get("greeter", "definition")
+            assert stale["from_cache"] is True
+            assert stale["payload"]["metadata"]["version"] == "1.0.0"
+        finally:
+            await client.aclose()

@@ -215,3 +215,110 @@ class TestDiscovery:
                 await discovery.register(AgentDescriptor(name="", version="1.0.0"))
         finally:
             await discovery.aclose()
+
+
+class TestRegistryHardening:
+    """Verification for the cloud hardening batch (registration/heartbeat TTLs,
+    clean 404 details, and the documented query ordering)."""
+
+    def _registered_client(self) -> TestClient:
+        client = TestClient(create_registry_app())
+        descriptor = descriptor_from_definition(_definition(), card_url="http://greeter")
+        response = client.put(
+            "/registry/agents/greeter/1.0.0",
+            json=descriptor.to_dict(),
+            params={"ttl_seconds": 30},
+        )
+        assert response.status_code == 200
+        return client
+
+    def test_ttl_is_accepted_on_register_and_heartbeat(self):
+        with self._registered_client() as http:
+            beat = http.post(
+                "/registry/agents/greeter/1.0.0/heartbeat",
+                params={"ttl_seconds": 45},
+            )
+            assert beat.status_code == 200
+
+    def test_non_positive_heartbeat_ttl_is_rejected(self):
+        with self._registered_client() as http:
+            for ttl in ("0", "-5"):
+                beat = http.post(
+                    "/registry/agents/greeter/1.0.0/heartbeat",
+                    params={"ttl_seconds": ttl},
+                )
+                assert beat.status_code == 422
+                assert "positive" in beat.json()["detail"]
+
+    def test_404_details_are_clean_without_keyerror_quotes(self):
+        with TestClient(create_registry_app()) as http:
+            for method, url in (
+                ("get", "/registry/agents/ghost/1.0.0"),
+                ("post", "/registry/agents/ghost/1.0.0/heartbeat"),
+                ("delete", "/registry/agents/ghost/1.0.0"),
+            ):
+                response = getattr(http, method)(url)
+                assert response.status_code == 404
+                detail = response.json()["detail"]
+                assert detail == "ghost@1.0.0 is not registered"
+                assert "KeyError" not in detail
+                assert "'" not in detail
+
+    def test_query_results_ordered_by_name_then_version(self):
+        """The documented contract: (agent name, version) order, regardless of
+        registration order."""
+        with TestClient(create_registry_app()) as http:
+            for name, version in (
+                ("beta", "1.10.0"),
+                ("alpha", "1.0.0"),
+                ("beta", "1.2.0"),
+                ("alpha", "2.0.0"),
+            ):
+                descriptor = descriptor_from_definition(
+                    _definition(name=name, version=version), card_url="http://x.test"
+                )
+                assert (
+                    http.put(
+                        f"/registry/agents/{name}/{version}", json=descriptor.to_dict()
+                    ).status_code
+                    == 200
+                )
+
+            found = http.get("/registry/agents").json()["agents"]
+            assert [(a["descriptor"]["name"], a["descriptor"]["version"]) for a in found] == [
+                ("alpha", "1.0.0"),
+                ("alpha", "2.0.0"),
+                ("beta", "1.10.0"),
+                ("beta", "1.2.0"),
+            ]
+
+
+class TestDiscoveryHardening:
+    async def test_client_side_errors_are_authoritative_not_cached(self):
+        """A 4xx from the registry is an answer, not an outage: it must
+        propagate even when a cached snapshot for the query exists."""
+        app = create_registry_app()
+        asgi = httpx.ASGITransport(app=app)
+        state = {"reject": False}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if state["reject"]:
+                return httpx.Response(404, json={"detail": "no such query"})
+            return await asgi.handle_async_request(request)
+
+        discovery = RegistryDiscoveryClient(
+            "http://registry.test",
+            client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=""),
+        )
+        try:
+            descriptor = descriptor_from_definition(_definition(), card_url="http://greeter")
+            await discovery.register(descriptor)
+            hits = await discovery.discover(skill="greet")
+            assert hits and not hits[0].from_cache  # snapshot now cached
+
+            state["reject"] = True
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                await discovery.discover(skill="greet")
+            assert exc_info.value.response.status_code == 404
+        finally:
+            await discovery.aclose()
