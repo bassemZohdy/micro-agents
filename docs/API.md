@@ -19,7 +19,7 @@ read-only compatibility alias; new clients should use the versioned URL.
 | `GET /v1/docs` | Swagger UI | interactive documentation for the versioned API |
 | `GET /v1/redoc` | ReDoc | alternative documentation for the versioned API |
 | `GET /.well-known/agent-card.json` | standard A2A agent card | served from the official SDK card model |
-| `POST /` | A2A JSON-RPC `message/send` | available when `spec.interoperability.a2a.enabled` is true; non-streaming tasks only |
+| `POST /` | A2A JSON-RPC `message/send` and `message/stream` | available when `spec.interoperability.a2a.enabled` is true; streaming is advertised only when the bound runtime supports it |
 
 ## Invoke request
 

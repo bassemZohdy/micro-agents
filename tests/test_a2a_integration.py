@@ -1,5 +1,5 @@
-"""A2A integration: standard card route, v1 card contract, and an official
-SDK client resolving the card and completing a non-streaming task."""
+"""A2A integration: standard card route, card contract, and official-SDK
+clients completing non-streaming and streaming tasks."""
 
 import httpx
 import pytest
@@ -190,3 +190,63 @@ class TestOfficialSdkInterop:
             assert texts and texts[0]
             await agent.stop()
             await agent.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_official_client_receives_streaming_artifact_chunks(self):
+        """An official SDK client receives a streamed built-in-runtime result."""
+        import json as jsonlib
+
+        from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
+        from a2a.client.helpers import create_text_message_object
+        from a2a.types import Role, TaskState
+        from a2a.types import TransportProtocol as TransportProtocolType
+
+        from micro_agent.models import FakeModelConfig, FakeModelProvider
+        from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+
+        runtime = AdkRuntime(
+            AdkRuntimeConfig(
+                model_provider=FakeModelProvider(
+                    FakeModelConfig(response="hello", stream_chunks=["hel", "lo"])
+                )
+            )
+        )
+        agent = DefaultMicroAgent(_definition(), runtime)
+        await agent.initialize()
+        await agent.start()
+        app = create_app(agent, base_url="http://test")
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http_client:
+            resolver = A2ACardResolver(httpx_client=http_client, base_url="http://test")
+            card = await resolver.get_agent_card()
+            assert card.capabilities.streaming is True
+
+            config = ClientConfig(
+                httpx_client=http_client,
+                streaming=True,
+                supported_transports=[TransportProtocolType.jsonrpc],
+            )
+            client = ClientFactory(config).create(card)
+            message = create_text_message_object(
+                content=jsonlib.dumps({"action": "stream"}), role=Role.user
+            )
+            updates = []
+            final_task = None
+            async for task, update in client.send_message(message):
+                final_task = task
+                updates.append(update)
+
+            assert final_task is not None
+            assert final_task.status.state == TaskState.completed
+            artifacts = final_task.artifacts or []
+            assert artifacts
+            streamed_text = "".join(
+                part.root.text
+                for artifact in artifacts
+                for part in artifact.parts
+                if hasattr(part.root, "text")
+            )
+            assert streamed_text == "hello"
+            assert updates
+        await agent.stop()
+        await agent.shutdown()

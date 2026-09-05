@@ -75,6 +75,10 @@ class TestAgentCard:
         assert card.default_output_modes == ["application/json"]
         assert [s.id for s in card.skills] == ["check"]
 
+    def test_streaming_capability_can_be_advertised(self):
+        card = agent_card_from_definition(_definition(), streaming=True)
+        assert card.capabilities.streaming is True
+
     def test_card_url_falls_back_to_a2a_endpoint(self):
         definition = _definition(endpoint="https://a2a.example.com")
         card = agent_card_from_definition(definition)

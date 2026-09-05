@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); evidence and limitations belong in
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Baseline audited: `7ada9d4` on 2026-09-05.
+Baseline audited: `16d053a` on 2026-09-05.
 
 ## Release gate
 
@@ -103,9 +103,10 @@ or the relevant ADR.
 
 ### P1 — A2A protocol
 
-- [ ] Implement A2A streaming tasks. The card currently advertises streaming
-      as unavailable.
-      See [docs/API.md](docs/API.md).
+- [x] Implement A2A streaming tasks for runtimes that advertise streaming;
+      the official SDK `message/stream` path receives appendable artifact
+      chunks and the card reflects the bound runtime capability, covered by
+      `tests/test_a2a_server.py` and `tests/test_a2a_integration.py`.
 - [ ] Implement A2A push notifications.
 - [ ] Implement A2A extended authenticated cards.
 - [ ] Add durable A2A task store. Currently in-memory only; production state
@@ -174,8 +175,9 @@ or the relevant ADR.
 
 ### P2 — HTTP and observability
 
-- [ ] Implement response streaming for the Google ADK adapter and A2A
-      transport. Currently only the built-in runtime supports it.
+- [ ] Implement response streaming for the Google ADK adapter. The A2A
+      transport now streams when the bound runtime advertises streaming, while
+      the Google ADK adapter remains non-streaming.
 - [ ] Add latency histogram support. Current latency metrics are gauges
       (latest value), not histograms; percentile dashboards require a native
       OTel histogram exporter.

@@ -12,8 +12,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   80% coverage floor in `pyproject.toml`.
 - Re-exported the implemented C1-C4 cloud control-plane surfaces from the
   top-level `cloud` package and verified the public API contract. The current
-  verification baseline is 709 collected tests, 609 passing in the default
-  selection, 100 deselected integration/E2E/OTel tests, and 83.76% coverage.
+  verification baseline is 712 collected tests, 611 passing in the default
+  selection, 101 deselected integration/E2E/OTel tests, and 83.82% coverage.
 - Wired A2A executor cancellation to cancel the in-flight Micro-Agent task,
   with a regression test for the canceled task transition.
 - Expanded Google ADK adapter coverage for identifier/message/tool mapping,
@@ -22,6 +22,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Reconciled custom-runtime behavior coverage across the dedicated runtime,
   policy, resilience, state, streaming, session, and side-effect test modules;
   the backlog item now reflects the existing contract coverage.
+- Added A2A `message/stream` bridging for runtimes that advertise streaming;
+  artifact chunks use stable append/last-chunk semantics, and the published
+  agent card now reflects the bound runtime's streaming capability.
 - Implemented conditional `PolicyRule` evaluation with resource/action
   matching, identity-backed conditions, supported comparison operators, and
   deny-over-allow precedence.
@@ -657,9 +660,10 @@ real providers, but the following production boundaries remain:
 - MCP notifications are consumed by the SDK session but not surfaced as
   events; tests exercise loopback and local stdio servers, not remote
   production deployments
-- A2A streaming tasks, push notifications, and durable task state are not
-  implemented (the card advertises streaming as unavailable); cancellation
-  of in-flight runtime work is wired through to the task transition
+- A2A push notifications and durable task state are not implemented;
+  streaming is available when the bound runtime advertises it, and
+  cancellation of in-flight runtime work is wired through to the task
+  transition
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; caller identity is observable to operations but not
   forwarded through per-protocol delegation
