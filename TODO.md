@@ -285,6 +285,47 @@ at the source; the plane is read-mostly and losing it costs visibility,
 never agents. In-memory store by design for the minimal slice; durable
 backends replace it later.
 
+## Cloud hardening backlog
+
+Found during the 2026-09-04 full-project review. These are correctness and
+hardening fixes to the already implemented minimal cloud slices, not expansion
+beyond the documented C1-C4 scope.
+
+- [x] Fix gateway routing so `GET /gateway/health` is registered before the
+      `/{agent}/{path:path}` catch-all and is reachable. (PR: gateway hardening)
+- [x] Forward inbound query strings through the gateway to upstream targets.
+- [x] Make registration/heartbeat TTLs work end to end: send `ttl_seconds`
+      from `RegistryDiscoveryClient`, accept it on the registry HTTP routes,
+      and reject non-positive heartbeat TTLs just as registration does.
+      (verified by tests/test_cloud_registry.py)
+- [x] Align the registry query contract and implementation for result ordering
+      — (name, version) ordering documented in docs/CLOUD_REGISTRY.md and pinned
+      by an HTTP-layer test regardless of registration order.
+- [x] Make observability batch ingest atomic and validate that every event is
+      an object so malformed batches return 422 without partial writes or a
+      500 (verified by tests/test_cloud_observability.py).
+- [x] Return clean registry 404 details without `KeyError`'s embedded quotes
+      (verified by tests/test_cloud_registry.py).
+- [x] Treat client-side HTTP errors as authoritative in the config/discovery
+      clients instead of misclassifying 4xx responses as plane outages or
+      serving stale cache entries; reserve fallback for transport failures and
+      5xx responses (verified by tests in test_cloud_config.py /
+      test_cloud_registry.py).
+- [x] Make failed non-retryable gateway calls return the executed target's
+      response consistently, regardless of how many targets the route has.
+- [x] Propagate safe upstream response headers through the gateway instead of
+      dropping everything except the content type (hop-by-hop, content-length,
+      content-encoding stripped).
+- [x] Bound gateway rate-limit state with idle eviction and a maximum bucket
+      count so distinct-token spraying cannot grow memory without limit
+      (`rate_limit_max_buckets`, `rate_limit_idle_seconds`, `rate_limit_bucket_count()`).
+- [x] Validate observability audit-read limits at the HTTP boundary
+      (verified by tests/test_cloud_observability.py).
+- [x] Use constant-time bearer-token comparison in the gateway's static
+      development authenticator (`hmac.compare_digest`).
+- [x] Include `cloud` in the release workflow's strict mypy command so the
+      release gate is at least as strong as CI.
+
 ### C5 — Cloud hardening (deferred)
 
 - [ ] Add durable persistence for the cloud registry (replace in-memory
@@ -321,3 +362,9 @@ backends replace it later.
 - workflow engine
 - agent marketplace
 - distributed memory platform
+- Durable, shared cloud backends for registry, configuration, gateway state,
+  and observability; all four planes currently document in-memory state as a
+  minimal-slice limitation.
+- Authentication for the standalone registry, config, and observability plane
+  apps; they are currently documented as unauthenticated behind the C3 edge.
+- Streaming pass-through at the gateway.

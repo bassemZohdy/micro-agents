@@ -82,13 +82,23 @@ class ConfigClient:
                 params={"version": version} if version is not None else {},
             )
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
+                raise
+            cached = self._cache.get(key)
+            if cached is None:
+                raise ConfigPlaneUnreachableError(
+                    f"config plane at {self._base_url} is unavailable and no cached "
+                    f"{kind} exists for '{agent}'"
+                ) from exc
+            return {**cached, "from_cache": True}
+        except httpx.HTTPError as exc:
             cached = self._cache.get(key)
             if cached is None:
                 raise ConfigPlaneUnreachableError(
                     f"config plane at {self._base_url} is unreachable and no cached "
                     f"{kind} exists for '{agent}'"
-                ) from None
+                ) from exc
             return {**cached, "from_cache": True}
         body: dict[str, Any] = response.json()
         self._cache[key] = body

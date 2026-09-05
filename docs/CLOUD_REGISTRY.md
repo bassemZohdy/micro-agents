@@ -46,6 +46,11 @@ The FastAPI surface (`create_registry_app`, runnable standalone with
 | `POST /registry/agents/{name}/{version}/heartbeat` | renew the lease (404 when unknown) |
 | `DELETE /registry/agents/{name}/{version}` | deregister |
 | `GET /registry/agents?name=&skill=&tenant=&healthy_only=` | query with health rollups |
+
+Query results are ordered deterministically by agent name and then
+version (lexicographic), regardless of registration order, at both the
+store and the HTTP surface — pinned by tests.
+
 | `GET /registry/agents/{name}/{version}` | fetch one entry |
 | `GET /health/ready` | registry readiness |
 

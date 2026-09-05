@@ -30,6 +30,7 @@ decisions stay with the agent (C0).
 from __future__ import annotations
 
 import asyncio
+import hmac
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -50,6 +51,9 @@ _HOP_BY_HOP = {
     "host",
     "content-length",
 }
+# Response headers that must not be forwarded verbatim: hop-by-hop set plus
+# headers the proxy itself recomputes from the forwarded body.
+_RESPONSE_STRIP = _HOP_BY_HOP | {"content-length", "content-encoding"}
 _MAX_BODY_BYTES = 10 * 1024 * 1024
 
 
@@ -89,11 +93,13 @@ class StaticTokenAuthenticator:
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() != "bearer" or not token:
             return None
-        grant = self._tokens.get(token)
-        if grant is None:
-            return None
-        tenant, subject = grant
-        return Caller(tenant=tenant, subject=subject)
+        # Constant-time comparison: a dict lookup by token would let call
+        # timing distinguish prefix matches on the expected tokens.
+        for expected, grant in self._tokens.items():
+            if hmac.compare_digest(expected.encode("utf-8"), token.encode("utf-8")):
+                tenant, subject = grant
+                return Caller(tenant=tenant, subject=subject)
+        return None
 
 
 @dataclass
@@ -186,17 +192,27 @@ class Gateway:
         authenticator: GatewayAuthenticator | None = None,
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 30.0,
+        rate_limit_max_buckets: int = 10_000,
+        rate_limit_idle_seconds: float = 300.0,
     ) -> None:
         self._routes = {route.agent: route for route in routes}
         self._authenticator = authenticator
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
-        self._buckets: dict[tuple[str, str], _TokenBucket] = {}
+        # (bucket, last_used monotonic); bounded so distinct-token spraying
+        # cannot grow memory without limit.
+        self._buckets: dict[tuple[str, str], tuple[_TokenBucket, float]] = {}
+        self._rate_limit_max_buckets = rate_limit_max_buckets
+        self._rate_limit_idle_seconds = rate_limit_idle_seconds
         self._round_robin: dict[str, int] = {}
 
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
+
+    def rate_limit_bucket_count(self) -> int:
+        """Live rate-limit buckets (bounded; see rate_limit_max_buckets)."""
+        return len(self._buckets)
 
     def breaker_states(self) -> dict[str, dict[str, bool]]:
         return {
@@ -220,11 +236,27 @@ class Gateway:
 
     def _rate_limit(self, route: GatewayRoute, caller: Caller) -> bool:
         key = (route.agent, caller.tenant or caller.subject)
-        bucket = self._buckets.get(key)
-        if bucket is None:
-            bucket = _TokenBucket(route.rate_limit_per_minute)
-            self._buckets[key] = bucket
-        return bucket.try_take()
+        now = time.monotonic()
+        entry = self._buckets.get(key)
+        if entry is None:
+            self._evict_buckets(now)
+            entry = (_TokenBucket(route.rate_limit_per_minute), now)
+            self._buckets[key] = entry
+        else:
+            self._buckets[key] = (entry[0], now)
+        return entry[0].try_take()
+
+    def _evict_buckets(self, now: float) -> None:
+        """Make room for a new bucket: idle entries first, then LRU."""
+        if len(self._buckets) < self._rate_limit_max_buckets:
+            return
+        idle_cutoff = now - self._rate_limit_idle_seconds
+        idle = [k for k, (_, used) in self._buckets.items() if used <= idle_cutoff]
+        for key in idle:
+            del self._buckets[key]
+        while len(self._buckets) >= self._rate_limit_max_buckets:
+            oldest = min(self._buckets.items(), key=lambda item: item[1][1])[0]
+            del self._buckets[oldest]
 
     def _select_targets(self, route: GatewayRoute) -> list[Target]:
         available = [t for t in route.targets if t.available()]
@@ -261,6 +293,7 @@ class Gateway:
         }
         retryable = request.method in {"GET", "HEAD"} or _IDEMPOTENCY_HEADER in headers
         attempts = targets if retryable else targets[:1]
+        query = str(request.url.query) or None
         last_status = 503
         last_content: bytes = b"no upstream accepted the call"
         for target in attempts:
@@ -270,6 +303,7 @@ class Gateway:
                 upstream = await self._client.request(
                     request.method,
                     f"{target.base_url}/{rest}",
+                    params=query,
                     headers=headers,
                     content=body,
                 )
@@ -283,23 +317,36 @@ class Gateway:
                 last_status, last_content = upstream.status_code, upstream.content
                 continue
             target.record_success()
-            return Response(
-                content=upstream.content,
-                status_code=upstream.status_code,
-                media_type=upstream.headers.get("content-type"),
-            )
-        if not retryable and len(attempts) < len(targets):
-            return Response(
-                status_code=last_status,
-                content=b"non-retryable call failed on its primary target",
-            )
+            return _proxy_response(upstream)
+        # Non-retryable failures report exactly what the executed target
+        # answered, the same as retryable exhaustion — no generic stand-in.
         return Response(status_code=last_status, content=last_content)
+
+
+def _proxy_response(upstream: httpx.Response) -> Response:
+    """Forward the upstream response with safe headers preserved."""
+    forwarded = {
+        name: value
+        for name, value in upstream.headers.items()
+        if name.lower() not in _RESPONSE_STRIP
+    }
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        headers=forwarded,
+    )
 
 
 def create_gateway_app(gateway: Gateway) -> FastAPI:
     """FastAPI surface: a policy-checked reverse proxy in front of agents."""
     app = FastAPI(title="Micro-Agent Cloud Gateway", version="0.1.0")
     app.state.gateway = gateway
+
+    # Registered before the /{agent}/{path:path} catch-all so the fixed
+    # /gateway/health path is reachable instead of being routed as an agent.
+    @app.get("/gateway/health")
+    async def health() -> dict[str, Any]:
+        return {"targets": gateway.breaker_states()}
 
     @app.api_route(
         "/{agent}/{path:path}",
@@ -312,10 +359,6 @@ def create_gateway_app(gateway: Gateway) -> FastAPI:
         except GatewayAuthenticationError as exc:
             return Response(status_code=401, content=str(exc))
         return await gateway.forward(request, caller)
-
-    @app.get("/gateway/health")
-    async def health() -> dict[str, Any]:
-        return {"targets": gateway.breaker_states()}
 
     return app
 

@@ -66,8 +66,10 @@ class RegistryDiscoveryClient:
         if not descriptor.name or not descriptor.version:
             raise DescriptorError("descriptor must carry a name and version")
         payload = descriptor.to_dict()
+        params = {"ttl_seconds": ttl_seconds} if ttl_seconds is not None else None
         response = await self._client.put(
             f"{self._base_url}/registry/agents/{descriptor.name}/{descriptor.version}",
+            params=params,
             json=payload,
         )
         if response.status_code == 422:
@@ -79,8 +81,10 @@ class RegistryDiscoveryClient:
     async def heartbeat(
         self, name: str, version: str, *, ttl_seconds: float | None = None
     ) -> dict[str, Any]:
+        params = {"ttl_seconds": ttl_seconds} if ttl_seconds is not None else None
         response = await self._client.post(
-            f"{self._base_url}/registry/agents/{name}/{version}/heartbeat"
+            f"{self._base_url}/registry/agents/{name}/{version}/heartbeat",
+            params=params,
         )
         response.raise_for_status()
         body: dict[str, Any] = response.json()
@@ -118,13 +122,32 @@ class RegistryDiscoveryClient:
         try:
             response = await self._client.get(f"{self._base_url}/registry/agents", params=params)
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
+                raise
+            snapshot = self._cache.get(key)
+            if snapshot is None:
+                raise RegistryUnreachableError(
+                    f"registry at {self._base_url} is unavailable and no cached "
+                    "discovery snapshot exists for this query"
+                ) from exc
+            return [
+                DiscoveredAgent(
+                    descriptor=agent.descriptor,
+                    healthy=agent.healthy,
+                    lease_expires_in_seconds=agent.lease_expires_in_seconds,
+                    registered_at_age_seconds=agent.registered_at_age_seconds,
+                    from_cache=True,
+                )
+                for agent in snapshot.agents
+            ]
+        except httpx.HTTPError as exc:
             snapshot = self._cache.get(key)
             if snapshot is None:
                 raise RegistryUnreachableError(
                     f"registry at {self._base_url} is unreachable and no cached "
                     "discovery snapshot exists for this query"
-                ) from None
+                ) from exc
             return [
                 DiscoveredAgent(
                     descriptor=agent.descriptor,

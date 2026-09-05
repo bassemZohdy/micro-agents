@@ -86,6 +86,8 @@ class InMemoryAgentRegistry:
         self, name: str, version: str, *, ttl_seconds: float | None = None
     ) -> RegistryEntry:
         ttl = ttl_seconds if ttl_seconds is not None else self._default_lease
+        if ttl <= 0:
+            raise DescriptorError("heartbeat ttl must be positive")
         async with self._lock:
             entry = self._entries.get((name, version))
             if entry is None:
@@ -106,7 +108,7 @@ class InMemoryAgentRegistry:
         tenant: str | None = None,
         healthy_only: bool = False,
     ) -> list[RegistryEntry]:
-        """Return matching entries, newest registration first.
+        """Return matching entries, ordered by agent name and version.
 
         ``tenant`` filters by declared visibility: entries with empty
         visibility are unrestricted, others match only when the tenant is
@@ -154,6 +156,10 @@ def _entry_payload(entry: RegistryEntry) -> dict[str, Any]:
     }
 
 
+def _not_found(exc: KeyError) -> HTTPException:
+    return HTTPException(status_code=404, detail=str(exc.args[0] if exc.args else exc))
+
+
 def create_registry_app(registry: InMemoryAgentRegistry | None = None) -> FastAPI:
     """FastAPI surface for the registry. The registry API is unauthenticated."""
     app = FastAPI(title="Micro-Agent Cloud Registry", version="0.1.0")
@@ -161,7 +167,12 @@ def create_registry_app(registry: InMemoryAgentRegistry | None = None) -> FastAP
     app.state.registry = reg
 
     @app.put("/registry/agents/{name}/{version}")
-    async def register_agent(name: str, version: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def register_agent(
+        name: str,
+        version: str,
+        payload: dict[str, Any],
+        ttl_seconds: float | None = None,
+    ) -> dict[str, Any]:
         body_name = str(payload.get("name", name))
         body_version = str(payload.get("version", version))
         if body_name != name or body_version != version:
@@ -171,17 +182,21 @@ def create_registry_app(registry: InMemoryAgentRegistry | None = None) -> FastAP
             )
         try:
             descriptor = AgentDescriptor.from_dict({**payload, "name": name, "version": version})
-            entry = await reg.register(descriptor)
+            entry = await reg.register(descriptor, ttl_seconds=ttl_seconds)
         except DescriptorError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _entry_payload(entry)
 
     @app.post("/registry/agents/{name}/{version}/heartbeat")
-    async def heartbeat(name: str, version: str) -> dict[str, Any]:
+    async def heartbeat(
+        name: str, version: str, ttl_seconds: float | None = None
+    ) -> dict[str, Any]:
         try:
-            entry = await reg.heartbeat(name, version)
+            entry = await reg.heartbeat(name, version, ttl_seconds=ttl_seconds)
         except UnknownAgentError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise _not_found(exc) from exc
+        except DescriptorError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _entry_payload(entry)
 
     @app.delete("/registry/agents/{name}/{version}")
@@ -189,7 +204,7 @@ def create_registry_app(registry: InMemoryAgentRegistry | None = None) -> FastAP
         try:
             await reg.deregister(name, version)
         except UnknownAgentError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise _not_found(exc) from exc
         return {"status": "deregistered", "name": name, "version": version}
 
     @app.get("/registry/agents")
@@ -207,7 +222,8 @@ def create_registry_app(registry: InMemoryAgentRegistry | None = None) -> FastAP
         try:
             entry = await reg.get(name, version)
         except UnknownAgentError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            detail = str(exc.args[0] if exc.args else exc)
+            raise HTTPException(status_code=404, detail=detail) from exc
         return _entry_payload(entry)
 
     @app.get("/health/ready")
