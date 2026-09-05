@@ -88,6 +88,25 @@ def test_google_adk_runtime_accepts_native_google_model_selection(monkeypatch):
         asyncio.run(bootstrap.runtime.close())
 
 
+def test_google_adk_runtime_resolves_native_model_credential(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("GOOGLE_MODEL_TOKEN", "native-secret")
+    bootstrap = build_runtime(
+        _definition(
+            provider="google",
+            model_id="gemini-2.5-flash",
+            credential_ref="GOOGLE_MODEL_TOKEN",
+        )
+    )
+    try:
+        assert bootstrap.resolved.model_api_key == "native-secret"
+        assert bootstrap.runtime._config.model_api_key == "native-secret"
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
 def test_unsupported_runtime_fails_before_runtime_creation(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "unknown")
     with pytest.raises(BootstrapError, match="Unsupported runtime"):

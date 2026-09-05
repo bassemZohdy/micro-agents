@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 714 collected | 613 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 716 collected | 615 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -114,8 +114,9 @@ Implemented:
   or workload identity; a source-level guard test enforces this boundary
 - executable bootstrap selects the custom loop by default or the Google ADK
   adapter through `MICRO_AGENT_RUNTIME`; ADK declarations that still cannot
-  be mapped (external session state, model credential references) fail fast
-  rather than being silently ignored
+  be mapped (external session state) fail fast rather than being silently
+  ignored, while native model credentials are resolved into an owned GenAI
+  client
 - declared MCP servers connect through the official SDK wire client at
   startup when the `mcp` extra is installed; without it, startup fails with
   an installation message instead of silently ignoring the declarations

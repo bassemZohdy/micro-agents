@@ -463,8 +463,9 @@ construct knowledge and credential providers from configuration and validate
 declared knowledge sources and credential references; native tools outside
 the built-in registry also fail fast in both runtimes. Declarations that
 still cannot be mapped under Google ADK — external (SQLite or remote)
-session state and model credential references — fail fast; they are not
-silently ignored.
+      session state — fail fast; model credential references are resolved at
+      bootstrap and native Gemini receives the resolved API key through an
+      owned Google GenAI client.
 
 OpenAI-compatible model endpoints preserve any path prefix in the configured
 URL. For example, `https://llm.example.com/v1` is probed at

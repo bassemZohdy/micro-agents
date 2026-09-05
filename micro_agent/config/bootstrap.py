@@ -166,6 +166,7 @@ def build_runtime(
         runtime: AgentRuntime = GoogleAdkRuntime(
             GoogleAdkRuntimeConfig(
                 model_provider=provider,
+                model_api_key=resolved.model_api_key,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
                 knowledge_provider=knowledge_provider,
@@ -242,12 +243,6 @@ def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: Reso
             "Google ADK runtime maps only in-memory sessions; use session "
             "persistence 'none' or 'memory' with a memory:// endpoint, or use "
             "the custom runtime for sqlite/external state"
-        )
-    model = definition.spec.dependencies.model
-    if model is not None and model.credential_ref:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map model credential references; "
-            "use the custom runtime or remove the credential reference"
         )
     if config.idempotency_endpoint:
         raise BootstrapError(

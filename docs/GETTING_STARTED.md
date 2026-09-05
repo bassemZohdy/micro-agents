@@ -138,8 +138,9 @@ runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
 The adapter owns ADK agent, runner, and session objects internally; only the
 runtime-neutral `AgentRuntime` contracts are exposed to callers. Memory, MCP,
 policy, knowledge, credential, and telemetry mappings are validated at startup;
-unsupported external session bindings and model credential references fail
-fast.
+unsupported external session bindings fail fast, while model credential
+references resolve through the configured provider and native Google models
+use an owned GenAI API-key client.
 
 ## Container
 

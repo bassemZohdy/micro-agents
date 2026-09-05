@@ -16,8 +16,8 @@ Declared services map onto ADK-native constructs:
   :class:`McpConnectionManager`,
 - telemetry maps to spans, metrics, and structured logs around the runner.
 
-Declarations the adapter cannot map (credential references and external
-state bindings) keep failing fast in the bootstrap instead of being silently
+Declarations the adapter cannot map (external state bindings and distributed
+idempotency) keep failing fast in the bootstrap instead of being silently
 ignored. Knowledge providers use the same runtime-neutral retrieval contract as
 the custom runtime and are injected as bounded reference context per invocation.
 """
@@ -116,6 +116,7 @@ class GoogleAdkRuntimeConfig:
     memory_policy: MemoryPolicy | None = None
     app_name_prefix: str = "micro-agent"
     user_id: str = "micro-agent-user"
+    model_api_key: str | None = field(default=None, repr=False)
 
     @property
     def effective_memory_policy(self) -> MemoryPolicy:
@@ -129,6 +130,7 @@ class GoogleAdkRuntime(AgentRuntime):
         self._config = config or GoogleAdkRuntimeConfig()
         self._runners: list[Any] = []
         self._model_provider = self._config.model_provider
+        self._native_model_clients: list[Any] = []
         self._telemetry = self._config.telemetry or Telemetry.from_environment()
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
@@ -162,6 +164,7 @@ class GoogleAdkRuntime(AgentRuntime):
             provider=model_ref.provider if model_ref else None,
             model_id=model_ref.model_id if model_ref else None,
             endpoint=model_ref.endpoint if model_ref else None,
+            credential_ref=model_ref.credential_ref if model_ref else None,
             generation=structured_output_generation(
                 model_ref.generation if model_ref else {},
                 definition.spec.behavior.output_contract,
@@ -390,6 +393,13 @@ class GoogleAdkRuntime(AgentRuntime):
                     await result
             closed.add(id(runner))
         self._runners.clear()
+        closed_clients: set[int] = set()
+        for client in self._native_model_clients:
+            if id(client) in closed_clients:
+                continue
+            await _close_native_model_client(client)
+            closed_clients.add(id(client))
+        self._native_model_clients.clear()
         if self._model_provider is not None:
             close = getattr(self._model_provider, "aclose", None)
             if close is not None:
@@ -704,6 +714,15 @@ class GoogleAdkRuntime(AgentRuntime):
                 "Google ADK requires a Google model or an injected model_factory/provider; "
                 f"provider '{config.provider}' is not a native ADK model"
             )
+        if self._config.model_api_key is not None:
+            try:
+                from google.adk.models import Gemini
+                from google.genai import Client
+            except ImportError as exc:  # pragma: no cover - guarded by _load_adk
+                raise GoogleAdkError("Google ADK credential APIs are unavailable") from exc
+            client = Client(api_key=self._config.model_api_key)
+            self._native_model_clients.append(client)
+            return Gemini(model=model, client=client)
         return model
 
     def _resolve_tools(self, definition: MicroAgentDefinition) -> dict[str, Tool]:
@@ -896,6 +915,21 @@ def _adk_streaming_run_config() -> Any:
     except ImportError as exc:  # pragma: no cover - guarded by _load_adk
         raise GoogleAdkError("Google ADK streaming APIs are unavailable") from exc
     return RunConfig(streaming_mode=StreamingMode.SSE)
+
+
+async def _close_native_model_client(client: Any) -> None:
+    """Close both sync and async transports owned by a native ADK client."""
+    close = getattr(client, "close", None)
+    if close is not None:
+        result = close()
+        if hasattr(result, "__await__"):
+            await result
+    async_client = getattr(client, "aio", None)
+    aclose = getattr(async_client, "aclose", None)
+    if aclose is not None:
+        result = aclose()
+        if hasattr(result, "__await__"):
+            await result
 
 
 def _messages_from_adk(llm_request: Any) -> list[dict[str, Any]]:

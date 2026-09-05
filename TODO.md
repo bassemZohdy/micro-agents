@@ -99,8 +99,10 @@ or the relevant ADR.
       See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).
 - [ ] Implement external session state bindings for the Google ADK adapter.
       Currently rejects SQLite and remote session persistence.
-- [ ] Implement model credential reference resolution for the Google ADK
-      adapter. Currently fails on credential refs on the model dependency.
+- [x] Implement model credential reference resolution for the Google ADK
+      adapter. Bootstrap resolves the reference through the configured
+      credential provider and native Gemini receives an owned API-key client,
+      covered by bootstrap and ADK lifecycle tests.
 - [ ] Prove runtime portability: run the same definition through both the
       custom loop and the Google ADK adapter under shared contract tests
       (ADR 0001 consequence).
