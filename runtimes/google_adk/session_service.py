@@ -1,5 +1,9 @@
 """Google ADK session service backed by the runtime-neutral session SPI."""
 
+# Google ADK is optional and does not publish a py.typed marker. Keep the
+# dynamic SDK boundary consistent with runtimes/google_adk/runtime.py.
+# mypy: disable_error_code="import-not-found,import-untyped,misc"
+
 from __future__ import annotations
 
 from copy import deepcopy
