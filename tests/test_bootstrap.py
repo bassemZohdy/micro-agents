@@ -2,6 +2,7 @@
 
 import pytest
 
+from micro_agent.checkpoint import SessionCheckpointStore
 from micro_agent.config import BootstrapError, EnvironmentOverlay, build_runtime
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
@@ -128,11 +129,20 @@ def test_google_adk_runtime_accepts_in_memory_session_persistence(monkeypatch):
         asyncio.run(bootstrap.runtime.close())
 
 
-def test_google_adk_runtime_rejects_sqlite_session_persistence(monkeypatch):
+def test_google_adk_runtime_constructs_sqlite_session_persistence(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
     monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "sqlite:///:memory:")
-    with pytest.raises(BootstrapError, match="only in-memory sessions"):
-        build_runtime(_definition(provider="fake"))
+    bootstrap = build_runtime(
+        _definition(provider="fake", session={"persistence": "sqlite", "ttl_seconds": 60})
+    )
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert isinstance(bootstrap.runtime._config.session_provider, SqliteSessionProvider)
+        assert isinstance(bootstrap.runtime._config.checkpoint_store, SessionCheckpointStore)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
 
 
 def test_bare_string_model_reference_requires_explicit_provider():
@@ -310,6 +320,37 @@ async def test_external_redis_session_persistence_is_constructed(monkeypatch):
         await bootstrap.runtime.close()
 
 
+def test_google_adk_external_redis_state_bindings_are_constructed(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        pass
+
+    monkeypatch.setattr(
+        "micro_agent.session.redis._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: FakeRedisClient()),
+    )
+    monkeypatch.setattr(
+        "micro_agent.security.redis_operations._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: FakeRedisClient()),
+    )
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
+    monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "redis://sessions.example.test/0")
+    monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://operations.example.test/0")
+    bootstrap = build_runtime(
+        _definition(provider="fake", session={"persistence": "external", "ttl_seconds": 60})
+    )
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert isinstance(bootstrap.runtime._config.session_provider, RedisSessionProvider)
+        assert isinstance(bootstrap.runtime._config.checkpoint_store, SessionCheckpointStore)
+        assert isinstance(bootstrap.runtime._config.operation_registry, RedisOperationRegistry)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
 def test_external_postgres_endpoints_construct_providers(monkeypatch):
     pytest.importorskip("asyncpg")
     monkeypatch.setenv("MICRO_AGENT_SESSION_ENDPOINT", "postgres://db.example.test/agents")
@@ -451,11 +492,26 @@ async def test_external_redis_approval_store_is_constructed(monkeypatch):
         await bootstrap.runtime.close()
 
 
-def test_google_adk_rejects_distributed_idempotency(monkeypatch):
+def test_google_adk_constructs_distributed_idempotency(monkeypatch):
+    import types
+
+    class FakeRedisClient:
+        pass
+
+    monkeypatch.setattr(
+        "micro_agent.security.redis_operations._import_redis",
+        lambda: types.SimpleNamespace(from_url=lambda *_args, **_kwargs: FakeRedisClient()),
+    )
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
     monkeypatch.setenv("MICRO_AGENT_IDEMPOTENCY_ENDPOINT", "redis://operations.example.test/0")
-    with pytest.raises(BootstrapError, match="does not yet map distributed idempotency"):
-        build_runtime(_definition(provider="fake"))
+    bootstrap = build_runtime(_definition(provider="fake"))
+    try:
+        assert isinstance(bootstrap.runtime, GoogleAdkRuntime)
+        assert isinstance(bootstrap.runtime._config.operation_registry, RedisOperationRegistry)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
 
 
 def test_google_adk_rejects_durable_approval_store(monkeypatch):

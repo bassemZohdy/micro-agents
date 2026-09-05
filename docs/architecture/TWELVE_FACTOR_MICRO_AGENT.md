@@ -310,8 +310,8 @@ The custom runtime's optional Redis operation registry shares claims and
 completed results across replicas (`MICRO_AGENT_IDEMPOTENCY_ENDPOINT`) and
 expires them with a provider TTL. Operation, session, and memory keys are
 scoped by verified tenant when available; snapshots carry optimistic versions
-and stale non-zero-version writes are rejected. The Google ADK adapter rejects
-the binding until mapped.
+and stale non-zero-version writes are rejected. The Google ADK adapter wraps
+non-read-only ADK tools with the same registry contract.
 
 ### Factor 20 — Standard Interoperability
 

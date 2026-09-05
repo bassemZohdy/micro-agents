@@ -57,7 +57,8 @@ operation claims use an atomic `SET NX` reservation. The idempotency registry
 scopes operation keys by verified tenant when available. Operation, session,
 and memory records use the same tenant boundary; reads carry a version and
 stale updates raise `StateConflictError`, while zero-version writes preserve
-compatibility for legacy callers. Google ADK rejects this binding. Set
+compatibility for legacy callers. Google ADK applies the same operation
+registry to non-read-only ADK tools. Set
 `persistence: external` for shared sessions.
 
 For environment-specific model or MCP locations, keep this definition
@@ -138,7 +139,7 @@ runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
 The adapter owns ADK agent, runner, and session objects internally; only the
 runtime-neutral `AgentRuntime` contracts are exposed to callers. Memory, MCP,
 policy, knowledge, credential, and telemetry mappings are validated at startup;
-unsupported external session bindings fail fast, while model credential
+unsupported external session endpoints fail fast, while model credential
 references resolve through the configured provider and native Google models
 use an owned GenAI API-key client. Set the definition's session persistence to
 `memory` to enable process-local ADK checkpointing; resume by sending a request

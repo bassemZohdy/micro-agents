@@ -142,8 +142,9 @@ unverified calls retain the legacy provider-wide namespace). Session and memory
 records carry the same optional `tenant_id` boundary and a monotonically
 increasing `version`. Providers raise `StateConflictError` when a non-zero
 expected version is stale; a zero-version write keeps legacy unconditional
-semantics. The Google ADK runtime rejects this binding until its idempotency
-mapping is available.
+semantics. The Google ADK runtime uses the same registry for non-read-only ADK
+tool calls, so retries routed to another replica receive the stored result
+instead of executing the tool again.
 
 ## Invoke response
 

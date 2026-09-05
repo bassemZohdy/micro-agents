@@ -18,10 +18,11 @@ Declared services map onto ADK-native constructs:
 - checkpointing maps the runtime-neutral store onto ADK's resumable invocation
   flow and stores an event snapshot for cross-process restoration.
 
-Declarations the adapter cannot map (external state bindings and distributed
-idempotency) keep failing fast in the bootstrap instead of being silently
-ignored. Knowledge providers use the same runtime-neutral retrieval contract as
-the custom runtime and are injected as bounded reference context per invocation.
+External session providers map onto an ADK session-service bridge, and the
+runtime-neutral operation registry wraps side-effect tools for distributed
+idempotency. Knowledge providers use the same runtime-neutral retrieval
+contract as the custom runtime and are injected as bounded reference context
+per invocation.
 """
 
 # Google ADK is intentionally optional.  The dedicated ADK CI job installs its
@@ -35,6 +36,7 @@ the custom runtime and are injected as bounded reference context per invocation.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import time
@@ -74,16 +76,28 @@ from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
     InvocationIdentity,
+    Operation,
+    OperationRegistryProtocol,
+    OperationResult,
     PolicyEvaluator,
+    RetryClassification,
     get_invocation_identity,
     reset_invocation_identity,
     resolve_workload_identity,
     set_invocation_identity,
 )
+from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
 from micro_agent.tools.plugin import load_plugin_tools
 
 _ADK_REQUEST_CONFIRMATION_NAME = "adk_request_confirmation"
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Normalize sync local providers and async external providers."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 class GoogleAdkError(RuntimeError):
@@ -118,6 +132,8 @@ class GoogleAdkRuntimeConfig:
     telemetry: Telemetry | None = None
     memory_provider: MemoryProvider | None = None
     memory_policy: MemoryPolicy | None = None
+    session_provider: SessionProvider | None = None
+    operation_registry: OperationRegistryProtocol | None = None
     checkpoint_store: CheckpointStore | None = None
     app_name_prefix: str = "micro-agent"
     user_id: str = "micro-agent-user"
@@ -191,6 +207,7 @@ class GoogleAdkRuntime(AgentRuntime):
                 evaluator=self._policy_evaluator,
                 telemetry=self._telemetry,
                 audit=self._config.audit,
+                operation_registry=self._config.operation_registry,
                 side_effect=tool_side_effects.get(tool.metadata.name),
             )
             for tool in tools.values()
@@ -207,7 +224,11 @@ class GoogleAdkRuntime(AgentRuntime):
         session_service = (
             self._config.session_service_factory()
             if self._config.session_service_factory is not None
-            else session_service_cls()
+            else (
+                _provider_session_service(self._config.session_provider)
+                if self._config.session_provider is not None
+                else session_service_cls()
+            )
         )
         memory_service = self._build_memory_service()
         runner_kwargs: dict[str, Any] = {
@@ -296,6 +317,15 @@ class GoogleAdkRuntime(AgentRuntime):
             if not healthy:
                 raise RuntimeError("checkpoint store failed its health check at startup")
 
+        operation_registry = self._config.operation_registry
+        if operation_registry is not None:
+            try:
+                healthy = await _maybe_await(operation_registry.health_check())
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("operation registry failed its health check at startup") from exc
+            if not healthy:
+                raise RuntimeError("operation registry failed its health check at startup")
+
         memory_provider = self._config.memory_provider
         if memory_provider is not None:
             try:
@@ -364,6 +394,7 @@ class GoogleAdkRuntime(AgentRuntime):
                         evaluator=self._policy_evaluator,
                         telemetry=self._telemetry,
                         audit=self._config.audit,
+                        operation_registry=self._config.operation_registry,
                         side_effect=(agent._internal.get("tool_side_effects") or {}).get(
                             tool.metadata.name
                         ),
@@ -442,6 +473,14 @@ class GoogleAdkRuntime(AgentRuntime):
             knowledge_close = getattr(self._config.knowledge_provider, "aclose", None)
             if knowledge_close is not None:
                 await knowledge_close()
+        session_provider = self._config.session_provider
+        if session_provider is not None:
+            session_close = getattr(session_provider, "aclose", None)
+            if session_close is not None:
+                await _maybe_await(session_close())
+        operation_registry = self._config.operation_registry
+        if operation_registry is not None:
+            await _maybe_await(operation_registry.aclose())
 
     def health_probes(self) -> dict[str, DependencyProbe]:
         """Expose injected providers as the adapter's active probes."""
@@ -478,6 +517,16 @@ class GoogleAdkRuntime(AgentRuntime):
             probes["knowledge"] = _knowledge_probe
         if mcp_manager is not None:
             probes["mcp"] = _mcp_probe
+        operation_registry = self._config.operation_registry
+        if operation_registry is not None:
+
+            async def _operation_probe() -> HealthStatus | bool:
+                return cast(
+                    HealthStatus | bool,
+                    await _maybe_await(operation_registry.health_check()),
+                )
+
+            probes["operation_registry"] = _operation_probe
         return probes
 
     async def invoke(self, agent: RuntimeAgent, request: AgentRequest) -> AgentResponse:
@@ -1057,6 +1106,15 @@ def _provider_memory_service(provider: MemoryProvider) -> Any:
     return ProviderMemoryService()
 
 
+def _provider_session_service(provider: SessionProvider) -> Any:
+    """Build the ADK session service over a configured state provider."""
+    if provider is None:  # pragma: no cover - guarded by the caller
+        raise GoogleAdkError("a session provider is required")
+    from runtimes.google_adk.session_service import build_adk_session_service
+
+    return build_adk_session_service(provider)
+
+
 def _event_text(event: Any) -> str:
     content = getattr(event, "content", None)
     return "".join(
@@ -1261,6 +1319,7 @@ def _as_adk_tool(
     evaluator: PolicyEvaluator | None = None,
     telemetry: Telemetry | None = None,
     audit: AuditSink | None = None,
+    operation_registry: OperationRegistryProtocol | None = None,
     side_effect: str | None = None,
 ) -> Any:
     """Adapt a Micro-Agent tool to ADK's client-side ``BaseTool`` contract.
@@ -1358,7 +1417,67 @@ def _as_adk_tool(
                             f"denied by side-effect policy: {side_effect_decision.reason}",
                             event="policy.side_effect_denied",
                         )
-            result = await self._micro_tool.execute(args)
+            operation: Operation | None = None
+            registry = operation_registry
+            if registry is not None and self._side_effect != "read_only":
+                identity = get_invocation_identity()
+                tenant_id = (
+                    identity.user.tenant_id
+                    if identity is not None and identity.user is not None
+                    else None
+                )
+                operation = Operation(
+                    name=self._micro_tool.metadata.name,
+                    arguments=args,
+                    idempotency_key=(
+                        str(args["idempotency_key"])
+                        if args.get("idempotency_key") is not None
+                        else None
+                    ),
+                    tenant_id=tenant_id,
+                    retry_classification={
+                        "idempotent": RetryClassification.IDEMPOTENT,
+                        "unsafe": RetryClassification.UNSAFE,
+                    }.get(self._side_effect, RetryClassification.SAFE),
+                )
+                claimed, prior = await _maybe_await(registry.claim(operation))
+                if not claimed:
+                    return {
+                        "output": prior.output if prior is not None else None,
+                        "error": (
+                            "operation is already in progress"
+                            if prior is not None and prior.status == "in_progress"
+                            else (prior.error if prior is not None else None)
+                        ),
+                        "was_deduplicated": True,
+                    }
+            try:
+                result = await self._micro_tool.execute(args)
+            except Exception as exc:  # noqa: BLE001 — preserve operation outcome
+                if operation is not None and registry is not None:
+                    await _maybe_await(
+                        registry.record(
+                            operation,
+                            OperationResult(
+                                operation_id=operation.operation_id,
+                                status="failed",
+                                error=str(exc),
+                            ),
+                        )
+                    )
+                raise
+            if operation is not None and registry is not None:
+                await _maybe_await(
+                    registry.record(
+                        operation,
+                        OperationResult(
+                            operation_id=operation.operation_id,
+                            status="failed" if result.is_error else "success",
+                            output=result.output,
+                            error=result.error,
+                        ),
+                    )
+                )
             if result.is_error:
                 return {"error": result.error or f"tool '{self.name}' failed"}
             return result.output

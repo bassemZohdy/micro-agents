@@ -13,8 +13,8 @@ Constructed from configuration:
 - an MCP connection manager for declared MCP servers (a deployment may inject
   a manager that owns a real wire-protocol client factory),
 - telemetry with the configured log level,
-- built-in memory, optional Redis memory, and in-memory/SQLite session providers,
-  or an optional Redis external session provider,
+- built-in memory, optional Redis memory, and in-memory/SQLite/external session
+  providers,
 - an optional Redis operation registry for distributed idempotency,
 - a knowledge provider for declared knowledge sources (injected, or the
   built-in in-memory retriever whose startup health check fails fast until a
@@ -160,12 +160,17 @@ def build_runtime(
     )
     if runtime_name == "google-adk":
         _validate_google_adk_bindings(definition, resolved)
+        session_provider = _build_session_provider(definition, resolved)
         memory_provider = _build_memory_provider(definition, resolved)
-        checkpoint_store: CheckpointStore | None = (
-            InMemoryCheckpointStore()
-            if definition.spec.dependencies.session.persistence == "memory"
-            else None
-        )
+        operation_registry = _build_operation_registry(resolved)
+        checkpoint_store: CheckpointStore | None = None
+        if session_provider is not None:
+            checkpoint_store = SessionCheckpointStore(
+                session_provider,
+                ttl_seconds=definition.spec.dependencies.session.ttl_seconds,
+            )
+        elif definition.spec.dependencies.session.persistence == "memory":
+            checkpoint_store = InMemoryCheckpointStore()
         from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
 
         runtime: AgentRuntime = GoogleAdkRuntime(
@@ -174,6 +179,8 @@ def build_runtime(
                 model_api_key=resolved.model_api_key,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                session_provider=session_provider,
+                operation_registry=operation_registry,
                 checkpoint_store=checkpoint_store,
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
@@ -239,22 +246,8 @@ def _runtime_name(value: str | None) -> str:
 
 
 def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: ResolvedConfig) -> None:
-    """Reject declarations the optional adapter cannot map to ADK constructs."""
-    session = definition.spec.dependencies.session
-    endpoint = config.session_endpoint
-    if session.persistence not in {"none", "memory"} or (
-        endpoint and endpoint not in {"memory://", "inmemory://"}
-    ):
-        raise BootstrapError(
-            "Google ADK runtime maps only in-memory sessions; use session "
-            "persistence 'none' or 'memory' with a memory:// endpoint, or use "
-            "the custom runtime for sqlite/external state"
-        )
-    if config.idempotency_endpoint:
-        raise BootstrapError(
-            "Google ADK runtime does not yet map distributed idempotency; use "
-            "the custom runtime for MICRO_AGENT_IDEMPOTENCY_ENDPOINT"
-        )
+    """Reject only bindings that remain outside the ADK adapter contract."""
+    del definition
     if config.approval_endpoint:
         raise BootstrapError(
             "Google ADK runtime uses native approval continuations and does not map "

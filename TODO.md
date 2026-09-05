@@ -92,22 +92,23 @@ or the relevant ADR.
       provider supports it. The runtime-neutral output contract is translated
       to strict JSON Schema generation settings, covered by
       `tests/test_google_adk_runtime.py`.
-  - [x] Advertise checkpointing in the Google ADK adapter. Store-backed
-        runners enable ADK resumability and persist/restore replay-safe event
-        snapshots, covered by `tests/test_google_adk_runtime.py` and bootstrap
-        coverage.
-- [ ] Implement distributed idempotency mapping for the Google ADK adapter.
-      Currently rejects `MICRO_AGENT_IDEMPOTENCY_ENDPOINT`.
+- [x] Advertise checkpointing in the Google ADK adapter. Store-backed runners
+      enable ADK resumability and persist/restore replay-safe event snapshots,
+      covered by `tests/test_google_adk_runtime.py` and bootstrap coverage.
+- [x] Implement distributed idempotency mapping for the Google ADK adapter.
+      Store-backed operation registries now wrap non-read-only ADK tools with
+      atomic claims and result replay, covered by adapter and bootstrap tests.
       See [ADR 0011](docs/adr/0011-redis-idempotency-registry.md).
-- [ ] Implement external session state bindings for the Google ADK adapter.
-      Currently rejects SQLite and remote session persistence.
+- [x] Implement external session state bindings for the Google ADK adapter.
+      SQLite, Redis, and PostgreSQL session providers now back an ADK session
+      service bridge with JSON event/state persistence and restore coverage.
 - [x] Implement model credential reference resolution for the Google ADK
       adapter. Bootstrap resolves the reference through the configured
       credential provider and native Gemini receives an owned API-key client,
       covered by bootstrap and ADK lifecycle tests.
-- [ ] Prove runtime portability: run the same definition through both the
-      custom loop and the Google ADK adapter under shared contract tests
-      (ADR 0001 consequence).
+- [x] Prove runtime portability: shared contract coverage runs the same
+      definition and fake provider through the custom loop and Google ADK
+      adapter (ADR 0001 consequence).
 
 ### P1 — A2A protocol
 

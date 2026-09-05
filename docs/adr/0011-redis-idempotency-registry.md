@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted for the custom reference runtime. The Google ADK adapter does not map
-this provider yet and rejects the binding during bootstrap.
+Accepted for the custom reference runtime and Google ADK adapter. The Google
+ADK adapter wraps non-read-only ADK tools with the same registry contract.
 
 ## Context
 
@@ -51,8 +51,7 @@ Trade-offs and remaining work:
   version checks;
 - completion uses an ownership check before persistence, so callers must still
   choose a TTL long enough for the expected operation duration;
-- Google ADK idempotency mapping, durable knowledge, and production approval
-  state remain open work.
+- durable knowledge and production approval state remain open work.
 
 ## Alternatives considered
 

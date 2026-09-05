@@ -41,5 +41,5 @@ Trade-offs and remaining work:
 
 - Callers must decide how to merge a `StateConflictError`.
 - Unverified/local calls intentionally retain the legacy provider-wide scope.
-- Google ADK idempotency mapping and durable knowledge remain separate backlog
+- durable knowledge and production approval state remain separate backlog
   items.
