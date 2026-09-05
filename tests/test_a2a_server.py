@@ -25,7 +25,7 @@ class FakeAgentExecutor:
 
 
 class FakeTaskUpdater:
-    last: "FakeTaskUpdater | None" = None
+    last: FakeTaskUpdater | None = None
 
     def __init__(self, event_queue: object, *, task_id: str, context_id: str) -> None:
         self.event_queue = event_queue
@@ -76,7 +76,11 @@ class FakeContext:
 
 
 class FakeAgent:
-    def __init__(self, output: dict[str, object] | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        output: dict[str, object] | None = None,
+        error: Exception | None = None,
+    ) -> None:
         self.output = output or {"content": "done"}
         self.error = error
         self.request: object | None = None

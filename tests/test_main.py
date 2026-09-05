@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from argparse import Namespace
+from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -121,10 +122,8 @@ def test_main_dispatches_to_async_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main_module, "run", fake_run)
 
     def fake_asyncio_run(coroutine: object) -> None:
-        try:
+        with suppress(StopIteration):
             coroutine.send(None)  # type: ignore[attr-defined]
-        except StopIteration:
-            pass
 
     monkeypatch.setattr(main_module.asyncio, "run", fake_asyncio_run)
 
