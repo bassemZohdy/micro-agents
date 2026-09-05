@@ -14,7 +14,9 @@ Declared services map onto ADK-native constructs:
   execution and to a startup check of declared MCP servers,
 - declared MCP servers map to ADK tools discovered through the injected
   :class:`McpConnectionManager`,
-- telemetry maps to spans, metrics, and structured logs around the runner.
+- telemetry maps to spans, metrics, and structured logs around the runner,
+- checkpointing maps the runtime-neutral store onto ADK's resumable invocation
+  flow and stores an event snapshot for cross-process restoration.
 
 Declarations the adapter cannot map (external state bindings and distributed
 idempotency) keep failing fast in the bootstrap instead of being silently
@@ -41,12 +43,14 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
 
+from micro_agent.checkpoint import CheckpointRecord, CheckpointStore
 from micro_agent.core import (
     AgentCapabilities,
     AgentIdentity,
     AgentRequest,
     AgentResponse,
     AgentStreamEvent,
+    CheckpointNotFoundError,
     ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
@@ -114,6 +118,7 @@ class GoogleAdkRuntimeConfig:
     telemetry: Telemetry | None = None
     memory_provider: MemoryProvider | None = None
     memory_policy: MemoryPolicy | None = None
+    checkpoint_store: CheckpointStore | None = None
     app_name_prefix: str = "micro-agent"
     user_id: str = "micro-agent-user"
     model_api_key: str | None = field(default=None, repr=False)
@@ -151,7 +156,7 @@ class GoogleAdkRuntime(AgentRuntime):
             structured_output=bool(
                 provider_capabilities and provider_capabilities.structured_output
             ),
-            checkpointing=False,
+            checkpointing=self._config.checkpoint_store is not None,
         )
 
     async def create(self, definition: MicroAgentDefinition) -> RuntimeAgent:
@@ -205,20 +210,33 @@ class GoogleAdkRuntime(AgentRuntime):
             else session_service_cls()
         )
         memory_service = self._build_memory_service()
+        runner_kwargs: dict[str, Any] = {
+            "agent": adk_agent,
+            "app_name": app_name,
+            "session_service": session_service,
+            "memory_service": memory_service,
+        }
         if self._config.runner_factory is not None:
-            runner = self._config.runner_factory(
-                agent=adk_agent,
-                app_name=app_name,
-                session_service=session_service,
-                memory_service=memory_service,
-            )
+            if self._config.checkpoint_store is not None:
+                runner_kwargs["resumability_config"] = _adk_resumability_config()
+            runner = self._config.runner_factory(**runner_kwargs)
         else:
-            runner = runner_cls(
-                agent=adk_agent,
-                app_name=app_name,
-                session_service=session_service,
-                memory_service=memory_service,
-            )
+            if self._config.checkpoint_store is not None:
+                try:
+                    from google.adk.apps import App
+                except ImportError as exc:  # pragma: no cover - guarded by _load_adk
+                    raise GoogleAdkError("Google ADK resumability APIs are unavailable") from exc
+                runner = runner_cls(
+                    app=App(
+                        name=app_name,
+                        root_agent=adk_agent,
+                        resumability_config=_adk_resumability_config(),
+                    ),
+                    session_service=session_service,
+                    memory_service=memory_service,
+                )
+            else:
+                runner = runner_cls(**runner_kwargs)
         self._runners.append(runner)
 
         identity = AgentIdentity(
@@ -268,6 +286,15 @@ class GoogleAdkRuntime(AgentRuntime):
         """Check injected providers and connect declared MCP servers before ready."""
         if self._model_provider is not None and not await self._model_provider.health_check():
             raise RuntimeError("model provider failed its health check at startup")
+
+        checkpoint_store = self._config.checkpoint_store
+        if checkpoint_store is not None:
+            try:
+                healthy = await checkpoint_store.health_check()
+            except Exception as exc:  # noqa: BLE001 — normalize startup failures
+                raise RuntimeError("checkpoint store failed its health check at startup") from exc
+            if not healthy:
+                raise RuntimeError("checkpoint store failed its health check at startup")
 
         memory_provider = self._config.memory_provider
         if memory_provider is not None:
@@ -536,10 +563,30 @@ class GoogleAdkRuntime(AgentRuntime):
             raise ContinuationNotFoundError(
                 "Google ADK approval continuations require the original session_id"
             )
-        session_id = request.session_id or str(uuid4())
+        checkpoint_store = self._config.checkpoint_store
+        bound_identity = get_invocation_identity()
+        tenant_id = (
+            bound_identity.user.tenant_id
+            if bound_identity is not None and bound_identity.user is not None
+            else None
+        )
+        checkpoint: CheckpointRecord | None = None
+        checkpoint_id = request.checkpoint_id or request.request_id
+        if request.checkpoint_id is not None:
+            if checkpoint_store is None:
+                raise CheckpointNotFoundError("checkpointing is not configured for this runtime")
+            checkpoint = await checkpoint_store.get(request.checkpoint_id, tenant_id=tenant_id)
+            if checkpoint is None or checkpoint.agent_id != agent.identity.agent_id:
+                raise CheckpointNotFoundError("unknown, expired, or foreign checkpoint")
+            if request.input:
+                raise ValueError("checkpoint resume must not include new input")
+            if not checkpoint.session_id or not checkpoint.request_id:
+                raise CheckpointNotFoundError("checkpoint does not contain resumable ADK state")
+        session_id = (checkpoint.session_id if checkpoint is not None else None) or (
+            request.session_id or str(uuid4())
+        )
         trace_id = request.request_id or str(uuid4())
         labels = {"agent": definition.metadata.name}
-        bound_identity = get_invocation_identity()
         span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
@@ -557,7 +604,16 @@ class GoogleAdkRuntime(AgentRuntime):
         start_time = time.monotonic()
 
         async def run() -> AgentResponse:
-            if request.continuation_id is not None:
+            knowledge_counts: dict[str, int] = {}
+            if checkpoint is not None:
+                await _restore_adk_checkpoint(
+                    service,
+                    app_name,
+                    user_id,
+                    checkpoint,
+                )
+                content = None
+            elif request.continuation_id is not None:
                 session = await service.get_session(
                     app_name=app_name,
                     user_id=user_id,
@@ -574,7 +630,6 @@ class GoogleAdkRuntime(AgentRuntime):
             else:
                 await _ensure_session(service, app_name, user_id, session_id)
                 knowledge_context = ""
-                knowledge_counts: dict[str, int] = {}
                 if self._config.knowledge_provider is not None and self._knowledge_refs:
                     knowledge_context, knowledge_counts = await retrieve_knowledge_context(
                         self._config.knowledge_provider,
@@ -586,18 +641,44 @@ class GoogleAdkRuntime(AgentRuntime):
             run_kwargs: dict[str, Any] = {
                 "user_id": user_id,
                 "session_id": session_id,
-                "invocation_id": request.request_id or None,
-                "new_message": content,
+                "invocation_id": checkpoint.request_id
+                if checkpoint is not None
+                else request.request_id or None,
             }
+            if content is not None:
+                run_kwargs["new_message"] = content
             if streaming:
                 run_kwargs["run_config"] = _adk_streaming_run_config()
-            async for event in runner.run_async(**run_kwargs):
-                events.append(event)
-                if emit_delta is not None and getattr(event, "partial", False):
-                    await emit_delta(_event_text(event))
+            try:
+                async for event in runner.run_async(**run_kwargs):
+                    events.append(event)
+                    if emit_delta is not None and getattr(event, "partial", False):
+                        await emit_delta(_event_text(event))
+            except BaseException:
+                if checkpoint_store is not None and request.continuation_id is None:
+                    await _checkpoint_failed_adk_invocation(
+                        checkpoint_store,
+                        service,
+                        app_name,
+                        user_id,
+                        agent,
+                        checkpoint_id=checkpoint_id,
+                        request_id=checkpoint.request_id
+                        if checkpoint is not None
+                        else request.request_id,
+                        session_id=session_id,
+                        input_payload=(
+                            checkpoint.input_payload if checkpoint is not None else request.input
+                        ),
+                        tenant_id=tenant_id,
+                        yielded_events=events,
+                    )
+                raise
             await self._auto_store(agent, service, app_name, user_id, session_id)
             approval = _approval_metadata(events)
             if approval is not None:
+                if checkpoint_store is not None:
+                    await checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
                 pending_tools = list(approval["pending_tools"])
                 continuation_id = str(approval["continuation_id"])
                 self._audit(
@@ -624,6 +705,8 @@ class GoogleAdkRuntime(AgentRuntime):
                     },
                 )
             output = _terminal_text(events, agent._internal["adk_agent"].name)
+            if checkpoint_store is not None:
+                await checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
             return AgentResponse(
                 output={
                     "content": output,
@@ -641,6 +724,7 @@ class GoogleAdkRuntime(AgentRuntime):
                     "knowledge_sources": knowledge_counts
                     if request.continuation_id is None
                     else {},
+                    "resumed_from_checkpoint": request.checkpoint_id,
                 },
             )
 
@@ -750,6 +834,183 @@ def _load_adk() -> tuple[Any, Any, Any]:
             "Google ADK is not installed; install the optional 'adk' extra"
         ) from exc
     return LlmAgent, Runner, InMemorySessionService
+
+
+def _adk_resumability_config() -> Any:
+    """Return ADK's resumability setting for checkpoint-backed runners."""
+    try:
+        from google.adk.apps import ResumabilityConfig
+    except ImportError as exc:  # pragma: no cover - guarded by _load_adk
+        raise GoogleAdkError("Google ADK resumability APIs are unavailable") from exc
+    return ResumabilityConfig(is_resumable=True)
+
+
+async def _restore_adk_checkpoint(
+    service: Any,
+    app_name: str,
+    user_id: str,
+    checkpoint: CheckpointRecord,
+) -> None:
+    """Restore a checkpoint snapshot into the ADK session service."""
+    state = checkpoint.runtime_state.get("google_adk")
+    if not isinstance(state, dict) or state.get("version") != 1:
+        raise CheckpointNotFoundError("checkpoint does not contain resumable ADK state")
+    serialized_events = state.get("events")
+    if not isinstance(serialized_events, list) or not serialized_events:
+        raise CheckpointNotFoundError("checkpoint does not contain resumable ADK events")
+
+    try:
+        from google.adk.events import Event
+
+        events = [Event.model_validate(event) for event in serialized_events]
+    except (ImportError, TypeError, ValueError) as exc:
+        raise CheckpointNotFoundError("checkpoint contains invalid ADK event state") from exc
+
+    existing = await service.get_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=checkpoint.session_id,
+    )
+    if existing is not None:
+        await service.delete_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=checkpoint.session_id,
+        )
+
+    session = await service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=checkpoint.session_id,
+        state=state.get("session_state") if isinstance(state.get("session_state"), dict) else None,
+    )
+    for event in events:
+        await service.append_event(session=session, event=event)
+
+
+async def _checkpoint_failed_adk_invocation(
+    checkpoint_store: CheckpointStore,
+    service: Any,
+    app_name: str,
+    user_id: str,
+    agent: RuntimeAgent,
+    *,
+    checkpoint_id: str,
+    request_id: str,
+    session_id: str,
+    input_payload: dict[str, Any],
+    tenant_id: str | None,
+    yielded_events: list[Any],
+) -> None:
+    """Persist a replayable ADK snapshot after a failed invocation.
+
+    This is deliberately best effort from an exception handler: a checkpoint
+    storage failure must never hide the original model/tool error. Pending
+    non-read-only tool calls invalidate the snapshot because ADK resumption is
+    at-least-once for tools.
+    """
+    try:
+        session = await service.get_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        events = list(getattr(session, "events", []) or []) if session is not None else []
+        if not events:
+            events = list(yielded_events)
+        if not events or _adk_has_unsafe_pending_tool(agent, events, request_id):
+            await checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
+            return
+
+        serialized_events = [event.model_dump(mode="json") for event in events]
+        session_state = getattr(session, "state", {}) if session is not None else {}
+        runtime_state = {
+            "google_adk": {
+                "version": 1,
+                "events": serialized_events,
+                "session_state": dict(session_state) if isinstance(session_state, dict) else {},
+            }
+        }
+        await checkpoint_store.save(
+            CheckpointRecord(
+                checkpoint_id=checkpoint_id,
+                agent_id=agent.identity.agent_id,
+                request_id=request_id,
+                session_id=session_id,
+                input_payload=dict(input_payload),
+                messages=_checkpoint_messages_from_adk_events(events),
+                all_tool_results=_tool_results_from_events(events),
+                history_tail_length=len(events),
+                tenant_id=tenant_id,
+                runtime_state=runtime_state,
+            )
+        )
+    except BaseException:
+        # Checkpointing is recovery assistance; it must not mask the failure
+        # that caused the invocation to stop.
+        return
+
+
+def _adk_has_unsafe_pending_tool(
+    agent: RuntimeAgent,
+    events: list[Any],
+    invocation_id: str,
+) -> bool:
+    """Return true when resumption could repeat a non-read-only tool call."""
+    calls: dict[str, str] = {}
+    responses: set[str] = set()
+    for event in events:
+        if getattr(event, "invocation_id", None) != invocation_id:
+            continue
+        content = getattr(event, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            function_call = getattr(part, "function_call", None)
+            if function_call is not None and getattr(function_call, "id", None):
+                name = str(getattr(function_call, "name", ""))
+                if name != _ADK_REQUEST_CONFIRMATION_NAME:
+                    calls[str(function_call.id)] = name
+            function_response = getattr(part, "function_response", None)
+            if function_response is not None and getattr(function_response, "id", None):
+                responses.add(str(function_response.id))
+
+    return any(
+        not _adk_tool_is_replay_safe(agent, name)
+        for call_id, name in calls.items()
+        if call_id not in responses
+    )
+
+
+def _adk_tool_is_replay_safe(agent: RuntimeAgent, name: str) -> bool:
+    """Resolve an ADK tool name to a fail-closed read-only declaration."""
+    side_effects = agent._internal.get("tool_side_effects") or {}
+    classification = side_effects.get(name)
+    if classification is None:
+        for declared_name, declared_classification in side_effects.items():
+            if re.sub(r"[^A-Za-z0-9_]", "_", str(declared_name)) == name:
+                classification = declared_classification
+                break
+    if classification is not None:
+        return str(classification) == "read_only"
+
+    for tool in agent._internal.get("adk_agent").tools or []:
+        if getattr(tool, "name", None) == name:
+            return str(getattr(tool, "_side_effect", "unsafe")) == "read_only"
+    return False
+
+
+def _checkpoint_messages_from_adk_events(events: list[Any]) -> list[dict[str, Any]]:
+    """Provide a runtime-neutral transcript alongside opaque ADK state."""
+    messages: list[dict[str, Any]] = []
+    for event in events:
+        text = _event_text(event)
+        author = str(getattr(event, "author", "") or "assistant")
+        message: dict[str, Any] = {
+            "role": "assistant" if author not in {"user", "tool"} else author,
+            "content": text,
+        }
+        if text or message["role"] in {"user", "tool"}:
+            messages.append(message)
+    return messages
 
 
 def _provider_memory_service(provider: MemoryProvider) -> Any:

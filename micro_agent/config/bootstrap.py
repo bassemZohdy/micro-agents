@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from micro_agent.checkpoint import SessionCheckpointStore
+from micro_agent.checkpoint import CheckpointStore, InMemoryCheckpointStore, SessionCheckpointStore
 from micro_agent.config.config import (
     EnvironmentConfig,
     EnvironmentOverlay,
@@ -161,6 +161,11 @@ def build_runtime(
     if runtime_name == "google-adk":
         _validate_google_adk_bindings(definition, resolved)
         memory_provider = _build_memory_provider(definition, resolved)
+        checkpoint_store: CheckpointStore | None = (
+            InMemoryCheckpointStore()
+            if definition.spec.dependencies.session.persistence == "memory"
+            else None
+        )
         from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
 
         runtime: AgentRuntime = GoogleAdkRuntime(
@@ -169,6 +174,7 @@ def build_runtime(
                 model_api_key=resolved.model_api_key,
                 memory_provider=memory_provider,
                 memory_policy=MemoryPolicy() if memory_provider is not None else None,
+                checkpoint_store=checkpoint_store,
                 knowledge_provider=knowledge_provider,
                 mcp_manager=mcp,
                 policy=effective_policy,

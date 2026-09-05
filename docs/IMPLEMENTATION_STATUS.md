@@ -138,12 +138,12 @@ Implemented:
 - retry attempts are bounded by definition-level attempt and wall-clock
   budgets, with exponential backoff and optional jitter; defaults preserve one
   immediate retry
-- checkpoint persistence/resume is capability-gated: the custom runtime stores
-  exact replay-safe model boundaries, invalidates checkpoints before
-  non-read-only tools, and resumes explicitly by checkpoint id when a store is
-  configured
+- checkpoint persistence/resume is capability-gated: both runtimes store
+  replay-safe boundaries and resume explicitly by checkpoint id when a store
+  is configured; the Google ADK adapter persists an ADK event/state snapshot
+  and invalidates checkpoints before a pending non-read-only tool can replay
 
-Current custom-runtime capability matrix:
+Current runtime capability matrix:
 
 | Capability | Availability | Notes |
 |---|---|---|
@@ -152,16 +152,15 @@ Current custom-runtime capability matrix:
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
 | `a2a` | transport-level | the runtime flag remains false; the official SDK transport provides the non-streaming task protocol separately |
-| `checkpointing` | configured | true for the custom runtime when a checkpoint store is injected; the Google ADK adapter does not advertise it |
+| `checkpointing` | configured | true when a checkpoint store is injected; Google ADK additionally requires its ADK resumability configuration and stores an event/state snapshot |
 
 Gaps:
 
 - policy references cannot yet resolve from external policy *stores*; the
   bootstrap accepts an injected policy or a policy resolver callable, and
   fails fast when neither can satisfy a declared reference
-- the Google ADK adapter does not yet advertise checkpointing, and it rejects
-  distributed idempotency/session mappings that have not been implemented
-  through native ADK services
+- the Google ADK adapter still rejects distributed idempotency/session mappings
+  that have not been implemented through native ADK services
 
 ### Performance and resource budgets
 

@@ -463,9 +463,12 @@ construct knowledge and credential providers from configuration and validate
 declared knowledge sources and credential references; native tools outside
 the built-in registry also fail fast in both runtimes. Declarations that
 still cannot be mapped under Google ADK — external (SQLite or remote)
-      session state — fail fast; model credential references are resolved at
-      bootstrap and native Gemini receives the resolved API key through an
-      owned Google GenAI client.
+session state — fail fast; model credential references are resolved at
+bootstrap and native Gemini receives the resolved API key through an
+owned Google GenAI client. When the definition selects in-memory session
+persistence, bootstrap also enables process-local checkpointing; a
+checkpoint resume restores the ADK event/state snapshot and continues
+the original invocation.
 
 OpenAI-compatible model endpoints preserve any path prefix in the configured
 URL. For example, `https://llm.example.com/v1` is probed at

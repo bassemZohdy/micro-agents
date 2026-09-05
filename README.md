@@ -160,7 +160,9 @@ API-key client. Install
 `MICRO_AGENT_SESSION_ENDPOINT=redis://...` for the `external` session mode, or
 `MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for shared memory, and
 `MICRO_AGENT_IDEMPOTENCY_ENDPOINT=redis://...` for distributed operation
-deduplication. Redis writes use transactional pipelines and key TTLs so
+deduplication. A Google ADK definition using `session.persistence: memory`
+also enables process-local checkpointing and ADK invocation resume. Redis
+writes use transactional pipelines and key TTLs so
 independently scaled processes share state. Operation, session, and memory
 records are scoped by the verified tenant when one is available. Provider reads
 return versioned snapshots; updates advance the version and reject stale
