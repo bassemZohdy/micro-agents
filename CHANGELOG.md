@@ -4,6 +4,13 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Verification and test coverage
+
+- Added direct unit coverage for the SQLite session provider, executable CLI,
+  approval and credential stores, plugin loading, and the A2A server bridge.
+  Added import smoke coverage for the remaining runtime submodules and an
+  80% coverage floor in `pyproject.toml`.
+
 ### Cloud (C2)
 
 - Added the versioned distributed-configuration plane to the `cloud`
