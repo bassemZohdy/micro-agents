@@ -1,0 +1,2585 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Architecture and reference framework for independently deployable AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://bassemzohdy.github.io/micro-agents/CONFIGURATION/">
+      
+      
+        <link rel="prev" href="../IMPLEMENTATION_STATUS/">
+      
+      
+        <link rel="next" href="../CHECKPOINTING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration - Micro-Agents</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Micro-Agents" class="md-header__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Micro-Agents
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Micro-Agents" class="md-nav__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Micro-Agents
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GETTING_STARTED/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMPLEMENTATION_STATUS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables-recognized-by-resolve_config-and-telemetry-bootstrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables recognized by resolve_config() and telemetry bootstrap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowledge-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-endpoint-overlays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment endpoint overlays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-compatibility-fixtures-and-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API compatibility fixtures and migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opentelemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenTelemetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approval-continuation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approval continuation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-side-effect-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool side-effect classification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-the-tool-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending the tool registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workload-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workload identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-versus-deployment-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition versus deployment configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invocation-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-fake-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development fake mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHECKPOINTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checkpointing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STREAMING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STRUCTURED_OUTPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_REGISTRY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_CONFIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STANDARDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_18" id="__nav_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/MICRO_AGENT_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/TWELVE_FACTOR_MICRO_AGENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Twelve-Factor Micro-Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/CLOUD_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Control-Plane Architecture (C0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Schema
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/micro-agent-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Definition v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-runtime-neutral-definition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Runtime-neutral definition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-adk-first-runtime-fake-model-ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 One runtime first
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-telemetry-facade-before-otel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 Telemetry facade before OTel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-security-and-health-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Security and health modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-deterministic-policy-enforcement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 Deterministic policy enforcement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-sqlite-session-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 SQLite development persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-stable-protocol-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 Stable protocol baselines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-runtime-adapter-truthfulness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 Runtime adapter truthfulness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-compat-policy-and-reexport-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Compatibility policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-redis-session-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Redis session provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-redis-memory-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 Redis memory provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-redis-idempotency-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Redis idempotency registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-versioned-tenant-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Versioned tenant state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-cloud-control-plane-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Cloud control-plane boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-minimal-cloud-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Minimal cloud registry and discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-versioned-cloud-config-plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Versioned cloud config plane
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gateway-edge-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 Gateway edge policy and resilience
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-observability-aggregation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Read-mostly observability aggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables-recognized-by-resolve_config-and-telemetry-bootstrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables recognized by resolve_config() and telemetry bootstrap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowledge-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-endpoint-overlays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment endpoint overlays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-compatibility-fixtures-and-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API compatibility fixtures and migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opentelemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenTelemetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approval-continuation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approval continuation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-side-effect-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool side-effect classification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-the-tool-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending the tool registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workload-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workload identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-versus-deployment-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition versus deployment configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invocation-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-fake-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development fake mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-reference">Configuration Reference</h1>
+<h2 id="configuration-layers">Configuration layers</h2>
+<p>The intended precedence is:</p>
+<pre><code class="language-text">framework defaults
+    &lt; definition
+    &lt; environment configuration
+    &lt; environment variables
+    &lt; resolved secret binding
+</code></pre>
+<p><code>micro_agent.config.resolve_config()</code> implements this precedence, and the
+executable bootstrap uses it to construct the configured model provider before
+the service becomes ready.</p>
+<h2 id="environment-variables-recognized-by-resolve_config-and-telemetry-bootstrap">Environment variables recognized by <code>resolve_config()</code> and telemetry bootstrap</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Resolved field</th>
+<th>Bootstrap status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MICRO_AGENT_RUNTIME</code></td>
+<td><code>runtime</code></td>
+<td>wired; <code>custom</code> (default) or <code>google-adk</code> selects the runtime implementation</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_MODEL_ENDPOINT</code></td>
+<td><code>model_endpoint</code></td>
+<td>wired; selects OpenAI-compatible provider when set</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_MODEL_ID</code></td>
+<td><code>model_id</code></td>
+<td>wired; overrides the provider model ID without changing the logical definition ref</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_MODEL_API_KEY</code></td>
+<td><code>model_api_key</code></td>
+<td>wired; kept in provider memory only</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_MODEL_PROVIDER</code></td>
+<td><code>model_provider</code></td>
+<td>wired; <code>fake</code> or OpenAI-compatible aliases</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_MEMORY_ENDPOINT</code></td>
+<td><code>memory_endpoint</code></td>
+<td>wired for built-in memory, Redis (<code>redis://</code>/<code>rediss://</code>), or PostgreSQL (<code>postgres://</code>/<code>postgresql://</code>) memory; unsupported endpoints fail fast</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_SESSION_ENDPOINT</code></td>
+<td><code>session_endpoint</code></td>
+<td>wired for SQLite, Redis (<code>redis://</code>/<code>rediss://</code>), or PostgreSQL (<code>postgres://</code>/<code>postgresql://</code>) bindings; unsupported external endpoints fail fast</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_IDEMPOTENCY_ENDPOINT</code></td>
+<td><code>idempotency_endpoint</code></td>
+<td>wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_APPROVAL_ENDPOINT</code></td>
+<td><code>approval_endpoint</code></td>
+<td>wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_LOG_LEVEL</code></td>
+<td><code>log_level</code></td>
+<td>wired; applied to Uvicorn logging</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_CORS_ORIGINS</code></td>
+<td><code>cors_origins</code></td>
+<td>wired; comma-separated absolute HTTP(S) origins, or <code>*</code> alone</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_ENABLED</code></td>
+<td>telemetry bootstrap</td>
+<td>wired; opt-in OpenTelemetry instrumentation (<code>true</code>/<code>false</code>, default <code>false</code>)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_SERVICE_NAME</code></td>
+<td>telemetry bootstrap</td>
+<td>wired; service name for standard traces/metrics (falls back to <code>OTEL_SERVICE_NAME</code>)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_CAPTURE_CONTENT</code></td>
+<td>telemetry bootstrap</td>
+<td>wired; opt-in bounded content attributes (default <code>false</code>)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_MAX_ATTRIBUTE_LENGTH</code></td>
+<td>telemetry bootstrap</td>
+<td>wired; positive bound for attribute/label strings (default <code>256</code>)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_MAX_LABEL_VALUES</code></td>
+<td>telemetry bootstrap</td>
+<td>wired; maximum distinct values per metric label (default <code>100</code>, overflow is <code>[OTHER]</code>)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_INPUT_COST_PER_1K_USD</code></td>
+<td>telemetry bootstrap</td>
+<td>optional non-negative input-token price used for <code>model_cost_usd_total</code></td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_OTEL_OUTPUT_COST_PER_1K_USD</code></td>
+<td>telemetry bootstrap</td>
+<td>optional non-negative output-token price used for <code>model_cost_usd_total</code></td>
+</tr>
+</tbody>
+</table>
+<p>When a definition declares <code>memory</code>, the bootstrap constructs the built-in
+in-memory provider when <code>MICRO_AGENT_MEMORY_ENDPOINT</code> is <code>memory://</code> or
+<code>inmemory://</code> (or unset). A <code>redis://</code> or <code>rediss://</code> endpoint selects the
+optional Redis memory provider, which stores scoped JSON records in a shared
+namespace, enforces <code>MemoryPolicy</code> TTL/capacity limits, and cleans expired
+records. A <code>postgres://</code> or <code>postgresql://</code> endpoint selects the optional
+PostgreSQL memory provider, which stores tenant- and scope-partitioned
+versioned entries with optimistic-conflict detection. Other endpoints fail
+fast until a matching provider is installed.
+Session persistence <code>memory</code> constructs an in-memory provider.
+Persistence <code>sqlite</code> accepts <code>MICRO_AGENT_SESSION_ENDPOINT</code> as
+<code>sqlite:///absolute/path</code> (or a plain SQLite path) and defaults to <code>:memory:</code>
+for development. Persistence <code>external</code> accepts <code>redis://</code> or <code>rediss://</code>
+endpoints when the optional <code>redis</code> extra is installed
+(<code>pip install 'micro-agents[redis]'</code>), or <code>postgres://</code>/<code>postgresql://</code>
+endpoints when the optional <code>postgres</code> extra is installed
+(<code>pip install 'micro-agents[postgres]'</code>). The Redis provider uses transactional
+writes, Redis key TTLs, and a shared index so independently scaled processes
+can share session state; the PostgreSQL provider guards updates with stored
+version checks so a stale writer raises <code>StateConflictError</code> instead of
+losing its update. Other endpoints fail fast; the declaration is never
+silently downgraded to local state. An endpoint without a matching definition
+is also rejected so configuration cannot be accidentally ignored.</p>
+<p>The custom runtime and Google ADK adapter can share operation reservations and
+completed results across replicas with <code>MICRO_AGENT_IDEMPOTENCY_ENDPOINT</code>.
+Redis (<code>redis://</code> or
+<code>rediss://</code>) is supported when the optional client is installed, and
+PostgreSQL (<code>postgres://</code>/<code>postgresql://</code>) when the optional <code>postgres</code> extra
+is installed. Reservations are claimed with one atomic write (Redis <code>SET ...
+NX</code>, PostgreSQL <code>INSERT ... ON CONFLICT DO NOTHING</code>) and completed results
+expire after the provider TTL (one day by default). When a verified tenant identity is present, operation
+keys are namespaced by that tenant; unverified/local calls retain the legacy
+provider-wide namespace. Session and memory records use the same verified
+tenant boundary. Reads return a versioned snapshot (starting at version 1),
+and writing a stale snapshot raises <code>StateConflictError</code>; zero-version writes
+retain the legacy unconditional behavior. Google ADK wraps non-read-only ADK
+tool calls with the same registry claim and result-replay contract.</p>
+<p>Approval continuations are process-local by default. Set
+<code>MICRO_AGENT_APPROVAL_ENDPOINT</code> to a <code>redis://</code> or <code>rediss://</code> URL, or inject
+<code>RedisApprovalStore</code>/another <code>ApprovalStore</code> into <code>build_runtime</code>, to share
+pending approvals across custom-runtime replicas. Records carry an absolute
+expiry timestamp as well as a Redis TTL, so expired or malformed records are
+discarded safely after worker restarts. The Google ADK runtime uses its native
+approval-continuation protocol and rejects this binding.</p>
+<h2 id="knowledge-retrieval">Knowledge retrieval</h2>
+<p>Knowledge is externally supplied, read-only domain context; it is not memory
+and is never persisted into session state. Each declared source has bounded
+retrieval controls:</p>
+<pre><code class="language-yaml">spec:
+  dependencies:
+    knowledge:
+      - ref: policy-kb
+        source_type: document
+        version: &quot;2026.09&quot;
+        max_results: 5
+        max_context_characters: 4000
+</code></pre>
+<p>At invocation time the runtime deterministically flattens the complete input
+object into the retrieval query, visits sources in declaration order, and
+preserves each provider's result ordering. Exact duplicate content is removed.
+Each source is capped by <code>max_results</code> and <code>max_context_characters</code>; the merged
+context is also capped at 32,768 content characters. Retrieval errors fail the
+invocation rather than silently removing declared knowledge. Source health is
+probed before readiness.</p>
+<p>Both the custom runtime and Google ADK adapter use the same
+<code>KnowledgeRetriever</code> SPI and context builder. Retrieved content is framed as
+untrusted reference data: it cannot override system instructions, security
+policy, or the caller request. The custom runtime appends this context to the
+system prompt without persisting it; the Google ADK adapter injects the same
+framed context into the per-invocation user content because ADK system
+instructions are constructed when the agent is created. Deployments may inject
+a <code>KnowledgeRetriever</code> into <code>build_runtime</code>; without one, a declared source
+uses the empty in-memory retriever and therefore fails its startup health check
+instead of pretending knowledge is available.</p>
+<p>HTTP CORS is disabled unless <code>MICRO_AGENT_CORS_ORIGINS</code> is set. The executable
+passes this allowlist to <code>create_app</code>; application embedders can use the same
+policy with <code>create_app(cors_origins=[...])</code>. The default policy never enables
+credentials. Rate limiting is intentionally an injected <code>RateLimiter</code> hook,
+not an environment-selected local counter; deployments should provide a
+shared gateway or datastore implementation to <code>create_app(rate_limiter=...)</code>.</p>
+<pre><code class="language-bash">pip install 'micro-agents[redis]'
+export MICRO_AGENT_SESSION_ENDPOINT='rediss://sessions.example:6380/0'
+export MICRO_AGENT_IDEMPOTENCY_ENDPOINT='rediss://operations.example:6380/0'
+</code></pre>
+<h2 id="deployment-endpoint-overlays">Deployment endpoint overlays</h2>
+<p>Keep the definition portable and bind environment-specific service locations
+at bootstrap time with <code>EnvironmentOverlay</code>:</p>
+<pre><code class="language-python">from micro_agent.config import EnvironmentOverlay, build_runtime
+
+overlay = EnvironmentOverlay(
+    model_endpoint=&quot;https://staging-llm.example.com/v1&quot;,
+    mcp_endpoints={&quot;rules&quot;: &quot;https://staging-mcp.example.com&quot;},
+    memory_endpoint=&quot;memory://&quot;,
+    session_endpoint=&quot;sqlite:///var/lib/micro-agent/sessions.db&quot;,
+    idempotency_endpoint=&quot;rediss://operations.example:6380/0&quot;,
+)
+bootstrap = build_runtime(definition, environment=overlay)
+</code></pre>
+<p>The overlay is a typed deployment layer. <code>model_endpoint</code> and every
+<code>mcp_endpoints</code> value must be an absolute <code>http</code> or <code>https</code> URL; MCP keys must
+match a server <code>ref</code> declared by the definition. Overriding a stdio MCP
+server is rejected because stdio is selected by its command and arguments,
+not a network endpoint. Memory and session endpoints retain their provider
+specific schemes. An overlay is copied into runtime configuration and never
+mutates the <code>MicroAgentDefinition</code> object.</p>
+<p>The effective precedence is framework defaults, definition, an explicit
+<code>EnvironmentConfig</code> or <code>EnvironmentOverlay</code>, <code>MICRO_AGENT_*</code> environment
+variables, and finally resolved secret bindings. Unknown MCP bindings fail
+before runtime creation instead of being silently ignored. Pass an
+<code>EnvironmentConfig</code> directly when non-endpoint deployment fields (for
+example, runtime or authentication) also need to be supplied.</p>
+<h2 id="api-compatibility-fixtures-and-migration">API compatibility fixtures and migration</h2>
+<p><code>tests/fixtures/compatibility/v1alpha1-minimal.yaml</code> is the canonical small
+fixture for the supported <code>microagents.io/v1alpha1</code> shape. The loader and
+generated schema reject other API versions and unknown fields, so a future
+version must be introduced as a new versioned model and fixture rather than
+silently widening v1alpha1. During migration, validate the new fixture in CI,
+keep endpoint bindings in an overlay, and update the schema, compatibility
+tests, this guide, and the changelog together. Existing v1alpha1 definitions
+remain valid until an explicit migration policy for the new API version is
+published.</p>
+<h2 id="secret-references">Secret references</h2>
+<p>Definitions store references, never secret values:</p>
+<pre><code class="language-yaml">spec:
+  dependencies:
+    model:
+      ref: reasoning-model
+      model_id: provider-model-v2
+      credential_ref: MODEL_API_KEY
+  security:
+    credential_refs:
+      - residency-api-key
+</code></pre>
+<p>A <code>credential_ref</code> is resolved through the configured credential provider
+during bootstrap: by default references name environment variables, and a
+deployment can inject a non-environment provider (for example
+<code>StaticCredentialProvider</code> with values pre-loaded from a mounted secret or a
+secret manager). Startup fails if any declared credential reference — model,
+MCP server, or security — cannot be resolved. Resolved values are never
+included in models, responses, logs, or exception text.</p>
+<p>Policy references (<code>security.policy_refs</code>) resolve the same way at the
+policy level: through an injected <code>AgentPolicy</code> or a configured policy
+resolver callable. Unresolved policy references fail startup rather than
+silently running without the declared policy.</p>
+<p><code>AgentPolicy.rules</code> adds conditional, resource-scoped decisions on top of the
+legacy allow/deny lists. Resources use <code>skill:&lt;id&gt;</code>, <code>tool:&lt;name&gt;</code>,
+<code>mcp:&lt;ref&gt;</code>, <code>model:&lt;ref&gt;</code>, or <code>side_effect:&lt;name&gt;</code>; actions are <code>invoke</code>,
+<code>connect</code>, or <code>execute</code>. All fields in <code>conditions</code> must match. Conditions
+can compare values directly or use <code>equals</code>, <code>not_equals</code>, <code>in</code>, <code>not_in</code>,
+<code>contains</code>, <code>contains_any</code>, <code>contains_all</code>, <code>matches</code> (shell-style wildcard),
+and <code>exists</code> operators. For example:</p>
+<pre><code class="language-python">PolicyRule(
+    effect=PolicyEffect.DENY,
+    resource=&quot;tool:charge-card&quot;,
+    actions=[&quot;invoke&quot;],
+    conditions={&quot;tenant_id&quot;: &quot;restricted&quot;, &quot;roles&quot;: {&quot;contains&quot;: &quot;guest&quot;}},
+)
+</code></pre>
+<p>During an authenticated invocation, <code>tenant_id</code>, <code>user_id</code>, <code>roles</code>,
+<code>caller_id</code>, <code>caller_type</code>, and workload identity fields come from the
+verified invocation context. A matching deny rule wins over matching allow
+rules; missing condition fields simply prevent that conditional rule from
+matching, while the existing explicit policy lists remain authoritative.</p>
+<h2 id="transport-authentication">Transport authentication</h2>
+<p>Inbound authentication is selected through external configuration, behind an
+<code>Authenticator</code> SPI. OIDC/OAuth2 Bearer JWT validation is implemented first
+as the dominant scheme; the default <code>none</code> mode leaves <code>/v1/invoke</code>
+unauthenticated for development.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MICRO_AGENT_AUTH</code></td>
+<td><code>none</code> (default) or <code>oidc</code></td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_AUTH_ISSUER</code></td>
+<td>OIDC issuer URL (required for <code>oidc</code>); JWKS is discovered from the issuer</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_AUTH_AUDIENCE</code></td>
+<td>Expected <code>aud</code> claim (required for <code>oidc</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Behavior when <code>oidc</code> is configured:</p>
+<ul>
+<li><code>/v1/invoke</code> requires <code>Authorization: Bearer &lt;JWT&gt;</code>; tokens are verified
+  for asymmetric signature (JWKS), issuer, audience, and expiry, and must
+  carry <code>sub</code>. Standard claims map to verified caller and user/tenant
+  identity (<code>sub</code>, <code>preferred_username</code>, <code>tid</code>/<code>tenant_id</code>, <code>roles</code>,
+  <code>client_id</code> for service callers).</li>
+<li>Unauthenticated calls fail with the stable 401 <code>authentication_required</code>
+  contract before the agent is reached.</li>
+<li>Health probes and the A2A discovery card remain public by design.</li>
+<li>A definition declaring <code>security.identity_requirements.require_caller_identity</code>
+  fails app creation if no authenticator is configured.</li>
+</ul>
+<p>Verification requires the optional <code>auth</code> extra (<code>PyJWT</code>): install with
+<code>pip install 'micro-agents[auth]'</code>.</p>
+<h2 id="audit-events">Audit events</h2>
+<p>Security-relevant decisions — policy denials (tool, side effect, skill,
+model, MCP), approval decisions, and authentication failures — are recorded
+through a configurable audit sink. Sensitive keys are redacted at write
+time; events carry identifiers and reasons, never payloads or credentials.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MICRO_AGENT_AUDIT_SINK</code></td>
+<td><code>stdout</code> (default), <code>file</code>, or <code>none</code></td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_AUDIT_FILE</code></td>
+<td>Append path; required when the sink is <code>file</code></td>
+</tr>
+</tbody>
+</table>
+<p>The default <code>stdout</code> sink writes one JSON object per line for platform log
+collection (the 12-factor durability path); <code>file</code> appends to a local file
+for deployments without a log pipeline.</p>
+<h2 id="opentelemetry">OpenTelemetry</h2>
+<p>Install the optional instrumentation extra and enable it explicitly:</p>
+<pre><code class="language-bash">pip install 'micro-agents[otel]'
+export MICRO_AGENT_OTEL_ENABLED=true
+export MICRO_AGENT_OTEL_SERVICE_NAME=orders-agent
+</code></pre>
+<p><code>Telemetry</code> keeps the in-memory metrics and span tree for deterministic tests
+and adds SDK-backed spans, counters, histograms, and W3C <code>traceparent</code>/
+<code>tracestate</code> extraction and injection when enabled. Model requests and
+SDK-backed MCP HTTP requests inject the active carrier on each outbound call;
+tool and A2A work stays in the same in-process span context. Configure the
+OpenTelemetry SDK/exporter using the standard <code>OTEL_*</code> environment variables or
+an embedding process's providers. Content-bearing attributes are suppressed by
+default; only enable <code>MICRO_AGENT_OTEL_CAPTURE_CONTENT</code> after reviewing
+redaction, retention, and cost controls. Label values are truncated and capped
+to avoid unbounded cardinality. Dashboard/alert definitions remain deployment
+follow-up work.</p>
+<p>Token metrics use <code>model_tokens_total</code> with a <code>token_type</code> label (<code>prompt</code>,
+<code>completion</code>, and <code>total</code>); <code>total</code> is taken from the provider when available
+and otherwise equals prompt plus completion tokens. Optional USD prices per
+1,000 input/output tokens produce <code>model_cost_usd_total</code>; no cost is inferred
+when prices are not configured. The <code>/metrics</code> endpoint exposes in-memory
+operational series in Prometheus text format for a scraper.</p>
+<h2 id="approval-continuation">Approval continuation</h2>
+<p>When a policy sets <code>approval_required</code>, side-effect tool calls pause the
+invocation instead of silently executing or permanently failing: the
+response returns <code>status: approval_required</code> with a <code>continuation_id</code> and
+the pending tool names. The caller resumes the same invocation by posting
+<code>continuation_id</code> with <code>approval_decision: approve</code> (the pending tools
+execute; hard policy denials still apply) or <code>deny</code> (the model receives the
+denial and can respond). Continuations expire after five minutes of
+inactivity; unknown or expired ids fail with a stable 404.</p>
+<p>The Google ADK adapter maps the same request onto ADK's native experimental
+<code>ToolConfirmation</code> flow. ADK continuations are backed by the original ADK
+session, so resume requests must include the original <code>session_id</code>; the
+returned metadata also includes the pending tool names, approval hints, and
+payloads. The adapter keeps ADK classes behind the runtime SPI and does not
+enable the feature for runtimes that do not advertise the adapter.</p>
+<h2 id="tool-side-effect-classification">Tool side-effect classification</h2>
+<p>Declare the retry and approval semantics of each tool explicitly. The
+classification is part of the portable definition, so both runtime adapters
+apply the same policy:</p>
+<pre><code class="language-yaml">spec:
+  dependencies:
+    tools:
+      - name: profile
+        source: native
+        side_effect: read_only
+      - name: charge-card
+        source: mcp
+        side_effect: idempotent
+      - name: send-notification
+        source: native
+        side_effect: unsafe
+</code></pre>
+<p><code>read_only</code> means the tool must not write external state. It is still subject
+to the ordinary tool allow/deny policy, but it does not trigger side-effect
+approval or an operation-registry claim. <code>idempotent</code> means a stable
+<code>idempotency_key</code> can safely deduplicate a retry; <code>unsafe</code> may have a
+non-repeatable effect and remains approval/policy gated. Both <code>idempotent</code> and
+<code>unsafe</code> use the operation registry when one is configured.</p>
+<p>The field defaults to <code>unsafe</code> for backward compatibility and fail-closed
+behavior. Runtime metadata for injected or discovered tools also defaults to
+<code>unsafe</code> when no declaration overrides it. A classification documents the
+contract; it does not make an implementation idempotent or add automatic
+retry logic. The custom runtime suppresses its whole-invocation retry policy
+after any non-read-only tool has started, including when a later model call or
+operation-record write fails. This conservative rule avoids replaying a write
+whose final outcome is unknown; retry budgets, backoff, and reconciliation
+remain deployment work.</p>
+<h2 id="mcp-servers">MCP servers</h2>
+<p>Declared MCP servers connect through the official MCP SDK (stable
+<code>2025-11-25</code>) when the optional <code>mcp</code> extra is installed
+(<code>pip install 'micro-agents[mcp]'</code>); without it, startup fails with an
+installation message rather than ignoring the declarations. Streamable HTTP
+and stdio are the standard transports; <code>sse</code> exists for legacy migration
+only.</p>
+<pre><code class="language-yaml">spec:
+  dependencies:
+    mcp_servers:
+      - ref: profile-services
+        transport: streamable-http
+        endpoint: https://mcp.internal.example.com
+        credential_ref: MCP_TOKEN
+        timeout_seconds: 15
+      - ref: local-tools
+        transport: stdio
+        command: python
+        args: [&quot;-m&quot;, &quot;tools.mcp_server&quot;]
+</code></pre>
+<p>stdio servers are modeled by a local <code>command</code> and <code>args</code> (never an
+endpoint); HTTP-based servers require an https endpoint unless they are on
+loopback. Declared <code>credential_ref</code> values resolve through the configured
+credential provider at connect time — an Authorization header for HTTP
+servers, and an environment variable named after the reference for stdio
+child processes — and are never stored on config objects or logs.</p>
+<p>The SDK client automatically reconnects after an unexpected transport drop.
+Each new connection renegotiates the MCP protocol and capabilities. The retry
+budget is bounded (three attempts by default) with exponential backoff; an
+explicit runtime shutdown suppresses reconnects, and an exhausted budget keeps
+the dependency unhealthy so readiness does not report a recovered server.</p>
+<h2 id="extending-the-tool-registry">Extending the tool registry</h2>
+<p>Tools are resolved in precedence order: programmatic injection (the
+runtime's <code>tool_registry</code>), plugin packages, then the built-in native
+registry. A plugin package exposes an entry point in the <code>micro_agent.tools</code>
+group whose value is <code>module:attribute</code> — a <code>Tool</code> subclass with a
+no-argument constructor, or a zero-argument callable returning a <code>Tool</code>
+instance. Tools are keyed by their <code>metadata.name</code>.</p>
+<pre><code class="language-python"># in your package (setup.py/pyproject entry points):
+[project.entry-points.&quot;micro_agent.tools&quot;]
+weather = &quot;weather_tools:WeatherTool&quot;
+</code></pre>
+<p>Definition-declared tools resolve by name against the merged registry;
+unresolvable tools fail before runtime creation.</p>
+<h2 id="workload-identity">Workload identity</h2>
+<p>The runtime resolves its own workload identity once per process for audit
+attribution and invocation context:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MICRO_AGENT_WORKLOAD_ID</code></td>
+<td>Explicit workload identifier (overrides discovery)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_WORKLOAD_NAMESPACE</code></td>
+<td>Explicit namespace (overrides discovery)</td>
+</tr>
+<tr>
+<td><code>MICRO_AGENT_SERVICE_ACCOUNT</code></td>
+<td>Service-account name</td>
+</tr>
+</tbody>
+</table>
+<p>Without overrides, the Kubernetes service-account namespace mount
+(<code>/var/run/secrets/kubernetes.io/serviceaccount/namespace</code>) supplies the
+namespace and the pod hostname the workload id; outside Kubernetes the
+hostname is used with the <code>default</code> namespace.</p>
+<p>Production requirements:</p>
+<ul>
+<li>inject values from environment, Kubernetes Secret, Vault, or another
+  configured secret provider</li>
+<li>redact values from logs, traces, errors, cards, and responses</li>
+<li>scope credentials to one dependency and least privilege</li>
+<li>fail startup when a required credential cannot be resolved</li>
+</ul>
+<h2 id="runtime-selection">Runtime selection</h2>
+<p>Runtime choice belongs to deployment configuration rather than the portable
+definition. The default <code>custom</code> value selects the lightweight reference loop.
+Set <code>MICRO_AGENT_RUNTIME=google-adk</code> and install the optional <code>adk</code> extra to
+select the Google ADK adapter:</p>
+<pre><code class="language-bash">python -m pip install -e &quot;.[dev,adk]&quot;
+export MICRO_AGENT_RUNTIME=google-adk
+</code></pre>
+<p>The selector accepts <code>custom</code> (also <code>adk</code> or <code>reference</code>) and <code>google-adk</code>
+(also <code>google_adk</code>). The adapter supports the native Google model path and
+injected fake/OpenAI-compatible model providers. Declared services map onto
+ADK-native constructs: memory bridges into an ADK memory service (auto-store
+and search included), injected policy is enforced around every tool execution
+and declared MCP server, declared MCP servers surface discovered tools as ADK
+tools, and telemetry spans/metrics/logs wrap the runner. Both runtimes
+construct knowledge and credential providers from configuration and validate
+declared knowledge sources and credential references; native tools outside
+the built-in registry also fail fast in both runtimes. Google ADK session
+state is persisted through the runtime-neutral session-provider bridge;
+SQLite, Redis, and PostgreSQL providers restore ADK event/state transcripts
+across process boundaries. Distributed idempotency uses the configured
+operation registry for non-read-only ADK tools. Model credential references
+are resolved at bootstrap and native Gemini receives the resolved API key
+through an owned Google GenAI client. Checkpoint resumes restore the ADK
+event/state snapshot and continue the original invocation.</p>
+<p>OpenAI-compatible model endpoints preserve any path prefix in the configured
+URL. For example, <code>https://llm.example.com/v1</code> is probed at
+<code>/v1/models</code> and invoked at <code>/v1/chat/completions</code>; the provider also sends the
+resolved <code>model_id</code> while the logical <code>ref</code> remains unchanged.</p>
+<h2 id="definition-versus-deployment-configuration">Definition versus deployment configuration</h2>
+<p>The logical definition owns portable agent semantics. Deployment configuration
+owns image, replicas, resources, namespace, runtime endpoint bindings, and
+secret-provider bindings. Use <code>EnvironmentOverlay</code> for provider endpoints that
+vary by environment rather than editing the base logical definition; use
+<code>EnvironmentConfig</code> when runtime, authentication, or audit fields also need
+deployment-specific values.</p>
+<h2 id="invocation-limits">Invocation limits</h2>
+<p>Definitions can bound concurrent requests at the agent boundary. The default
+<code>wait</code> policy queues callers until capacity is available; <code>reject</code> returns a
+runtime error immediately when the limit is full. Stopping an agent wakes
+queued callers so they cannot remain blocked:</p>
+<pre><code class="language-yaml">spec:
+  runtime:
+    max_concurrency: 4
+    concurrency_policy: wait  # or reject
+    shutdown_timeout_seconds: 30
+</code></pre>
+<p>When <code>shutdown_timeout_seconds</code> is set, stop waits for active calls to drain
+for that duration, then cancels the remaining invocation tasks before closing
+the runtime. Each HTTP invocation may also set a positive <code>timeout_seconds</code> to
+shorten the definition-level budget. The shortest request, definition, model,
+and tool timeout is shared with session, memory, and MCP operations; a retry
+cannot reset the remaining deadline.</p>
+<p>When <code>error_policy: retry</code> is selected, retries are bounded by
+<code>retry_max_attempts</code> (one retry by default), <code>retry_budget_seconds</code> (optional),
+and the invocation deadline. <code>retry_backoff_seconds</code> is the base delay and is
+doubled for each retry; <code>retry_jitter_seconds</code> adds a bounded random delay to
+reduce synchronized retry storms. Defaults preserve the historical immediate
+single retry:</p>
+<pre><code class="language-yaml">spec:
+  runtime:
+    error_policy: retry
+    retry_max_attempts: 2
+    retry_backoff_seconds: 0.25
+    retry_jitter_seconds: 0.1
+    retry_budget_seconds: 5
+</code></pre>
+<p>Retries are attempted only for failures before a non-read-only tool starts.
+The runtime still lacks a circuit breaker and configurable error taxonomy;
+those remain explicit backlog items.</p>
+<p>When <code>behavior.input_contract</code> or <code>behavior.output_contract</code> declares
+parameters, the runtime validates required fields, JSON-compatible types, and
+unknown fields at the invocation boundary. An empty contract remains
+unconstrained for compatibility with minimal development definitions.</p>
+<p>Definitions may require runtime capabilities with
+<code>spec.runtime.capabilities</code>, for example <code>memory</code> or <code>mcp</code>. Startup compares
+these names with the runtime capability matrix and fails before readiness when
+any required capability is unavailable. The matrix is also exposed by
+<code>GET /v1/capabilities</code>. The runtime also probes the configured model, session,
+memory, and declared MCP providers before marking the agent ready; a failed
+probe leaves startup in an error state instead of deferring the failure to the
+first invocation.</p>
+<h2 id="development-fake-mode">Development fake mode</h2>
+<p>Fake mode is explicit: set <code>provider: fake</code> in the definition or
+<code>MICRO_AGENT_MODEL_PROVIDER=fake</code>. A bare model reference without a provider or
+endpoint is rejected by the executable bootstrap. Fake mode is suitable for
+offline development and CI only, not evidence of a real-provider deployment.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

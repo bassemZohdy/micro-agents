@@ -1,0 +1,2139 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Architecture and reference framework for independently deployable AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://bassemzohdy.github.io/micro-agents/API/">
+      
+      
+        <link rel="prev" href="../STRUCTURED_OUTPUT/">
+      
+      
+        <link rel="next" href="../DEPLOYMENT/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>HTTP API - Micro-Agents</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#http-api" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Micro-Agents" class="md-header__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Micro-Agents
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              HTTP API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Micro-Agents" class="md-nav__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Micro-Agents
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GETTING_STARTED/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMPLEMENTATION_STATUS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHECKPOINTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checkpointing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STREAMING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STRUCTURED_OUTPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invoke-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invoke request
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Invoke request">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openai-compatible-model-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI-compatible model calls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributed-operation-idempotency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed operation idempotency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invoke-response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invoke response
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invocation-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation concurrency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational metrics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A2A
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_REGISTRY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_CONFIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STANDARDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_18" id="__nav_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/MICRO_AGENT_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/TWELVE_FACTOR_MICRO_AGENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Twelve-Factor Micro-Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/CLOUD_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Control-Plane Architecture (C0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Schema
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/micro-agent-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Definition v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-runtime-neutral-definition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Runtime-neutral definition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-adk-first-runtime-fake-model-ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 One runtime first
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-telemetry-facade-before-otel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 Telemetry facade before OTel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-security-and-health-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Security and health modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-deterministic-policy-enforcement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 Deterministic policy enforcement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-sqlite-session-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 SQLite development persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-stable-protocol-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 Stable protocol baselines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-runtime-adapter-truthfulness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 Runtime adapter truthfulness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-compat-policy-and-reexport-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Compatibility policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-redis-session-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Redis session provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-redis-memory-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 Redis memory provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-redis-idempotency-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Redis idempotency registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-versioned-tenant-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Versioned tenant state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-cloud-control-plane-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Cloud control-plane boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-minimal-cloud-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Minimal cloud registry and discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-versioned-cloud-config-plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Versioned cloud config plane
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gateway-edge-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 Gateway edge policy and resilience
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-observability-aggregation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Read-mostly observability aggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invoke-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invoke request
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Invoke request">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openai-compatible-model-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI-compatible model calls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributed-operation-idempotency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed operation idempotency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invoke-response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invoke response
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invocation-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation concurrency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational metrics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A2A
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="http-api">HTTP API</h1>
+<p>The native HTTP API is versioned as <code>v1</code>. Native resource paths use the
+<code>/v1/</code> prefix, the generated OpenAPI document is available at
+<code>/v1/openapi.json</code>, and every response advertises
+<code>X-Micro-Agent-API-Version: v1</code>. The old <code>/openapi.json</code> URL remains a
+read-only compatibility alias; new clients should use the versioned URL.</p>
+<h2 id="endpoints">Endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method and path</th>
+<th>Purpose</th>
+<th>Current limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /v1/invoke</code></td>
+<td>invoke the agent</td>
+<td>authentication is applied when configured/required; declared contracts are enforced</td>
+</tr>
+<tr>
+<td><code>GET /metrics</code></td>
+<td>Prometheus operational metrics</td>
+<td>exposes the in-memory collector; configure an OpenTelemetry exporter for multi-replica production aggregation</td>
+</tr>
+<tr>
+<td><code>GET /health/live</code></td>
+<td>process liveness</td>
+<td>always healthy unless changed programmatically</td>
+</tr>
+<tr>
+<td><code>GET /health/ready</code></td>
+<td>dependency readiness</td>
+<td>returns 200 when ready and 503 when unhealthy; configured model, state, and declared MCP providers are probed before startup readiness</td>
+</tr>
+<tr>
+<td><code>GET /v1/capabilities</code></td>
+<td>runtime/skill metadata</td>
+<td>reports the runtime capability matrix, not end-to-end readiness</td>
+</tr>
+<tr>
+<td><code>GET /v1/openapi.json</code></td>
+<td>versioned OpenAPI document</td>
+<td>describes the native HTTP and A2A routes</td>
+</tr>
+<tr>
+<td><code>GET /v1/docs</code></td>
+<td>Swagger UI</td>
+<td>interactive documentation for the versioned API</td>
+</tr>
+<tr>
+<td><code>GET /v1/redoc</code></td>
+<td>ReDoc</td>
+<td>alternative documentation for the versioned API</td>
+</tr>
+<tr>
+<td><code>GET /.well-known/agent-card.json</code></td>
+<td>standard A2A agent card</td>
+<td>served from the official SDK card model</td>
+</tr>
+<tr>
+<td><code>POST /</code></td>
+<td>A2A JSON-RPC <code>message/send</code> and <code>message/stream</code></td>
+<td>available when <code>spec.interoperability.a2a.enabled</code> is true; streaming is advertised only when the bound runtime supports it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="invoke-request">Invoke request</h2>
+<pre><code class="language-json">{
+  &quot;input&quot;: {
+    &quot;message&quot;: &quot;hello&quot;
+  },
+  &quot;request_id&quot;: &quot;request-123&quot;,
+  &quot;session_id&quot;: &quot;session-456&quot;,
+  &quot;caller_metadata&quot;: {},
+  &quot;timeout_seconds&quot;: 15
+}
+</code></pre>
+<p><code>input</code> must currently be a JSON object. The definition's input contract is
+enforced when parameters are declared: required fields, JSON-compatible types,
+and unknown fields are rejected. <code>caller_metadata</code> is untrusted application
+data and must not be used as authenticated caller identity.</p>
+<p>Requests are limited to 1 MiB by default when <code>create_app()</code> is used. A
+deployment gateway should apply the same limit and reject chunked requests
+that exceed it; applications can choose a smaller limit with the
+<code>max_request_bytes</code> factory argument.</p>
+<h3 id="cors">CORS</h3>
+<p>CORS is disabled by default. Deployments that serve a browser client can pass
+an explicit allowlist to <code>create_app(cors_origins=[...])</code>, or set the
+comma-separated <code>MICRO_AGENT_CORS_ORIGINS</code> environment variable for the
+executable bootstrap. Entries must be absolute <code>http</code> or <code>https</code> origins;
+<code>*</code> is allowed as the sole entry. Credentials are never enabled by this
+default policy, so browser authentication should use a same-site gateway or a
+deployment-specific middleware with an explicit credential policy.</p>
+<p>Only <code>GET</code>, <code>POST</code>, and <code>OPTIONS</code> are allowed cross-origin. The API version and
+retry headers are exposed to browser clients.</p>
+<h3 id="rate-limiting">Rate limiting</h3>
+<p>The framework does not choose a rate-limit algorithm or local counter. Pass a
+deployment-owned <code>RateLimiter</code> implementation to
+<code>create_app(rate_limiter=...)</code>. Its <code>check(request)</code> method may be synchronous
+or asynchronous and returns either a boolean or <code>RateLimitDecision</code>:</p>
+<pre><code class="language-python">from micro_agent.interoperability import RateLimitDecision, create_app
+
+
+class DistributedLimiter:
+    async def check(self, request):
+        allowed, remaining = await reserve_from_gateway(request)
+        return RateLimitDecision(
+            allowed=allowed,
+            retry_after_seconds=5,
+            limit=100,
+            remaining=remaining,
+        )
+
+
+app = create_app(agent, rate_limiter=DistributedLimiter())
+</code></pre>
+<p>Rejected requests return HTTP 429 with <code>detail.code: rate_limited</code>, a
+<code>Retry-After</code> header, and optional <code>X-RateLimit-Limit</code> /
+<code>X-RateLimit-Remaining</code> headers. Limiter failures return the generic
+<code>rate_limiter_unavailable</code> HTTP 503 contract. Health and discovery routes are
+not rate-limited by this hook. Use a shared gateway or datastore for limits
+across replicas.</p>
+<h2 id="openai-compatible-model-calls">OpenAI-compatible model calls</h2>
+<p>When the selected model provider is OpenAI-compatible, the configured endpoint
+is treated as a base URL and its path prefix is retained. An endpoint ending in
+<code>/v1</code> therefore receives <code>GET /v1/models</code> during readiness and
+<code>POST /v1/chat/completions</code> during invocation. Session-backed invocations retain
+the complete conversation turn, including assistant <code>tool_calls</code> and matching
+tool results, so later turns can replay the provider-required transcript.</p>
+<p><code>request_id</code> is optional. When it is omitted or empty, the service generates a
+UUID and returns the same value in the response.</p>
+<p><code>timeout_seconds</code> is an optional positive end-to-end deadline for the
+invocation. The runtime uses the shortest of the request deadline, the
+definition's overall timeout, and each model/tool timeout. Cancellation of any
+in-flight model, tool (including MCP adapters), session, or memory operation
+releases its resources and propagates to that provider.</p>
+<p>The current invoke wire format accepts JSON requests with either a normal JSON
+response or Server-Sent Events. A request with <code>Accept: text/event-stream</code>
+receives HTTP 406 and <code>detail.code: streaming_unsupported</code> when the selected
+runtime advertises <code>streaming: false</code>. The custom runtime, and the Google ADK
+adapter when its injected model provider supports streaming, expose the
+runtime-neutral delta/final event contract described in
+<a href="../STREAMING/"><code>docs/STREAMING.md</code></a>.</p>
+<h2 id="distributed-operation-idempotency">Distributed operation idempotency</h2>
+<p>Tool declarations classify each operation as <code>read_only</code>, <code>idempotent</code>, or
+<code>unsafe</code>. <code>read_only</code> tools bypass side-effect approval and idempotency claims;
+the other classes retain policy enforcement and can use the registry below.
+The default for legacy or undeclared tools is <code>unsafe</code>.</p>
+<p>The custom runtime can use a shared Redis operation registry when
+<code>MICRO_AGENT_IDEMPOTENCY_ENDPOINT</code> is configured. Side-effect tools may include
+an <code>idempotency_key</code> in their arguments. Reusing the same stable key causes a
+retry on another replica to return the original result instead of executing the
+tool again; while the first attempt is still running, the duplicate receives an
+<code>operation is already in progress</code> result with <code>was_deduplicated: true</code>.
+Claims are atomic and results expire with the registry TTL (one day by default).
+Operation objects carry the mapped retry classification (<code>safe</code>, <code>idempotent</code>,
+or <code>unsafe</code>) into registry and audit hooks for downstream dispatch decisions.
+The custom runtime suppresses whole-invocation retries after a non-read-only
+tool starts, so a later model failure cannot replay an unknown write outcome.
+Before any side effect, <code>error_policy: retry</code> uses the definition's bounded
+attempt count, exponential backoff, optional jitter, and retry wall-clock
+budget; the default remains one immediate retry for compatibility.
+Keys are tenant-scoped when a verified tenant identity is available (local or
+unverified calls retain the legacy provider-wide namespace). Session and memory
+records carry the same optional <code>tenant_id</code> boundary and a monotonically
+increasing <code>version</code>. Providers raise <code>StateConflictError</code> when a non-zero
+expected version is stale; a zero-version write keeps legacy unconditional
+semantics. The Google ADK runtime uses the same registry for non-read-only ADK
+tool calls, so retries routed to another replica receive the stored result
+instead of executing the tool again.</p>
+<h2 id="invoke-response">Invoke response</h2>
+<pre><code class="language-json">{
+  &quot;output&quot;: {
+    &quot;content&quot;: &quot;fake response&quot;,
+    &quot;tool_results&quot;: []
+  },
+  &quot;request_id&quot;: &quot;request-123&quot;,
+  &quot;session_id&quot;: &quot;session-456&quot;,
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;error&quot;: null,
+  &quot;metadata&quot;: {}
+}
+</code></pre>
+<p>Contract violations return HTTP 422 with a stable detail object:</p>
+<pre><code class="language-json">{
+  &quot;detail&quot;: {
+    &quot;code&quot;: &quot;contract_validation_failed&quot;,
+    &quot;contract&quot;: &quot;input&quot;,
+    &quot;errors&quot;: [&quot;missing required field 'message'&quot;]
+  }
+}
+</code></pre>
+<p>Oversized bodies return HTTP 413 with <code>code: request_too_large</code>. Runtime
+failures use stable detail codes and deliberately generic messages:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th style="text-align: right;">Status</th>
+<th>Detail code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>authentication failure raised by an integration</td>
+<td style="text-align: right;">401</td>
+<td><code>authentication_required</code></td>
+</tr>
+<tr>
+<td>authorization or policy denial</td>
+<td style="text-align: right;">403</td>
+<td><code>authorization_denied</code></td>
+</tr>
+<tr>
+<td>invocation deadline exceeded</td>
+<td style="text-align: right;">504</td>
+<td><code>deadline_exceeded</code></td>
+</tr>
+<tr>
+<td>required model, state, or other dependency unavailable</td>
+<td style="text-align: right;">503</td>
+<td><code>dependency_unavailable</code></td>
+</tr>
+<tr>
+<td>unexpected runtime failure</td>
+<td style="text-align: right;">500</td>
+<td><code>internal_error</code></td>
+</tr>
+</tbody>
+</table>
+<p>When an authenticator is configured, <code>/v1/invoke</code> and an enabled A2A RPC route
+verify the bearer credential before invoking the agent. Health and card routes
+remain public. If the definition requires caller identity, app creation fails
+without an authenticator. Exception text is not returned in any of these
+responses.</p>
+<p>An exhausted request or definition deadline returns HTTP 504:</p>
+<pre><code class="language-json">{
+  &quot;detail&quot;: {
+    &quot;code&quot;: &quot;deadline_exceeded&quot;,
+    &quot;message&quot;: &quot;Invocation deadline exceeded&quot;
+  }
+}
+</code></pre>
+<h2 id="invocation-concurrency">Invocation concurrency</h2>
+<p>Definitions can bound concurrent calls and choose overload behavior:</p>
+<pre><code class="language-yaml">spec:
+  runtime:
+    max_concurrency: 8
+    concurrency_policy: reject # or wait (the default)
+</code></pre>
+<p><code>reject</code> returns HTTP 429 (<code>code: invocation_overloaded</code>) before model
+invocation and includes <code>Retry-After: 1</code>. <code>wait</code> queues the caller until a
+slot is available. Cancellation releases a queued slot. An invocation deadline
+is shared by every nested model, tool/MCP, session, and memory operation, so a
+retry cannot reset the caller's remaining budget.</p>
+<h2 id="health-behavior">Health behavior</h2>
+<p>Liveness answers whether the process should be restarted. Readiness answers
+whether the instance can serve traffic. The readiness endpoint returns HTTP
+503 with <code>"status":"unhealthy"</code> when a required dependency fails its probe.</p>
+<h2 id="operational-metrics">Operational metrics</h2>
+<p><code>GET /metrics</code> is a public scrape endpoint that returns Prometheus text format.
+Counter points are accumulated per label set and other points expose their
+latest value. The lightweight collector is intended for local/single-process
+scraping; configure an OpenTelemetry metrics provider/exporter for durable
+aggregation across replicas. Model usage follows the <code>model_tokens_total</code>
+<code>token_type</code> convention (<code>prompt</code>, <code>completion</code>, <code>total</code>), and optional pricing
+produces <code>model_cost_usd_total</code>.</p>
+<h2 id="a2a">A2A</h2>
+<p>The standard card route is:</p>
+<pre><code class="language-text">GET /.well-known/agent-card.json
+</code></pre>
+<p>When enabled in the definition, the official SDK also mounts JSON-RPC at <code>/</code>
+and handles <code>message/send</code> with submitted → working → completed/failed task
+states. In-flight <code>message/send</code> work is canceled when the SDK calls the
+executor cancellation hook. Streaming, push notifications, and durable task
+state are not yet implemented. Requests may declare <code>x-a2a-version</code>;
+unsupported versions receive a stable 400 response.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

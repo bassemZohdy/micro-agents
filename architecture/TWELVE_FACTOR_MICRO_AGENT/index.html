@@ -1,0 +1,2405 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Architecture and reference framework for independently deployable AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://bassemzohdy.github.io/micro-agents/architecture/TWELVE_FACTOR_MICRO_AGENT/">
+      
+      
+        <link rel="prev" href="../MICRO_AGENT_ARCHITECTURE/">
+      
+      
+        <link rel="next" href="../CLOUD_ARCHITECTURE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Twelve-Factor Micro-Agent - Micro-Agents</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#twelve-factor-micro-agent" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Micro-Agents" class="md-header__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Micro-Agents
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Twelve-Factor Micro-Agent
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Micro-Agents" class="md-nav__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Micro-Agents
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GETTING_STARTED/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../IMPLEMENTATION_STATUS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHECKPOINTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checkpointing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STREAMING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STRUCTURED_OUTPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUD_REGISTRY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUD_CONFIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUD_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUD_OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STANDARDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_18" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_18" id="__nav_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_18_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MICRO_AGENT_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Twelve-Factor Micro-Agent
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Twelve-Factor Micro-Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#original-factors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original Factors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Original Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#factor-1-codebase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 1 — Codebase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-2-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 2 — Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-3-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 3 — Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-4-backing-services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 4 — Backing Services
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-5-build-release-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 5 — Build, Release, Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-6-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 6 — Processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-7-port-binding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 7 — Port Binding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-8-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 8 — Concurrency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-9-disposability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 9 — Disposability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-10-devprod-parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 10 — Dev/Prod Parity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-11-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 11 — Logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-12-admin-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 12 — Admin Processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-specific-factors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Specific Factors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Specific Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#factor-13-explicit-agent-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 13 — Explicit Agent Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-14-capability-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 14 — Capability Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-15-bounded-autonomy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 15 — Bounded Autonomy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-16-portable-agent-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 16 — Portable Agent Definition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-17-externalized-agent-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 17 — Externalized Agent State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-18-agent-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 18 — Agent Observability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-19-safe-side-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 19 — Safe Side Effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-20-standard-interoperability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 20 — Standard Interoperability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Control-Plane Architecture (C0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Schema
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schemas/micro-agent-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Definition v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-runtime-neutral-definition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Runtime-neutral definition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-adk-first-runtime-fake-model-ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 One runtime first
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-telemetry-facade-before-otel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 Telemetry facade before OTel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-security-and-health-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Security and health modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-deterministic-policy-enforcement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 Deterministic policy enforcement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-sqlite-session-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 SQLite development persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-stable-protocol-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 Stable protocol baselines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-runtime-adapter-truthfulness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 Runtime adapter truthfulness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-compat-policy-and-reexport-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Compatibility policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-redis-session-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Redis session provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-redis-memory-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 Redis memory provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-redis-idempotency-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Redis idempotency registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-versioned-tenant-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Versioned tenant state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-cloud-control-plane-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Cloud control-plane boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-minimal-cloud-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Minimal cloud registry and discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-versioned-cloud-config-plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Versioned cloud config plane
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-gateway-edge-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 Gateway edge policy and resilience
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-observability-aggregation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Read-mostly observability aggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#original-factors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original Factors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Original Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#factor-1-codebase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 1 — Codebase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-2-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 2 — Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-3-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 3 — Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-4-backing-services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 4 — Backing Services
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-5-build-release-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 5 — Build, Release, Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-6-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 6 — Processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-7-port-binding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 7 — Port Binding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-8-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 8 — Concurrency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-9-disposability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 9 — Disposability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-10-devprod-parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 10 — Dev/Prod Parity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-11-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 11 — Logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-12-admin-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 12 — Admin Processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-specific-factors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Specific Factors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Specific Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#factor-13-explicit-agent-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 13 — Explicit Agent Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-14-capability-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 14 — Capability Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-15-bounded-autonomy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 15 — Bounded Autonomy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-16-portable-agent-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 16 — Portable Agent Definition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-17-externalized-agent-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 17 — Externalized Agent State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-18-agent-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 18 — Agent Observability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-19-safe-side-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 19 — Safe Side Effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor-20-standard-interoperability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Factor 20 — Standard Interoperability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="twelve-factor-micro-agent">Twelve-Factor Micro-Agent</h1>
+<blockquote>
+<p><strong>Normative model.</strong> These factors describe the target operating model. They
+are not a statement of current repository conformance. See
+<a href="../../IMPLEMENTATION_STATUS/">Implementation Status</a> for the audited gap
+analysis.</p>
+</blockquote>
+<p>This document maps the original Twelve-Factor App methodology to Micro-Agent Architecture and defines agent-specific factors.</p>
+<p>Each factor includes concrete implementation implications.</p>
+<hr />
+<h2 id="original-factors">Original Factors</h2>
+<h3 id="factor-1-codebase">Factor 1 — Codebase</h3>
+<blockquote>
+<p>One codebase tracked in version control, many deploys.</p>
+</blockquote>
+<p>A Micro-Agent has one versioned definition and codebase.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">Micro-Agent definition is version-controlled
+One definition produces one logical Micro-Agent
+Different environments use configuration overlays, not separate definitions
+Definition and runtime artifact are built together
+</code></pre>
+<h3 id="factor-2-dependencies">Factor 2 — Dependencies</h3>
+<blockquote>
+<p>Explicitly declare and isolate dependencies.</p>
+</blockquote>
+<p>A Micro-Agent explicitly declares all dependencies.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">model provider and identifier declared in definition
+MCP server references declared in definition
+tool dependencies declared in definition
+skill dependencies declared in definition
+Python/runtime dependencies declared in package manifest
+no implicit dependency on ambient environment
+</code></pre>
+<h3 id="factor-3-configuration">Factor 3 — Configuration</h3>
+<blockquote>
+<p>Store config in the environment.</p>
+</blockquote>
+<p>Environment-specific configuration remains outside the runtime artifact.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">model endpoints configured externally
+MCP endpoints configured externally
+memory store endpoints configured externally
+credentials referenced, never embedded
+timeouts configured externally
+policies configured externally
+deployment configuration separate from agent definition
+</code></pre>
+<h3 id="factor-4-backing-services">Factor 4 — Backing Services</h3>
+<blockquote>
+<p>Treat backing services as attached resources.</p>
+</blockquote>
+<p>Models, MCP servers, memory stores, and knowledge sources are attached resources.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">model provider is an attached backing service
+MCP server is an attached backing service
+memory store is an attached backing service
+knowledge source is an attached backing service
+session store is an attached backing service
+backing service failure does not corrupt agent definition
+backing services can be swapped through configuration
+</code></pre>
+<h3 id="factor-5-build-release-run">Factor 5 — Build, Release, Run</h3>
+<blockquote>
+<p>Strictly separate build and run stages.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">Build: compile/validate definition, resolve dependencies, produce artifact
+Release: combine artifact with environment configuration
+Run: launch runtime instance against release
+Definition validation occurs at build time
+Runtime instantiation occurs at run time
+</code></pre>
+<h3 id="factor-6-processes">Factor 6 — Processes</h3>
+<blockquote>
+<p>Execute the app as one or more stateless processes.</p>
+</blockquote>
+<p>Runtime instances are stateless.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">no persistent state in local process memory
+session state stored externally
+memory stored externally
+any instance can serve any request
+process restart loses no persistent data
+</code></pre>
+<h3 id="factor-7-port-binding">Factor 7 — Port Binding</h3>
+<blockquote>
+<p>Export services via port binding.</p>
+</blockquote>
+<p>A Micro-Agent is self-contained and exposes its own endpoints.</p>
+<p>Implementation:</p>
+<pre><code class="language-text">HTTP API bound to configured port
+health endpoints self-contained
+A2A endpoint self-contained if enabled
+no external web server required
+</code></pre>
+<h3 id="factor-8-concurrency">Factor 8 — Concurrency</h3>
+<blockquote>
+<p>Scale out via the process model.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">horizontal scaling through replicas
+each replica is independent
+no shared in-memory state between replicas
+replicas share external backing services
+scaling decisions based on invocation load
+</code></pre>
+<h3 id="factor-9-disposability">Factor 9 — Disposability</h3>
+<blockquote>
+<p>Maximize robustness with fast startup and graceful shutdown.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">fast startup: definition loaded, runtime initialized, ready to serve
+graceful shutdown on SIGTERM
+finish in-flight requests before termination
+release backing service connections on shutdown
+no cleanup of external state required on termination
+</code></pre>
+<h3 id="factor-10-devprod-parity">Factor 10 — Dev/Prod Parity</h3>
+<blockquote>
+<p>Keep development, staging, and production as similar as possible.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">same definition artifact across environments
+same runtime artifact across environments
+only configuration differs between environments
+deterministic fake model available for development and testing
+local MCP servers for development
+</code></pre>
+<h3 id="factor-11-logs">Factor 11 — Logs</h3>
+<blockquote>
+<p>Treat logs as event streams.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">structured JSON logs to stdout
+agent ID in every log entry
+agent version in every log entry
+invocation ID in every log entry
+session ID where applicable
+secret values redacted from log output
+log aggregation handled by execution environment
+</code></pre>
+<h3 id="factor-12-admin-processes">Factor 12 — Admin Processes</h3>
+<blockquote>
+<p>Run admin/management tasks as one-off processes.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">definition validation as a one-off process
+schema migration as a one-off process
+health check as a one-off diagnostic
+capability inspection as a one-off process
+admin tasks do not run inside the serving process
+</code></pre>
+<hr />
+<h2 id="agent-specific-factors">Agent-Specific Factors</h2>
+<h3 id="factor-13-explicit-agent-identity">Factor 13 — Explicit Agent Identity</h3>
+<blockquote>
+<p>Every Micro-Agent has an explicit, distinguishable identity.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">agent identity declared in definition
+agent identity included in all observability signals
+agent identity distinct from user identity
+agent identity distinct from runtime/workload identity
+identity supports policy evaluation and audit
+</code></pre>
+<h3 id="factor-14-capability-contract">Factor 14 — Capability Contract</h3>
+<blockquote>
+<p>A Micro-Agent explicitly declares its capabilities.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">skills declared in definition
+skills are discoverable metadata
+skills distinguish what the agent can do from how it does it
+skills are not equivalent to tool function signatures
+skills support routing, authorization, and documentation
+</code></pre>
+<h3 id="factor-15-bounded-autonomy">Factor 15 — Bounded Autonomy</h3>
+<blockquote>
+<p>Agent autonomy operates only within explicit boundaries.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">instructions define behavioral boundaries
+skills define capability boundaries
+tools define executable action boundaries
+MCPs define external capability boundaries
+policies define permission boundaries
+prompt injection cannot override deterministic platform policy
+</code></pre>
+<h3 id="factor-16-portable-agent-definition">Factor 16 — Portable Agent Definition</h3>
+<blockquote>
+<p>The agent definition contains sufficient semantics for any compatible runtime to reconstruct the logical agent.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">definition uses runtime-neutral types
+definition contains no ADK-native or framework-native objects
+definition includes metadata, behavior, dependencies, and runtime hints
+definition is versioned and schema-validated
+a compatible runtime can consume the definition without modification
+</code></pre>
+<h3 id="factor-17-externalized-agent-state">Factor 17 — Externalized Agent State</h3>
+<blockquote>
+<p>Agent state is stored in external backing services, not in process memory.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">session state in external session provider
+long-term memory in external memory provider
+knowledge in external knowledge source
+operational state in external store
+runtime instance destruction does not lose state
+multiple replicas share state through external providers
+</code></pre>
+<h3 id="factor-18-agent-observability">Factor 18 — Agent Observability</h3>
+<blockquote>
+<p>Agent behavior is observable through structured signals beyond conventional logs and metrics.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">invocation tracing through model, tool, MCP, and memory operations
+token usage tracking
+model latency tracking
+tool invocation tracking
+MCP invocation tracking
+memory operation tracking
+policy decision tracking
+cost tracking
+OpenTelemetry-compatible instrumentation
+</code></pre>
+<h3 id="factor-19-safe-side-effects">Factor 19 — Safe Side Effects</h3>
+<blockquote>
+<p>Operations with side effects assume retries, failures, and possible replay.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">idempotency key support for write operations
+operation identifiers for deduplication
+retry classification (safe vs unsafe)
+confirmation/approval hooks for sensitive operations
+policy validation before side-effect execution
+</code></pre>
+<p>The custom runtime's optional Redis operation registry shares claims and
+completed results across replicas (<code>MICRO_AGENT_IDEMPOTENCY_ENDPOINT</code>) and
+expires them with a provider TTL. Operation, session, and memory keys are
+scoped by verified tenant when available; snapshots carry optimistic versions
+and stale non-zero-version writes are rejected. The Google ADK adapter wraps
+non-read-only ADK tools with the same registry contract.</p>
+<h3 id="factor-20-standard-interoperability">Factor 20 — Standard Interoperability</h3>
+<blockquote>
+<p>Micro-Agents communicate through standard protocols, not proprietary mechanisms.</p>
+</blockquote>
+<p>Implementation:</p>
+<pre><code class="language-text">A2A v1.0.1 for agent-to-agent communication
+MCP 2025-11-25 stable specification for tool and capability integration
+HTTP API for external invocation
+standard health check endpoints
+no custom agent communication protocol
+</code></pre>
+<hr />
+<h2 id="acceptance">Acceptance</h2>
+<p>Each factor above includes concrete implementation implications.</p>
+<p>No factor exists as a purely philosophical statement.</p>
+<p>Acceptance requires executable evidence at the relevant boundary. Schema
+validation is not runtime portability, a fake client is not wire-protocol
+interoperability, and a shared SQLite file is not an external multi-replica
+state service. The optional OpenTelemetry path now exports standard spans/metrics
+and bridges HTTP, model, MCP, tool, and A2A trace context. Token/cost
+conventions and a Prometheus-compatible <code>/metrics</code> surface are provided;
+production dashboards and alerts still require deployment configuration.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
