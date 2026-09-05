@@ -105,8 +105,9 @@ or the relevant ADR.
 - [ ] Implement A2A extended authenticated cards.
 - [ ] Add durable A2A task store. Currently in-memory only; production state
       arrives with external state providers.
-- [ ] Wire A2A task cancellation to the runtime invocation cancellation path.
-      Currently not connected.
+- [x] Wire A2A task cancellation to the runtime invocation cancellation path;
+      in-flight executor tasks are canceled and the task transitions to
+      canceled, covered by `tests/test_a2a_server.py`.
 - [ ] Validate full A2A v1.0.1 conformance with the official SDK (beyond the
       tested non-streaming subset).
       See [docs/STANDARDS.md](docs/STANDARDS.md).

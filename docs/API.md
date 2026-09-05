@@ -243,6 +243,7 @@ GET /.well-known/agent-card.json
 
 When enabled in the definition, the official SDK also mounts JSON-RPC at `/`
 and handles `message/send` with submitted → working → completed/failed task
-states. Streaming, push notifications, durable task state, and cancellation
-are not yet implemented. Requests may declare `x-a2a-version`; unsupported
-versions receive a stable 400 response.
+states. In-flight `message/send` work is canceled when the SDK calls the
+executor cancellation hook. Streaming, push notifications, and durable task
+state are not yet implemented. Requests may declare `x-a2a-version`;
+unsupported versions receive a stable 400 response.

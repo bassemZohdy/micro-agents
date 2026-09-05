@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -145,3 +146,37 @@ async def test_executor_cancel_marks_task_cancelled(monkeypatch: pytest.MonkeyPa
 
     assert FakeTaskUpdater.last is not None
     assert [name for name, _value in FakeTaskUpdater.last.events] == ["cancel"]
+
+
+@pytest.mark.asyncio
+async def test_executor_cancel_interrupts_in_flight_invocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(a2a_server, "_import_sdk", _sdk)
+    started = asyncio.Event()
+    never_finishes = asyncio.Event()
+
+    class BlockingAgent(FakeAgent):
+        async def invoke(self, request: object) -> SimpleNamespace:
+            self.request = request
+            started.set()
+            await never_finishes.wait()
+            return SimpleNamespace(output=self.output)
+
+    agent = BlockingAgent()
+    executor = a2a_server.build_micro_agent_executor(agent)  # type: ignore[arg-type]
+    context = FakeContext("ping")
+    execute_task = asyncio.create_task(executor.execute(context, "queue"))
+
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await executor.cancel(context, "queue")
+
+    with pytest.raises(asyncio.CancelledError):
+        await execute_task
+    assert FakeTaskUpdater.last is not None
+    assert [name for name, _value in FakeTaskUpdater.last.events] == [
+        "submit",
+        "start_work",
+        "cancel",
+    ]
+    assert executor._in_flight == {}  # type: ignore[attr-defined]

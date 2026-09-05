@@ -12,6 +12,7 @@ guards the RPC route when caller identity is required.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 from uuid import uuid4
@@ -71,17 +72,24 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
     class MicroAgentExecutor(sdk.AgentExecutor):
         def __init__(self, agent: DefaultMicroAgent) -> None:
             self._agent = agent
+            self._in_flight: dict[str, asyncio.Task[Any]] = {}
 
         async def execute(self, context: Any, event_queue: Any) -> None:
             task_id = context.task_id or str(uuid4())
             context_id = context.context_id or task_id
             updater = sdk.TaskUpdater(event_queue, task_id=task_id, context_id=context_id)
-            await updater.submit()
-            await updater.start_work()
+            current_task = asyncio.current_task()
+            if current_task is not None:
+                self._in_flight[task_id] = current_task
             try:
+                await updater.submit()
+                await updater.start_work()
                 response = await self._agent.invoke(
                     AgentRequest(input=_payload_from(context), session_id=context_id)
                 )
+            except asyncio.CancelledError:
+                await updater.cancel()
+                raise
             except Exception:  # noqa: BLE001 — failures become task failures
                 await updater.failed(
                     updater.new_agent_message(
@@ -89,19 +97,25 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
                     )
                 )
                 return
-            output = response.output
-            content = output.get("content") if isinstance(output, dict) else None
-            text = str(content) if content else json.dumps(output, default=str)
-            await updater.add_artifact(
-                [sdk.Part(root=sdk.TextPart(text=text))],
-                name="result",
-            )
-            await updater.complete()
+            else:
+                output = response.output
+                content = output.get("content") if isinstance(output, dict) else None
+                text = str(content) if content else json.dumps(output, default=str)
+                await updater.add_artifact(
+                    [sdk.Part(root=sdk.TextPart(text=text))],
+                    name="result",
+                )
+                await updater.complete()
+            finally:
+                if current_task is not None and self._in_flight.get(task_id) is current_task:
+                    del self._in_flight[task_id]
 
         async def cancel(self, context: Any, event_queue: Any) -> None:
-            # Invocations complete within a single request; a cancel marks
-            # the task canceled in the task store.
             task_id = context.task_id or str(uuid4())
+            task = self._in_flight.get(task_id)
+            if task is not None and task is not asyncio.current_task():
+                task.cancel()
+                return
             context_id = context.context_id or task_id
             updater = sdk.TaskUpdater(event_queue, task_id=task_id, context_id=context_id)
             await updater.cancel()
