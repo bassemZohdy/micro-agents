@@ -197,7 +197,7 @@ state, or A2A task interoperability.
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
-| A2A | official SDK card and JSON-RPC non-streaming task lifecycle with authenticated integration tests and runtime-wired cancellation | streaming, push notifications, durable task store |
+| A2A | official SDK card and JSON-RPC non-streaming/streaming task lifecycles with authenticated integration tests and runtime-wired cancellation | push notifications, durable task store |
 | State | definition-wired in-memory memory/session, SQLite development sessions, and optional Redis-backed external memory/sessions, durable approval continuations, plus custom-runtime operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | Google ADK idempotency mapping |
 | Security | authentication, verified caller/workload propagation, policy and credential resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, and redacted audit events | downstream delegation, external policy stores, and database-backed audit persistence |
 | Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, and token/cost conventions | operational dashboards/alerts |
@@ -215,8 +215,8 @@ The project follows released standards rather than drafts:
   release candidate until finalized
 
 The implementation covers a tested subset of both baselines through their
-official Python SDKs; streaming, durable state, and some production features
-remain open. Details and official references are in [Standards](docs/STANDARDS.md).
+official Python SDKs; push notifications, durable state, and some production
+features remain open. Details and official references are in [Standards](docs/STANDARDS.md).
 
 ## Development
 
@@ -231,8 +231,8 @@ python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite collects 709 tests: 609 pass in the default CI selection
-(`not integration`, `not e2e`, and `not otel`), while 100 integration/E2E/OTel
+The current suite collects 712 tests: 611 pass in the default CI selection
+(`not integration`, `not e2e`, and `not otel`), while 101 integration/E2E/OTel
 tests are deselected for their dedicated CI jobs. The Redis extra adds three
 live integration tests in the Redis-enabled CI job, the optional Google ADK
 adapter adds 15 tests, and the optional OpenTelemetry extra adds five

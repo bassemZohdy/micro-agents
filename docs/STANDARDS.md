@@ -26,10 +26,11 @@ Relevant v1 requirements for this project:
 - at least one real standard message/task binding
 
 Current status: **tested subset implemented**. The official `a2a-sdk` serves
-`/.well-known/agent-card.json` and mounts JSON-RPC `message/send` when enabled;
-the integration suite resolves the card with the official client and completes
-a non-streaming task. Streaming, push notifications, durable task state, and
-in-flight cancellation remain open, so this is not a claim of full production
+`/.well-known/agent-card.json` and mounts JSON-RPC `message/send` and
+`message/stream` when enabled; the integration suite resolves the card with
+the official client and completes both non-streaming and streaming tasks when
+the bound runtime supports streaming. Push notifications, durable task state,
+and full v1 conformance remain open, so this is not a claim of full production
 conformance.
 
 ## MCP

@@ -1,11 +1,11 @@
 """A2A server transport: JSON-RPC binding bridged onto Micro-Agent invocations.
 
-The official a2a-sdk server stack serves the agent card and the JSON-RPC
-``message/send`` method; :class:`MicroAgentExecutor` maps a received message
-onto a Micro-Agent invocation and drives the standard task lifecycle
-(submitted → working → completed, or failed). Authentication stays at the
-HTTP transport layer — the same middleware that guards the native API also
-guards the RPC route when caller identity is required.
+The official a2a-sdk server stack serves the agent card and JSON-RPC
+``message/send``/``message/stream`` methods; :class:`MicroAgentExecutor` maps
+a received message onto a Micro-Agent invocation and drives the standard task
+lifecycle (submitted → working → completed, or failed). Authentication stays
+at the HTTP transport layer — the same middleware that guards the native API
+also guards the RPC route when caller identity is required.
 """
 
 # mypy: disable_error_code="attr-defined,name-defined,misc,untyped-decorator"
@@ -65,6 +65,21 @@ def _payload_from(context: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"message": text}
 
 
+def _streaming_enabled(agent: Any) -> bool:
+    """Return whether the bound runtime can produce stream events."""
+    capabilities = getattr(agent, "runtime_capabilities", None)
+    if callable(capabilities):
+        capabilities = capabilities()
+    return bool(getattr(capabilities, "streaming", False))
+
+
+def _response_text(response: Any) -> str:
+    """Map a terminal Micro-Agent response to an A2A text artifact."""
+    output = getattr(response, "output", {})
+    content = output.get("content") if isinstance(output, dict) else None
+    return str(content) if content else json.dumps(output, default=str)
+
+
 def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
     """Build the A2A AgentExecutor bridge for a Micro-Agent."""
     sdk = _import_sdk()
@@ -73,6 +88,53 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
         def __init__(self, agent: DefaultMicroAgent) -> None:
             self._agent = agent
             self._in_flight: dict[str, asyncio.Task[Any]] = {}
+
+        async def _stream_response(self, request: AgentRequest, updater: Any) -> Any:
+            """Publish provider deltas as one appendable A2A artifact."""
+            artifact_id = f"{updater.task_id}:result"
+            emitted_text = ""
+            pending_delta = ""
+            emitted_artifact = False
+            final_response = None
+
+            async for event in self._agent.stream(request):
+                delta = getattr(event, "delta", "")
+                if delta:
+                    if pending_delta:
+                        await updater.add_artifact(
+                            [sdk.Part(root=sdk.TextPart(text=pending_delta))],
+                            artifact_id=artifact_id,
+                            name="result",
+                            append=emitted_artifact,
+                            last_chunk=False,
+                        )
+                        emitted_text += pending_delta
+                        emitted_artifact = True
+                    pending_delta = delta
+                response = getattr(event, "response", None)
+                if response is not None:
+                    final_response = response
+
+            if final_response is None:
+                raise RuntimeError("A2A stream ended without a final response")
+
+            final_text = _response_text(final_response)
+            combined_text = emitted_text + pending_delta
+            if final_text.startswith(combined_text):
+                final_delta = pending_delta + final_text[len(combined_text) :]
+            else:
+                # Keep the artifact complete even if a custom provider does
+                # not repeat its accumulated content in the final event.
+                final_delta = final_text if not emitted_artifact else pending_delta
+            if final_delta or not emitted_artifact:
+                await updater.add_artifact(
+                    [sdk.Part(root=sdk.TextPart(text=final_delta))],
+                    artifact_id=artifact_id,
+                    name="result",
+                    append=emitted_artifact,
+                    last_chunk=True,
+                )
+            return final_response
 
         async def execute(self, context: Any, event_queue: Any) -> None:
             task_id = context.task_id or str(uuid4())
@@ -84,9 +146,11 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
             try:
                 await updater.submit()
                 await updater.start_work()
-                response = await self._agent.invoke(
-                    AgentRequest(input=_payload_from(context), session_id=context_id)
-                )
+                request = AgentRequest(input=_payload_from(context), session_id=context_id)
+                if _streaming_enabled(self._agent):
+                    response = await self._stream_response(request, updater)
+                else:
+                    response = await self._agent.invoke(request)
             except asyncio.CancelledError:
                 await updater.cancel()
                 raise
@@ -98,13 +162,11 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
                 )
                 return
             else:
-                output = response.output
-                content = output.get("content") if isinstance(output, dict) else None
-                text = str(content) if content else json.dumps(output, default=str)
-                await updater.add_artifact(
-                    [sdk.Part(root=sdk.TextPart(text=text))],
-                    name="result",
-                )
+                if not _streaming_enabled(self._agent):
+                    await updater.add_artifact(
+                        [sdk.Part(root=sdk.TextPart(text=_response_text(response)))],
+                        name="result",
+                    )
                 await updater.complete()
             finally:
                 if current_task is not None and self._in_flight.get(task_id) is current_task:
@@ -135,11 +197,16 @@ def attach_a2a(
 
     The agent card is served at ``/.well-known/agent-card.json``; when
     ``enable_rpc`` is true (the definition enables A2A), the JSON-RPC
-    transport is mounted at ``/`` with a full non-streaming task lifecycle.
+    transport is mounted at ``/`` with streaming enabled only when the bound
+    runtime advertises it.
     Returns the mounted paths.
     """
     sdk = _import_sdk()
-    card = agent_card_from_definition(agent.definition, base_url=base_url)
+    card = agent_card_from_definition(
+        agent.definition,
+        base_url=base_url,
+        streaming=_streaming_enabled(agent),
+    )
     paths = {
         "card": "/.well-known/agent-card.json",
         "protocol_version": card.protocol_version,

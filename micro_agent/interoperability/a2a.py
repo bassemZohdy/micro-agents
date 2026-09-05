@@ -2,9 +2,10 @@
 
 The agent card is the SDK's model served at the standard
 ``/.well-known/agent-card.json`` route, and the JSON-RPC transport bridges
-A2A tasks onto Micro-Agent invocations with a complete non-streaming task
-lifecycle. Declared protocol versions must be supported by the installed
-SDK; requests declaring an unsupported version are rejected.
+A2A tasks onto Micro-Agent invocations with non-streaming and streaming task
+lifecycles when the bound runtime supports streaming. Declared protocol
+versions must be supported by the installed SDK; requests declaring an
+unsupported version are rejected.
 """
 
 from __future__ import annotations
@@ -76,6 +77,7 @@ def agent_card_from_definition(
     base_url: str | None = None,
     security_scheme: dict[str, Any] | None = None,
     scheme_name: str = "oidc",
+    streaming: bool = False,
 ) -> Any:
     """Build the SDK AgentCard from a MicroAgentDefinition.
 
@@ -102,7 +104,10 @@ def agent_card_from_definition(
         preferred_transport="JSONRPC",
         protocol_version=normalize_protocol_version(declared),
         skills=skills_mapping(definition),
-        capabilities=a2a_types.AgentCapabilities(streaming=False, push_notifications=False),
+        capabilities=a2a_types.AgentCapabilities(
+            streaming=streaming,
+            push_notifications=False,
+        ),
         default_input_modes=["application/json"],
         default_output_modes=["application/json"],
         security=security,

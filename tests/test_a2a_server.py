@@ -44,8 +44,16 @@ class FakeTaskUpdater:
     def new_agent_message(self, parts: list[FakePart]) -> list[FakePart]:
         return parts
 
-    async def add_artifact(self, parts: list[FakePart], *, name: str) -> None:
-        self.events.append(("artifact", (parts, name)))
+    async def add_artifact(
+        self,
+        parts: list[FakePart],
+        *,
+        artifact_id: str | None = None,
+        name: str | None = None,
+        append: bool | None = None,
+        last_chunk: bool | None = None,
+    ) -> None:
+        self.events.append(("artifact", (parts, name, artifact_id, append, last_chunk)))
 
     async def complete(self) -> None:
         self.events.append(("complete", None))
@@ -93,6 +101,18 @@ class FakeAgent:
         return SimpleNamespace(output=self.output)
 
 
+class StreamingAgent(FakeAgent):
+    @property
+    def runtime_capabilities(self) -> SimpleNamespace:
+        return SimpleNamespace(streaming=True)
+
+    async def stream(self, request: object):
+        self.request = request
+        yield SimpleNamespace(delta="hel", response=None)
+        yield SimpleNamespace(delta="lo", response=None)
+        yield SimpleNamespace(response=SimpleNamespace(output={"content": "hello"}))
+
+
 def test_payload_from_supports_json_and_plain_text() -> None:
     assert a2a_server._payload_from(FakeContext('{"question": "ping"}')) == {"question": "ping"}
     assert a2a_server._payload_from(FakeContext("ping")) == {"message": "ping"}
@@ -113,6 +133,36 @@ async def test_executor_completes_and_maps_invocation(monkeypatch: pytest.Monkey
     assert [name for name, _value in FakeTaskUpdater.last.events] == [
         "submit",
         "start_work",
+        "artifact",
+        "complete",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_executor_streams_appendable_artifact_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(a2a_server, "_import_sdk", _sdk)
+    agent = StreamingAgent()
+    executor = a2a_server.build_micro_agent_executor(agent)  # type: ignore[arg-type]
+
+    await executor.execute(FakeContext("ping"), "queue")
+
+    assert FakeTaskUpdater.last is not None
+    artifacts = [payload for name, payload in FakeTaskUpdater.last.events if name == "artifact"]
+    assert len(artifacts) == 2
+    first_parts, _, artifact_id, append, last_chunk = artifacts[0]
+    assert first_parts[0].root.text == "hel"
+    assert artifact_id == "task-1:result"
+    assert append is False
+    assert last_chunk is False
+    final_parts, _, final_artifact_id, final_append, final_last_chunk = artifacts[1]
+    assert final_parts[0].root.text == "lo"
+    assert final_artifact_id == artifact_id
+    assert final_append is True
+    assert final_last_chunk is True
+    assert [name for name, _value in FakeTaskUpdater.last.events] == [
+        "submit",
+        "start_work",
+        "artifact",
         "artifact",
         "complete",
     ]

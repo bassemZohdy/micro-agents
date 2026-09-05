@@ -13,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 709 collected | 609 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 100 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 712 collected | 611 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -246,9 +246,10 @@ Implemented:
   route with the SDK card model: protocol binding/version, security schemes
   advertised from the configured authenticator, input/output modalities, and
   complete skill metadata
-- the JSON-RPC transport with a complete non-streaming task lifecycle
-  (submitted → working → completed/failed) bridged onto Micro-Agent
-  invocations through an AgentExecutor
+- the JSON-RPC transport with complete non-streaming and streaming task
+  lifecycles (submitted → working → completed/failed) bridged onto
+  Micro-Agent invocations through an AgentExecutor; streaming artifact chunks
+  are emitted only when the bound runtime advertises streaming
 - cancellation of in-flight executor tasks is wired through to the runtime
   invocation and transitions the A2A task to `canceled`
 - transport authentication shared with the native API guards A2A
@@ -257,13 +258,12 @@ Implemented:
 - declared protocol versions are validated at startup against the versions
   the installed SDK supports, and requests declaring another version are
   rejected
-- official-SDK client interop test: resolver + client resolve the card and
-  complete a non-streaming task end-to-end
+- official-SDK client interop tests: resolver + client resolve the card and
+  complete both non-streaming and streaming tasks end-to-end
 
 Gaps:
 
-- streaming tasks, push notifications, and extended authenticated cards are
-  not implemented (card advertises streaming as unavailable)
+- push notifications and extended authenticated cards are not implemented
 - task store is in-memory; durable task state arrives with production state
   providers
 
@@ -394,8 +394,8 @@ Implemented:
 Gaps:
 
 - response streaming is implemented for the built-in runtime when its model
-  provider advertises it; the Google ADK adapter and A2A transport remain
-  non-streaming and advertise that limitation
+  provider advertises it, and the A2A transport forwards those chunks; the
+  Google ADK adapter remains non-streaming and advertises that limitation
 - dashboards and alert thresholds remain deployment-owned; the full metric
   inventory, recommended dashboard panels, and PromQL alert examples are
   documented in docs/OBSERVABILITY.md (guarded by a source-vs-docs test), and
