@@ -59,7 +59,12 @@ from micro_agent.knowledge import (
 )
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import MemoryEntry, MemoryPolicy, MemoryProvider
-from micro_agent.models import ModelConfig, ModelProvider
+from micro_agent.models import (
+    ModelConfig,
+    ModelProvider,
+    ProviderCapabilities,
+    structured_output_generation,
+)
 from micro_agent.observability import AuditSink, Telemetry
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
@@ -141,7 +146,9 @@ class GoogleAdkRuntime(AgentRuntime):
             memory=self._config.memory_provider is not None,
             mcp=self._config.mcp_manager is not None,
             a2a=False,
-            structured_output=False,
+            structured_output=bool(
+                provider_capabilities and provider_capabilities.structured_output
+            ),
             checkpointing=False,
         )
 
@@ -155,7 +162,13 @@ class GoogleAdkRuntime(AgentRuntime):
             provider=model_ref.provider if model_ref else None,
             model_id=model_ref.model_id if model_ref else None,
             endpoint=model_ref.endpoint if model_ref else None,
-            generation=model_ref.generation if model_ref else {},
+            generation=structured_output_generation(
+                model_ref.generation if model_ref else {},
+                definition.spec.behavior.output_contract,
+                self._model_provider.capabilities()
+                if self._model_provider is not None
+                else ProviderCapabilities(),
+            ),
             timeout_seconds=model_ref.timeout_seconds if model_ref else None,
         )
         adk_model = self._adk_model(definition, model_config)

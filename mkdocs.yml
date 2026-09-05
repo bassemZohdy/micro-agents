@@ -16,6 +16,8 @@ nav:
   - Checkpointing: CHECKPOINTING.md
   - Performance: PERFORMANCE.md
   - Observability: OBSERVABILITY.md
+  - Streaming: STREAMING.md
+  - Structured Output: STRUCTURED_OUTPUT.md
   - HTTP API: API.md
   - Deployment: DEPLOYMENT.md
   - Cloud Registry: CLOUD_REGISTRY.md
