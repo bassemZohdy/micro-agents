@@ -10,7 +10,19 @@
       "Shell(mypy:*)",
       "Shell(python -m micro_agent.definition.schema)",
       "Shell(gh:*)",
-      "Shell(awk:*)"
+      "Shell(awk:*)",
+      "Shell(python -m pytest tests/test_cloud_registry.py tests/test_cloud_gateway.py tests/test_cloud_observability.py tests/test_cloud_config.py -q 2 >& 1)",
+      "Shell(python -m pytest -q 2 >& 1)",
+      "Shell(sed:*)",
+      "Shell(python -m pytest --lf --collect-only -q 2 > /dev/null)",
+      "Shell(python -m pytest tests/test_default_agent.py::TestHTTPAuthentication::test_health_and_discovery_routes_stay_public tests/test_redis_session.py::test_redis_memory_provider_shares_entries tests/test_acceptance.py::TestRealNetworkService::test_live_service_endpoints -x -q 2 >& 1)",
+      "Shell(grep:*)",
+      "Shell(python -m pytest tests/test_redis_session.py::test_redis_memory_provider_shares_entries -x -q 2 >& 1)",
+      "Shell(python -m pytest tests/test_acceptance.py::TestRealNetworkService::test_live_service_endpoints tests/test_mcp_sdk.py::test_streamable_http_interop_discover_and_call -q 2 >& 1)",
+      "Shell(python -m pytest tests/test_default_agent.py::TestHTTPAuthentication::test_health_and_discovery_routes_stay_public -q 2 >& 1)",
+      "Shell(python -c  from micro_agent.a2a import a2a_well_known_path print(a2a_well_known_path())  2 > /dev/null)",
+      "Shell(cd /Users/bassem/Code/micro-agents && python -c \"import a2a; print(a2a.__version__ if hasattr(a2a,'__version__') else 'installed')\" 2>&1; python -c \"import redis; print('redis lib ok')\" 2>&1; grep -rn \"skipif\\|skip\" tests/test_redis_session.py | head -5; grep -rn \"redis\" tests/test_redis_session.py | head -10)",
+      "Shell(python -m pytest tests/test_mcp_sdk.py::test_streamable_http_interop_discover_and_call -q 2 >& 1)"
     ],
     "deny": [],
     "defaultMode": "default"

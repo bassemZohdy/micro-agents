@@ -13,4 +13,5 @@
 - Prefers pytest with pytest-asyncio for testing. Confidence: 0.9
 - Prefers hatchling as the build backend. Confidence: 0.85
 - Prefers concise, action-oriented communication — minimal preamble, direct to execution. Confidence: 0.85
+- Expects code reviews to cover the full deployment/runtime story (Dockerfile, k8s manifests, entrypoints, signal handling, health probes) — not just test-passing application code. Confidence: 0.85
 - Comfortable with milestone-driven project management and TODO tracking. Confidence: 0.85
