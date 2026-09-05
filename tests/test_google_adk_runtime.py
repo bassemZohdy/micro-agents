@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
+from micro_agent.knowledge import InMemoryKnowledgeRetriever
+from micro_agent.memory import InMemoryMemoryProvider, MemoryEntry, MemoryPolicy
 from micro_agent.models import (
     FakeModelConfig,
     FakeModelProvider,
@@ -14,6 +19,15 @@ from micro_agent.models import (
     ModelResponse,
 )
 from runtimes.google_adk import GoogleAdkError, GoogleAdkRuntime, GoogleAdkRuntimeConfig
+from runtimes.google_adk.runtime import (
+    _adk_name,
+    _approval_metadata,
+    _entry_text,
+    _event_text,
+    _has_pending_confirmation,
+    _messages_from_adk,
+    _tools_from_adk,
+)
 
 pytest.importorskip("google.adk")
 
@@ -614,5 +628,200 @@ async def test_adk_runtime_retrieves_knowledge_before_model_call():
         assert "Refund policy allows returns for thirty days." in user_messages[-1]["content"]
         assert "untrusted reference data" in user_messages[-1]["content"]
         assert response.metadata["knowledge_entries"] == 1
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.parametrize(
+    ("definition_name", "adk_name"),
+    [
+        ("residency-renewal", "micro_agent_residency_renewal"),
+        ("9-agent", "micro_agent_agent_9_agent"),
+        ("", "micro_agent_agent_"),
+    ],
+)
+def test_adk_name_normalizes_runtime_identifiers(definition_name, adk_name):
+    assert _adk_name(definition_name) == adk_name
+
+
+def test_messages_from_adk_maps_text_tool_calls_and_responses():
+    function_call = SimpleNamespace(id="call-1", name="echo", args={"message": "hi"})
+    function_response = SimpleNamespace(id="call-1", name="echo", response={"echoed": "hi"})
+    request = SimpleNamespace(
+        contents=[
+            SimpleNamespace(
+                role="model",
+                parts=[SimpleNamespace(text="I will check.", function_call=function_call)],
+            ),
+            SimpleNamespace(
+                role="user",
+                parts=[SimpleNamespace(function_response=function_response)],
+            ),
+        ]
+    )
+
+    assert _messages_from_adk(request) == [
+        {
+            "role": "assistant",
+            "content": "I will check.",
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                        "name": "echo",
+                        "arguments": '{"message": "hi"}',
+                    },
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call-1",
+            "name": "echo",
+            "content": '{"echoed": "hi"}',
+        },
+    ]
+
+
+def test_tools_from_adk_maps_declarations():
+    declaration = SimpleNamespace(parameters_json_schema={"type": "object"})
+    tool = SimpleNamespace(
+        description="Echo text",
+        _get_declaration=lambda: declaration,
+    )
+
+    assert _tools_from_adk(SimpleNamespace(tools_dict={"echo": tool})) == [
+        {
+            "name": "echo",
+            "description": "Echo text",
+            "input_schema": {"type": "object"},
+        }
+    ]
+
+
+def test_adk_event_and_memory_entry_text_helpers():
+    event = SimpleNamespace(
+        content=SimpleNamespace(
+            parts=[SimpleNamespace(text="hello "), SimpleNamespace(text="world")]
+        )
+    )
+
+    assert _event_text(event) == "hello world"
+    assert _entry_text(MemoryEntry(key="k", value={"text": "stored"}, scope="agent")) == "stored"
+    assert _entry_text(MemoryEntry(key="k", value="plain", scope="agent")) == "plain"
+
+
+def test_pending_confirmation_helper_rejects_answered_calls():
+    function_call = SimpleNamespace(
+        name="adk_request_confirmation",
+        id="continuation-1",
+    )
+    function_response = SimpleNamespace(id="continuation-1")
+    requested = [
+        SimpleNamespace(
+            content=SimpleNamespace(parts=[SimpleNamespace(function_call=function_call)])
+        )
+    ]
+
+    assert _has_pending_confirmation(requested, "continuation-1") is True
+    answered = requested + [
+        SimpleNamespace(
+            content=SimpleNamespace(parts=[SimpleNamespace(function_response=function_response)])
+        )
+    ]
+    assert _has_pending_confirmation(answered, "continuation-1") is False
+
+
+def test_approval_metadata_maps_confirmation_events():
+    confirmation_call = SimpleNamespace(
+        name="adk_request_confirmation",
+        id="continuation-1",
+        args={
+            "originalFunctionCall": {"id": "call-1", "name": "echo"},
+            "toolConfirmation": {"hint": "Approve echo", "payload": {"safe": True}},
+        },
+    )
+    event = SimpleNamespace(
+        actions=SimpleNamespace(requested_tool_confirmations={"call-1": {}}),
+        content=SimpleNamespace(parts=[SimpleNamespace(function_call=confirmation_call)]),
+    )
+
+    assert _approval_metadata([event]) == {
+        "continuation_id": "continuation-1",
+        "pending_tools": ["echo"],
+        "approval_hints": {"echo": "Approve echo"},
+        "approval_payloads": {"echo": {"safe": True}},
+    }
+
+
+@pytest.mark.asyncio
+async def test_adk_runtime_honors_request_timeout():
+    never_finishes = asyncio.Event()
+
+    class SlowRunner:
+        async def run_async(self, **kwargs):
+            await never_finishes.wait()
+            if False:
+                yield None
+
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=FakeModelProvider(),
+            runner_factory=lambda **kwargs: SlowRunner(),
+        )
+    )
+    agent = await runtime.create(_definition())
+    try:
+        with pytest.raises(TimeoutError):
+            await runtime.invoke(
+                agent, AgentRequest(input={"message": "timeout"}, timeout_seconds=0.01)
+            )
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_runtime_stop_shutdown_and_close_release_resources():
+    class ClosableRunner:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    runner = ClosableRunner()
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=FakeModelProvider(),
+            runner_factory=lambda **kwargs: runner,
+        )
+    )
+    agent = await runtime.create(_definition())
+
+    await runtime.start(agent)
+    await runtime.stop(agent)
+    await runtime.shutdown(agent)
+    assert agent._internal is None
+    await runtime.close()
+    assert runner.closed is True
+
+
+@pytest.mark.asyncio
+async def test_adk_runtime_health_probes_cover_injected_dependencies():
+    runtime = GoogleAdkRuntime(
+        GoogleAdkRuntimeConfig(
+            model_provider=FakeModelProvider(),
+            memory_provider=InMemoryMemoryProvider(MemoryPolicy()),
+            knowledge_provider=InMemoryKnowledgeRetriever(documents={"rules": ["A rule."]}),
+        )
+    )
+    await runtime.create(_definition(dependencies_extra={"knowledge": [{"ref": "rules"}]}))
+    try:
+        probes = runtime.health_probes()
+        assert set(probes) == {"model", "memory", "knowledge"}
+        assert await probes["model"]() is True
+        assert await probes["memory"]() is True
+        assert await probes["knowledge"]() is True
     finally:
         await runtime.close()

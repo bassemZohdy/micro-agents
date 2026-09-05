@@ -12,10 +12,13 @@ All notable changes to the Micro-Agents project are documented in this file.
   80% coverage floor in `pyproject.toml`.
 - Re-exported the implemented C1-C4 cloud control-plane surfaces from the
   top-level `cloud` package and verified the public API contract. The current
-  verification baseline is 683 collected tests, 584 passing in the default
-  selection, 99 deselected integration/E2E/OTel tests, and 83.68% coverage.
+  verification baseline is 696 collected tests, 597 passing in the default
+  selection, 99 deselected integration/E2E/OTel tests, and 83.73% coverage.
 - Wired A2A executor cancellation to cancel the in-flight Micro-Agent task,
   with a regression test for the canceled task transition.
+- Expanded Google ADK adapter coverage for identifier/message/tool mapping,
+  confirmation metadata, timeout handling, lifecycle cleanup, and dependency
+  health probes.
 
 ### Cloud (C2)
 
