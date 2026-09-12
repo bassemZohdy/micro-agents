@@ -1,4 +1,4 @@
-"""Micro-Agent Cloud control-plane surfaces (C1-C4).
+"""Micro-Agent Cloud control-plane surfaces (C1-C5 reference slices).
 
 This package is the control-plane side of the boundary defined in ADR 0013:
 it may import the core framework, but the core framework never imports it,
@@ -11,6 +11,7 @@ from cloud.config import (
     EnvironmentSecretResolver,
     InMemoryConfigStore,
     SecretResolver,
+    SqliteConfigStore,
     create_config_app,
 )
 from cloud.config_client import ConfigClient, ConfigPlaneUnreachableError
@@ -40,6 +41,7 @@ from cloud.gateway import (
 )
 from cloud.observability import (
     InMemoryObservabilityStore,
+    SqliteObservabilityStore,
     TraceSpan,
     UsageRecord,
     create_observability_app,
@@ -47,6 +49,7 @@ from cloud.observability import (
 from cloud.registry import (
     InMemoryAgentRegistry,
     RegistryEntry,
+    SqliteAgentRegistry,
     UnknownAgentError,
     create_registry_app,
 )
@@ -70,6 +73,9 @@ __all__ = [
     "InMemoryAgentRegistry",
     "InMemoryConfigStore",
     "InMemoryObservabilityStore",
+    "SqliteAgentRegistry",
+    "SqliteConfigStore",
+    "SqliteObservabilityStore",
     "RegistryDiscoveryClient",
     "RegistryEntry",
     "RegistryUnreachableError",

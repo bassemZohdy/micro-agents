@@ -10,6 +10,7 @@ from cloud.config import (
     ConfigValidationError,
     EnvironmentSecretResolver,
     InMemoryConfigStore,
+    SqliteConfigStore,
     create_config_app,
 )
 from cloud.config_client import ConfigClient, ConfigPlaneUnreachableError
@@ -74,6 +75,22 @@ class TestConfigStore:
         assert resolver.resolve("PATH") is not None
         assert resolver.resolve("DEFINITELY_NOT_SET_12345") is None
 
+    async def test_sqlite_config_store_survives_reopen_and_preserves_versions(self, tmp_path):
+        path = tmp_path / "config.db"
+        store = SqliteConfigStore(path)
+        first = await store.store_definition("greeter", _definition_payload(version="1.0.0"))
+        second = await store.store_definition("greeter", _definition_payload(version="1.1.0"))
+        reopened = SqliteConfigStore(path)
+        assert (await reopened.get("greeter", "definition", first.version)).payload["metadata"][
+            "version"
+        ] == "1.0.0"
+        rolled = await reopened.rollback("greeter", "definition", second.version)
+        assert rolled.version == 3
+        assert len(await reopened.history("greeter", "definition")) == 3
+        assert await reopened.health_check()
+        await store.close()
+        await reopened.close()
+
 
 class TestConfigHttp:
     def test_http_roundtrip_validation_and_rollback(self):
@@ -115,6 +132,20 @@ class TestConfigHttp:
                 "/config/agents/greeter/rollback", json={"kind": "definition", "to_version": 77}
             )
             assert bad_rollback.status_code == 404
+
+    def test_durable_database_path_is_reused_by_new_app(self, tmp_path):
+        path = tmp_path / "config.db"
+        with TestClient(create_config_app(database_path=path)) as http:
+            assert (
+                http.put(
+                    "/config/agents/greeter/definition", json=_definition_payload()
+                ).status_code
+                == 200
+            )
+        with TestClient(create_config_app(database_path=path)) as http:
+            fetched = http.get("/config/agents/greeter/definition")
+            assert fetched.status_code == 200
+            assert fetched.json()["payload"]["metadata"]["name"] == "greeter"
 
 
 class TestConfigClient:

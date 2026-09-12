@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud.observability import InMemoryObservabilityStore, create_observability_app
+from cloud.observability import (
+    InMemoryObservabilityStore,
+    SqliteObservabilityStore,
+    create_observability_app,
+)
 
 
 def _span(trace_id: str, agent: str, span_id: str, **extra: object) -> dict[str, object]:
@@ -107,6 +111,48 @@ class TestStore:
         assert [event["action"] for event in acme] == ["tool.clock"]
         assert len(await store.audit_events(limit=1)) == 1
 
+    async def test_sqlite_observability_survives_reopen_and_applies_retention(self, tmp_path):
+        path = tmp_path / "observability.db"
+        store = SqliteObservabilityStore(path, retention_seconds=60)
+        await store.ingest(
+            [
+                _span("t1", "orchestrator", "s1"),
+                _span("t1", "greeter", "s2", caller_agent="orchestrator"),
+                {
+                    "kind": "usage",
+                    "trace_id": "t1",
+                    "agent": "greeter",
+                    "tenant": "acme",
+                    "input_tokens": 5,
+                    "output_tokens": 2,
+                    "cost_usd": 0.1,
+                },
+                {
+                    "kind": "audit",
+                    "trace_id": "t1",
+                    "agent": "greeter",
+                    "tenant": "acme",
+                    "action": "invoke",
+                    "decision": "allowed",
+                },
+            ]
+        )
+        reopened = SqliteObservabilityStore(path, retention_seconds=60)
+        assert len(await reopened.trace("t1")) == 2
+        assert (await reopened.topology())[0]["calls"] == 1
+        assert (await reopened.costs(tenant="acme"))["totals"]["input_tokens"] == 5
+        assert (await reopened.audit_events(tenant="acme"))[0]["action"] == "invoke"
+        assert await reopened.health_check()
+        await store.close()
+        await reopened.close()
+
+    async def test_sqlite_observability_evicts_oldest_rows_at_bound(self, tmp_path):
+        store = SqliteObservabilityStore(tmp_path / "observability.db", max_records=2)
+        await store.ingest([_span(str(index), "greeter", f"s{index}") for index in range(3)])
+        assert await store.trace("0") == []
+        assert len(await store.trace("2")) == 1
+        await store.close()
+
 
 class TestHttp:
     def test_http_ingest_and_views(self):
@@ -150,6 +196,19 @@ class TestHttp:
 
             audit = http.get("/observability/audit").json()["events"]
             assert audit[0]["action"] == "invoke"
+
+    def test_durable_database_path_is_reused_by_new_app(self, tmp_path):
+        path = tmp_path / "observability.db"
+        with TestClient(create_observability_app(database_path=path)) as http:
+            assert (
+                http.post(
+                    "/observability/events",
+                    json={"events": [_span("t1", "greeter", "s1")]},
+                ).status_code
+                == 200
+            )
+        with TestClient(create_observability_app(database_path=path)) as http:
+            assert http.get("/observability/traces/t1").status_code == 200
 
 
 class TestHttpHardening:

@@ -24,6 +24,14 @@ a pinned or the latest version; agents pin at start and keep it across
 config-plane outages (the C0 stance: the plane rolls versions, it never
 mutates a running agent).
 
+`SqliteConfigStore` provides the same contract across process restarts. It
+stores canonical JSON payloads and digests transactionally, preserves
+monotonic versions, and supports optional age-based retention while keeping
+the newest committed version. Use `create_config_app(database_path=...)` for
+an owned durable store, or inject `SqliteConfigStore` when lifecycle belongs to
+the host process. SQLite is the portable reference backend; a shared database
+implementation is required for independently scaled config-plane replicas.
+
 ## Secret references, never secret values
 
 Definitions carry `credential_ref` references and overlays carry endpoints —

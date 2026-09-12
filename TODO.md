@@ -31,8 +31,9 @@ Until the standalone release gate is complete:
 
 The immediate release task is the owner-side PyPI trusted-publisher setup
 above. The next implementation task is a shared multi-replica A2A/state
-backend and full protocol conformance. Cloud C5 hardening remains gated until
-the release task is complete.
+backend and full protocol conformance. SQLite durability now covers the
+framework and the Cloud registry/config/observability reference planes; shared
+database service operations and Cloud C5 edge hardening remain separate work.
 
 ## Standalone framework backlog
 
@@ -133,15 +134,19 @@ the release task is complete.
 
 ## Micro-Agent Cloud — C5 production hardening
 
-Cloud C0–C4 reference slices are implemented in the top-level `cloud` package;
-the following work remains deferred until the standalone release gate closes.
+Cloud C0–C4 reference slices and SQLite durability reference backends are
+implemented in the top-level `cloud` package; the following work remains
+deferred until the standalone release gate closes.
 
-- [ ] Add durable persistence for the cloud registry, with retention and
-      lease-recovery behavior. See [ADR 0014](docs/adr/0014-minimal-cloud-registry.md).
-- [ ] Add durable persistence for the cloud config plane. See
-      [ADR 0015](docs/adr/0015-versioned-cloud-config-plane.md).
-- [ ] Add durable persistence for cloud observability with retention and
-      eviction policy. See [ADR 0017](docs/adr/0017-observability-aggregation.md).
+- [x] Add durable persistence for the cloud registry, with stale-retention and
+      restart-safe lease recovery in `SqliteAgentRegistry`. Shared database
+      operations remain deployment work. See [ADR 0014](docs/adr/0014-minimal-cloud-registry.md).
+- [x] Add durable persistence for the cloud config plane, with transactional
+      versions and optional retention in `SqliteConfigStore`. Shared database
+      operations remain deployment work. See [ADR 0015](docs/adr/0015-versioned-cloud-config-plane.md).
+- [x] Add durable persistence for cloud observability with retention and
+      bounded eviction in `SqliteObservabilityStore`. Shared ingestion and
+      plane authentication remain deployment work. See [ADR 0017](docs/adr/0017-observability-aggregation.md).
 - [ ] Add shared-state backends for gateway circuit-breaker, rate-limit, and
       bulkhead state across replicas. See [CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
 - [ ] Implement gateway streaming pass-through; the current gateway buffers

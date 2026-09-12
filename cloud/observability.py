@@ -12,14 +12,18 @@ view. The plane aggregates four things:
 
 The plane is read-mostly: it can answer what happened, never change it, and
 losing it loses visibility, not agents (C0 failure stance). The in-memory
-store is the minimal C4 form; a durable backend replaces, not extends, it.
+store remains the lightweight default; ``SqliteObservabilityStore`` adds
+retention-aware restart-safe storage for the reference deployment.
 """
 
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -191,12 +195,300 @@ class InMemoryObservabilityStore:
         return list(reversed(events))[:limit]
 
 
+class SqliteObservabilityStore:
+    """Durable observability aggregation with bounded retention.
+
+    The input contract and query shapes match :class:`InMemoryObservabilityStore`.
+    SQLite stores normalized span, usage, and audit rows, purging records older
+    than ``retention_seconds`` and evicting oldest rows when a table reaches its
+    configured bound.
+    """
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        retention_seconds: float = 30 * 24 * 60 * 60,
+        max_records: int = 100_000,
+    ) -> None:
+        if retention_seconds <= 0 or max_records < 1:
+            raise ValueError("retention_seconds and max_records must be positive")
+        self.path = str(path)
+        self.retention_seconds = float(retention_seconds)
+        self.max_records = max_records
+        self._lock = threading.RLock()
+        self._memory_connection: sqlite3.Connection | None = None
+        if self.path == ":memory:":
+            self._memory_connection = sqlite3.connect(self.path)
+            self._initialize(self._memory_connection)
+        else:
+            path_obj = Path(self.path)
+            if path_obj.parent != Path(""):
+                path_obj.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(self.path) as connection:
+                self._initialize(connection)
+
+    @staticmethod
+    def _initialize(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS cloud_observability_spans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trace_id TEXT NOT NULL,
+                agent TEXT NOT NULL,
+                span_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                parent_span_id TEXT,
+                caller_agent TEXT,
+                tenant TEXT,
+                duration_ms REAL NOT NULL,
+                status TEXT NOT NULL,
+                received_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_cloud_obs_spans_trace
+                ON cloud_observability_spans (trace_id, received_at, id);
+            CREATE TABLE IF NOT EXISTS cloud_observability_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trace_id TEXT NOT NULL,
+                agent TEXT NOT NULL,
+                tenant TEXT,
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL,
+                cost_usd REAL NOT NULL,
+                received_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_cloud_obs_usage_filter
+                ON cloud_observability_usage (agent, tenant, received_at);
+            CREATE TABLE IF NOT EXISTS cloud_observability_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trace_id TEXT NOT NULL,
+                agent TEXT NOT NULL,
+                tenant TEXT,
+                action TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                received_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_cloud_obs_audit_filter
+                ON cloud_observability_audit (tenant, received_at, id);
+            """
+        )
+        connection.commit()
+
+    def _run(self, operation: Any) -> Any:
+        with self._lock:
+            if self._memory_connection is not None:
+                return operation(self._memory_connection)
+            with sqlite3.connect(self.path) as connection:
+                return operation(connection)
+
+    @staticmethod
+    def _validated(events: list[dict[str, Any]]) -> InMemoryObservabilityStore:
+        """Reuse the in-memory validator/normalizer without persisting it."""
+        return InMemoryObservabilityStore()
+
+    async def ingest(self, events: list[dict[str, Any]]) -> int:
+        validator = self._validated(events)
+        accepted = await validator.ingest(events)
+        spans = [span for values in validator._spans.values() for span in values]
+        usage = list(validator._usage)
+        audit = list(validator._audit)
+        cutoff = time.time() - self.retention_seconds
+
+        def operation(connection: sqlite3.Connection) -> None:
+            connection.execute("BEGIN IMMEDIATE")
+            for span in spans:
+                connection.execute(
+                    "INSERT INTO cloud_observability_spans "
+                    "(trace_id, agent, span_id, name, parent_span_id, caller_agent, tenant, "
+                    "duration_ms, status, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        span.trace_id,
+                        span.agent,
+                        span.span_id,
+                        span.name,
+                        span.parent_span_id,
+                        span.caller_agent,
+                        span.tenant,
+                        span.duration_ms,
+                        span.status,
+                        span.received_at,
+                    ),
+                )
+            for record in usage:
+                connection.execute(
+                    "INSERT INTO cloud_observability_usage "
+                    "(trace_id, agent, tenant, input_tokens, output_tokens, cost_usd, received_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        record.trace_id,
+                        record.agent,
+                        record.tenant,
+                        record.input_tokens,
+                        record.output_tokens,
+                        record.cost_usd,
+                        record.received_at,
+                    ),
+                )
+            for event in audit:
+                connection.execute(
+                    "INSERT INTO cloud_observability_audit "
+                    "(trace_id, agent, tenant, action, decision, received_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        event["trace_id"],
+                        event["agent"],
+                        event["tenant"],
+                        event["action"],
+                        event["decision"],
+                        event["received_at"],
+                    ),
+                )
+            for table in (
+                "cloud_observability_spans",
+                "cloud_observability_usage",
+                "cloud_observability_audit",
+            ):
+                connection.execute(f"DELETE FROM {table} WHERE received_at < ?", (cutoff,))
+                connection.execute(
+                    f"DELETE FROM {table} WHERE id IN ("
+                    f"SELECT id FROM {table} ORDER BY received_at ASC, id ASC "
+                    "LIMIT MAX(0, (SELECT COUNT(*) FROM "
+                    f"{table}) - ?))",
+                    (self.max_records,),
+                )
+            connection.commit()
+
+        await asyncio.to_thread(self._run, operation)
+        return accepted
+
+    async def trace(self, trace_id: str) -> list[TraceSpan]:
+        def operation(connection: sqlite3.Connection) -> list[tuple[Any, ...]]:
+            return connection.execute(
+                "SELECT trace_id, agent, span_id, name, parent_span_id, caller_agent, tenant, "
+                "duration_ms, status, received_at FROM cloud_observability_spans "
+                "WHERE trace_id = ? ORDER BY received_at, id",
+                (trace_id,),
+            ).fetchall()
+
+        return [TraceSpan(*row) for row in await asyncio.to_thread(self._run, operation)]
+
+    async def topology(self) -> list[dict[str, Any]]:
+        def operation(connection: sqlite3.Connection) -> list[tuple[Any, ...]]:
+            return connection.execute(
+                "SELECT caller_agent, agent, COUNT(*) FROM cloud_observability_spans "
+                "WHERE caller_agent IS NOT NULL AND caller_agent != agent "
+                "GROUP BY caller_agent, agent ORDER BY caller_agent, agent"
+            ).fetchall()
+
+        return [
+            {"caller_agent": str(row[0]), "callee_agent": str(row[1]), "calls": int(row[2])}
+            for row in await asyncio.to_thread(self._run, operation)
+        ]
+
+    async def costs(self, *, tenant: str | None = None, agent: str | None = None) -> dict[str, Any]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if tenant is not None:
+            clauses.append("tenant = ?")
+            params.append(tenant)
+        if agent is not None:
+            clauses.append("agent = ?")
+            params.append(agent)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        def operation(connection: sqlite3.Connection) -> list[tuple[Any, ...]]:
+            return connection.execute(
+                "SELECT agent, COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0), "
+                "COALESCE(SUM(cost_usd), 0.0) FROM cloud_observability_usage"
+                + where
+                + " GROUP BY agent ORDER BY agent",
+                params,
+            ).fetchall()
+
+        rows = await asyncio.to_thread(self._run, operation)
+        totals: dict[str, dict[str, float]] = {
+            str(row[0]): {
+                "input_tokens": int(row[1]),
+                "output_tokens": int(row[2]),
+                "cost_usd": round(float(row[3]), 6),
+            }
+            for row in rows
+        }
+        return {
+            "totals": {
+                "input_tokens": sum(int(bucket["input_tokens"]) for bucket in totals.values()),
+                "output_tokens": sum(int(bucket["output_tokens"]) for bucket in totals.values()),
+                "cost_usd": round(sum(bucket["cost_usd"] for bucket in totals.values()), 6),
+            },
+            "by_agent": totals,
+        }
+
+    async def audit_events(
+        self, *, tenant: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        if not 1 <= limit <= _MAX_AUDIT_LIMIT:
+            raise ValueError(f"limit must be between 1 and {_MAX_AUDIT_LIMIT}")
+
+        def operation(connection: sqlite3.Connection) -> list[tuple[Any, ...]]:
+            if tenant is None:
+                return connection.execute(
+                    "SELECT trace_id, agent, tenant, action, decision, received_at "
+                    "FROM cloud_observability_audit ORDER BY received_at DESC, id DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            return connection.execute(
+                "SELECT trace_id, agent, tenant, action, decision, received_at "
+                "FROM cloud_observability_audit WHERE tenant = ? "
+                "ORDER BY received_at DESC, id DESC LIMIT ?",
+                (tenant, limit),
+            ).fetchall()
+
+        return [
+            {
+                "trace_id": str(row[0]),
+                "agent": str(row[1]),
+                "tenant": str(row[2]) if row[2] is not None else None,
+                "action": str(row[3]),
+                "decision": str(row[4]),
+                "received_at": float(row[5]),
+            }
+            for row in await asyncio.to_thread(self._run, operation)
+        ]
+
+    async def health_check(self) -> bool:
+        try:
+            await asyncio.to_thread(
+                self._run, lambda connection: connection.execute("SELECT 1").fetchone()
+            )
+            return True
+        except sqlite3.Error:
+            return False
+
+    async def close(self) -> None:
+        if self._memory_connection is not None:
+            await asyncio.to_thread(self._memory_connection.close)
+            self._memory_connection = None
+
+
 def create_observability_app(
-    store: InMemoryObservabilityStore | None = None,
+    store: InMemoryObservabilityStore | SqliteObservabilityStore | None = None,
+    *,
+    database_path: str | Path | None = None,
 ) -> FastAPI:
-    """FastAPI ingest + query surface (unauthenticated; C3 gateway work)."""
+    """Create the observability API with an in-memory or durable store."""
+    if store is not None and database_path is not None:
+        raise ValueError("pass store or database_path, not both")
     app = FastAPI(title="Micro-Agent Cloud Observability", version="0.1.0")
-    obs = store if store is not None else InMemoryObservabilityStore()
+    owned = database_path is not None
+    obs = (
+        store
+        if store is not None
+        else (
+            SqliteObservabilityStore(database_path)
+            if database_path is not None
+            else InMemoryObservabilityStore()
+        )
+    )
     app.state.observability_store = obs
 
     @app.post("/observability/events")
@@ -249,9 +541,30 @@ def create_observability_app(
 
     @app.get("/health/ready")
     async def ready() -> dict[str, bool]:
+        health_check = getattr(obs, "health_check", None)
+        healthy = bool(await health_check()) if health_check is not None else True
+        if not healthy:
+            raise HTTPException(status_code=503, detail="observability store unavailable")
         return {"ready": True}
+
+    if owned:
+
+        async def close_owned_store() -> None:
+            close = getattr(obs, "close", None)
+            if close is not None:
+                result = close()
+                if asyncio.iscoroutine(result):
+                    await result
+
+        app.router.on_shutdown.append(close_owned_store)
 
     return app
 
 
-__all__ = ["InMemoryObservabilityStore", "TraceSpan", "UsageRecord", "create_observability_app"]
+__all__ = [
+    "InMemoryObservabilityStore",
+    "SqliteObservabilityStore",
+    "TraceSpan",
+    "UsageRecord",
+    "create_observability_app",
+]

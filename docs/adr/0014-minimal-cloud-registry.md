@@ -16,16 +16,19 @@ enforced by review: `cloud` imports the core, the core never imports
 `cloud`, and the `cloud` package is excluded from the published
 `micro-agents` distribution. Descriptors (`v1alpha1`) are built only by
 `descriptor_from_definition`, which refuses a served agent card that
-contradicts the definition. The registry is an in-memory, lease-based store
-behind a small FastAPI surface; the discovery client caches per-query
-snapshots and serves them marked stale during registry outages.
+contradicts the definition. The registry is a lease-based store behind a
+small FastAPI surface: the in-memory implementation is the lightweight default
+and `SqliteAgentRegistry` provides restart-safe reference persistence. The
+discovery client caches per-query snapshots and serves them marked stale during
+registry outages.
 
 ## Consequences
 
 - the control-plane code is reviewable and testable next to the framework
   it observes, without the core gaining a single cloud import or dependency;
-- the in-memory, unauthenticated registry is explicitly minimal: durable
-  persistence and plane authentication remain separate C5 hardening work;
+- the unauthenticated registry is explicitly minimal: plane authentication
+  remains separate C5 hardening work; SQLite durability is available as a
+  reference backend but shared database operations are deployment work;
   the adjacent C2 config plane and C3 gateway do not silently replace the
   registry's storage or API boundary;
 - moving `cloud` to its own repository/deployment later is a packaging step
