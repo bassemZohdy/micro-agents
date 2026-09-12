@@ -31,7 +31,7 @@ the service becomes ready.
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
 | `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
-| `MICRO_AGENT_KNOWLEDGE_ENDPOINT` | `knowledge_endpoint` | wired for the durable SQLite knowledge retriever (`sqlite:///path` or a plain path); unsupported endpoints fail fast |
+| `MICRO_AGENT_KNOWLEDGE_ENDPOINT` | `knowledge_endpoint` | wired for SQLite (`sqlite:///path` or a plain path) or the bounded HTTP semantic retriever (`https://...`); unsupported endpoints fail fast |
 | `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for the tenant-scoped SQLite A2A task and push-configuration stores |
 | `MICRO_AGENT_POLICY_STORE_ENDPOINT` | `policy_store_endpoint` | wired for declared `security.policy_refs`; HTTPS is required except loopback HTTP |
 | `MICRO_AGENT_POLICY_STORE_TOKEN` | `policy_store_token` | optional bearer token for the policy store; held in bootstrap memory only |
@@ -138,9 +138,19 @@ a `KnowledgeRetriever` into `build_runtime`. Set
 to use the built-in durable, tenant-scoped SQLite retriever. It stores
 versioned documents and performs deterministic keyword retrieval behind the
 same SPI; it is a single-process reference backend, not a distributed vector
-search service. Without a configured retriever or SQLite endpoint, a declared
-source uses the empty in-memory retriever and therefore fails its startup
-health check instead of pretending knowledge is available.
+search service. Set the endpoint to an HTTPS URL to use the built-in
+`HttpKnowledgeRetriever`: it sends bounded `POST /search` requests and probes
+`GET /health/ready`. The request includes `query`, `source_ref`, `limit`, and,
+when declared, `version` and `tenant_id`; responses must contain a strict
+`{"results": [...]}` object with bounded text and numeric relevance. Inject a
+configured retriever with `bearer_token` when the search service requires
+authentication. Loopback HTTP is permitted only for local development, and
+the owned HTTP client disables ambient proxy variables and redirects. This
+adapter supplies the production-facing SPI boundary; the actual distributed
+vector/index service and its capacity/SLO operations remain deployment-owned.
+Without a configured retriever or SQLite/HTTP endpoint, a declared source uses
+the empty in-memory retriever and therefore fails its startup health check
+instead of pretending knowledge is available.
 
 ## A2A task state and push notifications
 

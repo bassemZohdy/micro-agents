@@ -53,9 +53,12 @@ database service operations and Cloud C5 edge hardening remain separate work.
 - [ ] Validate full A2A v1.0.1 conformance with the official SDK, including
       unsupported/error paths beyond the currently tested non-streaming and
       streaming subset.
-- [ ] Implement a production semantic knowledge provider. The durable,
-      versioned, tenant-scoped SQLite keyword backend is complete as a
-      portable reference but is not a distributed vector/search service.
+- [x] Implement a production-facing semantic knowledge provider adapter. The
+      bounded `HttpKnowledgeRetriever` supports HTTPS semantic/vector or hybrid
+      search services with tenant/version propagation, strict result parsing,
+      optional bearer auth, content hashes, and readiness probing. Operating a
+      distributed vector/index service and validating its capacity remain
+      deployment work; SQLite remains the portable reference backend.
 
 ### P1 — Security and policy
 

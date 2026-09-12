@@ -1,9 +1,12 @@
 """Tests for Micro-Agent Knowledge."""
 
+import httpx
 import pytest
 
 from micro_agent.knowledge import (
+    HttpKnowledgeRetriever,
     KnowledgeEntry,
+    KnowledgeProviderError,
     KnowledgeRetriever,
     KnowledgeSource,
     SqliteKnowledgeRetriever,
@@ -73,3 +76,70 @@ async def test_sqlite_knowledge_is_versioned_and_tenant_scoped(tmp_path) -> None
     await retriever.delete_document(tenant_a, "rule-1")
     assert await retriever.retrieve("renewal", tenant_a) == []
     await retriever.close()
+
+
+@pytest.mark.asyncio
+async def test_http_knowledge_retriever_bounds_and_propagates_search_context() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/health/ready"):
+            return httpx.Response(200)
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "content": "Refunds are allowed for thirty days.",
+                        "score": 0.91,
+                        "version": "2026.09",
+                        "metadata": {"document_id": "refunds"},
+                    }
+                ]
+            },
+        )
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://search.test/api/"
+    )
+    retriever = HttpKnowledgeRetriever(
+        "https://search.test/api", bearer_token="search-token", client=client
+    )
+    source = KnowledgeSource(
+        ref="policy-kb", version="2026.09", max_results=1, metadata={"tenant_id": "acme"}
+    )
+    try:
+        entries = await retriever.retrieve("refund policy", source, limit=5)
+        assert entries[0].content.startswith("Refunds")
+        assert entries[0].relevance == 0.91
+        assert entries[0].metadata["content_hash"]
+        assert await retriever.health_check(source)
+        search = requests[0]
+        assert search.url.path == "/api/search"
+        assert search.headers["Authorization"] == "Bearer search-token"
+        assert search.content == (
+            b'{"query":"refund policy","source_ref":"policy-kb","limit":1,'
+            b'"version":"2026.09","tenant_id":"acme"}'
+        )
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_http_knowledge_retriever_rejects_invalid_results() -> None:
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{}]})),
+        base_url="https://search.test",
+    )
+    retriever = HttpKnowledgeRetriever("https://search.test", client=client)
+    try:
+        with pytest.raises(KnowledgeProviderError, match="content"):
+            await retriever.retrieve("query", KnowledgeSource(ref="kb"))
+    finally:
+        await client.aclose()
+
+
+def test_http_knowledge_endpoint_requires_https_outside_loopback() -> None:
+    with pytest.raises(ValueError, match="HTTPS"):
+        HttpKnowledgeRetriever("http://search.example")

@@ -6,6 +6,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Security and downstream protocols
 
+- Added a bounded `HttpKnowledgeRetriever` semantic-search adapter with strict
+  HTTPS/loopback endpoint validation, optional bearer authentication, tenant
+  and version propagation, content-integrity metadata, and readiness probes.
 - Added an optional strict HTTP token-exchange provider for remote MCP
   delegation. Verified invocation identity is exchanged for a short-lived
   Bearer token and injected per MCP JSON-RPC request, with HTTPS/loopback,

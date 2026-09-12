@@ -1061,6 +1061,21 @@ def test_declared_knowledge_constructs_builtin_provider():
         asyncio.run(bootstrap.runtime.close())
 
 
+def test_declared_knowledge_constructs_http_provider():
+    from micro_agent.knowledge import HttpKnowledgeRetriever
+
+    bootstrap = build_runtime(
+        _knowledge_definition(),
+        environment=EnvironmentConfig(knowledge_endpoint="https://search.example/api"),
+    )
+    try:
+        assert isinstance(bootstrap.runtime._config.knowledge_provider, HttpKnowledgeRetriever)
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
 def test_declared_knowledge_constructs_provider_for_google_adk(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "google-adk")
     from micro_agent.knowledge import InMemoryKnowledgeRetriever
