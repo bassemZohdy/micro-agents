@@ -1,7 +1,8 @@
 # Implementation Status
 
 Last audited: 2026-09-12
-Audited implementation revision: `main` @ `14a2b02` on 2026-09-12
+Audited implementation revision: current changes derived from `main` @
+`973d0f0` on 2026-09-12
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -12,7 +13,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 774 collected | 667 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
+| Tests | 776 collected | 669 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -176,10 +177,13 @@ Implemented:
 - an operator-invoked external harness for deployed Micro-Agent HTTP and
   Streamable HTTP MCP endpoints, measuring bounded live model/network/tool
   latency with redacted token handling
+- an operator-invoked sequential rising-concurrency capacity matrix that
+  preserves per-stage errors, p95 latency, throughput, replica count, and
+  shared-state metadata
 
 Gaps:
 
-- distributed contention and production capacity planning still require
+- live multi-replica contention and production SLO sign-off still require
   deployment-owned Redis/Postgres environments; the checked-in CI scenarios
   remain deterministic framework-overhead guardrails
 
@@ -496,7 +500,10 @@ static/OIDC authentication while retaining an unauthenticated local default.
 The `cloud`
 package is not part of the published `micro-agents` distribution. The core
 framework neither imports nor depends on cloud code; standalone product claims
-are unchanged.
+are unchanged. [ADR 0018](adr/0018-cloud-repository-boundary.md) records the
+repository-boundary evaluation: keep the reference slices in this repository
+until their contracts, ownership, release automation, and CI boundary
+stabilize, then revisit an independent split.
 
 ## Production-readiness conclusion
 
@@ -508,7 +515,7 @@ production capabilities.
 
 The immediate release-gate action is the PyPI trusted-publisher configuration
 (an owner action on pypi.org). Remaining implementation and deployment
-priorities are distributed contention/capacity validation, distributed
+priorities are production execution of the capacity matrix, distributed
 knowledge-service operations, target-cluster supply-chain admission, and live
 promotion/rollback; the complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).

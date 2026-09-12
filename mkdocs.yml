@@ -55,3 +55,4 @@ nav:
       - 0015 Versioned cloud config plane: adr/0015-versioned-cloud-config-plane.md
       - 0016 Gateway edge policy and resilience: adr/0016-gateway-edge-policy.md
       - 0017 Read-mostly observability aggregation: adr/0017-observability-aggregation.md
+      - 0018 Cloud repository boundary: adr/0018-cloud-repository-boundary.md

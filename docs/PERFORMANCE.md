@@ -68,6 +68,27 @@ included in the JSON report. Live model, network, tool, replica, and datastore
 measurements depend on the deployment. Record the endpoint version, replica
 count, datastore topology, load, and report when establishing production SLOs.
 
+For distributed contention and capacity planning, run a sequential matrix of
+increasing concurrency levels through the deployed front door:
+
+```bash
+python benchmarks/run_capacity_benchmark.py \
+  --protocol http \
+  --endpoint https://gateway.example.com/v1/invoke \
+  --concurrency-levels 1,2,4,8,16 \
+  --iterations-per-level 100 \
+  --deployment-label prod-2026-09-12 \
+  --replicas 3 \
+  --shared-state redis
+```
+
+The report preserves every stage and summarizes total errors, maximum error
+rate, maximum p95 latency, and peak throughput. A passing report only means
+the calls completed; it is not a universal capacity budget. Run repeated
+matrices during a controlled window against the actual multi-replica service
+and shared Redis/Postgres topology, then review saturation, telemetry, and
+rollback behavior with the deployment owner.
+
 ## CI policy
 
 CI runs both fake scenarios with budget enforcement after the unit tests. A

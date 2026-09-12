@@ -31,7 +31,8 @@ operated independently.
   shared memory, session, and operation-registry providers)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
 - Prometheus-compatible operational metrics at `/metrics`
-- deterministic runtime/HTTP benchmarks with versioned resource budgets
+- deterministic runtime/HTTP benchmarks with versioned resource budgets plus
+  operator-invoked external HTTP/MCP and rising-concurrency capacity harnesses
 - container and Kubernetes/OpenShift-oriented deployment examples
 
 The **Micro-Agent Cloud** workstream is separate from the standalone framework.
@@ -202,14 +203,14 @@ state, or A2A task interoperability.
 |---|---|---|
 | Definition | Typed loader, v1alpha1/v1beta1 schemas and migration fixture, semantic uniqueness/format checks, runtime contract enforcement, deployment endpoint overlays, and versioned model-alias catalogs | broader resource catalog types |
 | Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests and native confirmation continuations | external production state |
-| Models | Explicit fake provider, native Anthropic Messages, versioned model-alias catalog resolution, and definition/environment-selected OpenAI-compatible HTTP clients with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
+| Models | Explicit fake provider, native Anthropic Messages, versioned model-alias catalog resolution, and definition/environment-selected OpenAI-compatible HTTP clients with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and production live-model baselines |
 | Tools | `echo` and bounded `json_parse` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
-| MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and application-visible bounded notifications | remote production load testing |
+| MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, application-visible bounded notifications, and operator benchmark harnesses | production deployment baselines and SLO validation |
 | A2A | official `a2a-sdk==1.0.1` card and JSON-RPC non-streaming/streaming task lifecycles, tenant-scoped SQLite and Redis task/push stores, authenticated integration tests, and runtime-wired cancellation | optional extended-card features and production protocol validation |
 | State | definition-wired in-memory and durable SQLite knowledge/task/audit stores, SQLite and Redis A2A task/push stores, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits | durable Google ADK approval state, shared database service operations, and deployment validation |
 | Security | authentication, verified caller/workload propagation, injected and HTTP policy-store resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, redacted audit events, database-backed audit persistence, Vault/AWS secret-provider adapters, and optional per-request remote-MCP token exchange | deployment-owned exchange service, KMS adapter, and cluster secret bindings |
 | Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, token/cost conventions, and Prometheus histograms | operational dashboards/alerts |
-| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, shared Redis gateway resilience state, proxy defaults, tested Kubernetes deployment baseline, and reference cloud-gateway OIDC/streaming paths | target-cluster supply-chain policy/validation and production bootstrap |
+| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, shared Redis gateway resilience state, proxy defaults, tested Kubernetes deployment baseline, external HTTP/MCP and rising-concurrency capacity harnesses, and reference cloud-gateway OIDC/streaming paths | target-cluster supply-chain policy/validation and production bootstrap |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.
