@@ -63,6 +63,12 @@ degrade-to-last-good stance as discovery: when the plane is unreachable the
 last observed payload is returned annotated `from_cache: true`, and without
 a cache the client raises `ConfigPlaneUnreachableError`.
 
+The versioned response envelope is defined by
+`schemas/cloud-config-v1alpha1.json`. Its `payload` is selected by `kind`:
+definitions retain the core `MicroAgentDefinition` version, while overlays
+retain the strict `EnvironmentOverlay` shape. See [Cloud Contract Schemas](CLOUD_SCHEMAS.md)
+for additive and breaking-change rules.
+
 ## Verification
 
 7 tests in `tests/test_cloud_config.py` cover append-only versioning,

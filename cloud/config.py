@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from cloud.auth import PlaneAuthenticator, install_plane_auth
+from cloud.schemas import ConfigRecordContract
 from micro_agent.config import EnvironmentOverlay
 from micro_agent.definition import load_definition_from_dict
 
@@ -333,7 +334,7 @@ def _record_payload(record: ConfigRecord, include_payload: bool) -> dict[str, An
     }
     if include_payload:
         body["payload"] = record.payload
-    return body
+    return ConfigRecordContract.model_validate(body).model_dump(exclude_none=True)
 
 
 def create_config_app(

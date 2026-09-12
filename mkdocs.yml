@@ -24,6 +24,7 @@ nav:
   - Cloud Configuration: CLOUD_CONFIG.md
   - Cloud Gateway: CLOUD_GATEWAY.md
   - Cloud Observability: CLOUD_OBSERVABILITY.md
+  - Cloud Contract Schemas: CLOUD_SCHEMAS.md
   - Compatibility: COMPATIBILITY.md
   - Standards: STANDARDS.md
   - Architecture:
@@ -32,6 +33,9 @@ nav:
       - Cloud Control-Plane Architecture (C0): architecture/CLOUD_ARCHITECTURE.md
   - Schema:
       - Micro-Agent Definition v1alpha1: schemas/micro-agent-v1alpha1.json
+      - Cloud Descriptor v1alpha1: schemas/cloud-descriptor-v1alpha1.json
+      - Cloud Config v1alpha1: schemas/cloud-config-v1alpha1.json
+      - Cloud Observability v1alpha1: schemas/cloud-observability-v1alpha1.json
   - Decisions:
       - 0001 Runtime-neutral definition: adr/0001-runtime-neutral-definition.md
       - 0002 One runtime first: adr/0002-adk-first-runtime-fake-model-ci.md

@@ -35,6 +35,11 @@ the static or OIDC gateway authenticator to protect the observability routes;
 readiness remains public for probes. Omitting it keeps the local reference app
 unauthenticated.
 
+The ingestion envelope and event baseline are defined by
+`schemas/cloud-observability-v1alpha1.json`. Event extensions are additive and
+preserved for producer compatibility; aggregation ignores fields it does not
+need. See [Cloud Contract Schemas](CLOUD_SCHEMAS.md) for the full policy.
+
 | Route | Purpose |
 | --- | --- |
 | `POST /observability/events` | batch ingest (`{"events": [...]}`, max 1000; 422 on invalid) |

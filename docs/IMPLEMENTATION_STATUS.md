@@ -440,6 +440,8 @@ Implemented:
 - package metadata and `micro-agent` console entrypoint
 - hash-pinned Linux/Python 3.11 runtime requirements with `pip --require-hashes`
   installation in the Dockerfile
+- generated v1alpha1 cloud descriptor, config-record, and observability-batch
+  schemas with matching boundary validation and compatibility documentation
 - checked-in Kubernetes baseline with resource requests/limits, replica
   spreading, disruption budget, autoscaling, default-deny network policy,
   Prometheus scrape annotations, and a tested 25-second drain/30-second grace

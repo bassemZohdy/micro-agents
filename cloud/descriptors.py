@@ -18,7 +18,9 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-DESCRIPTOR_SCHEMA_VERSION = "v1alpha1"
+from cloud.schemas import CLOUD_SCHEMA_VERSION, AgentDescriptorContract
+
+DESCRIPTOR_SCHEMA_VERSION = CLOUD_SCHEMA_VERSION
 
 _DEFAULT_A2A_PROTOCOL_VERSION = "0.3.0"
 
@@ -69,27 +71,31 @@ class AgentDescriptor:
                 f"unsupported descriptor schema version '{version}'; "
                 f"supported: {DESCRIPTOR_SCHEMA_VERSION}"
             )
+        try:
+            contract = AgentDescriptorContract.model_validate(payload)
+        except Exception as exc:  # noqa: BLE001 — normalize boundary errors
+            raise DescriptorError(f"invalid descriptor: {exc}") from exc
         skills = [
             SkillDescriptor(
-                id=str(skill["id"]),
-                name=str(skill["name"]),
-                description=str(skill.get("description", "")),
-                tags=[str(tag) for tag in skill.get("tags", [])],
+                id=skill.id,
+                name=skill.name,
+                description=skill.description,
+                tags=list(skill.tags),
             )
-            for skill in payload.get("skills", [])
+            for skill in contract.skills
         ]
         return cls(
-            schema_version=version,
-            name=str(payload.get("name", "")),
-            version=str(payload.get("version", "")),
-            description=str(payload.get("description", "")),
-            a2a_protocol_version=str(payload.get("a2a_protocol_version", "")),
-            card_url=str(payload.get("card_url", "")),
-            card_fingerprint=str(payload.get("card_fingerprint", "")),
+            schema_version=contract.schema_version,
+            name=contract.name,
+            version=contract.version,
+            description=contract.description,
+            a2a_protocol_version=contract.a2a_protocol_version,
+            card_url=contract.card_url,
+            card_fingerprint=contract.card_fingerprint,
             skills=skills,
-            capabilities={str(k): bool(v) for k, v in payload.get("capabilities", {}).items()},
-            labels={str(k): str(v) for k, v in payload.get("labels", {}).items()},
-            visibility=[str(t) for t in payload.get("visibility", [])],
+            capabilities=dict(contract.capabilities),
+            labels=dict(contract.labels),
+            visibility=list(contract.visibility),
         )
 
 

@@ -29,6 +29,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 
 from cloud.auth import PlaneAuthenticator, install_plane_auth
+from cloud.schemas import ObservabilityBatchContract
 
 _MAX_EVENTS_PER_BATCH = 1000
 _MAX_AUDIT_LIMIT = 1000
@@ -497,12 +498,11 @@ def create_observability_app(
 
     @app.post("/observability/events")
     async def ingest_events(payload: dict[str, Any]) -> dict[str, Any]:
-        events = payload.get("events")
-        if not isinstance(events, list):
-            raise HTTPException(status_code=422, detail="payload must carry an events list")
         try:
+            contract = ObservabilityBatchContract.model_validate(payload)
+            events = [event.model_dump(exclude_none=True) for event in contract.events]
             accepted = await obs.ingest(events)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"accepted": accepted}
 

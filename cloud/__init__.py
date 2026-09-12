@@ -55,15 +55,26 @@ from cloud.registry import (
     UnknownAgentError,
     create_registry_app,
 )
+from cloud.schemas import (
+    CLOUD_SCHEMA_VERSION,
+    AgentDescriptorContract,
+    ConfigRecordContract,
+    ObservabilityBatchContract,
+    ObservabilityEventContract,
+    SkillDescriptorContract,
+)
 
 __all__ = [
     "Caller",
+    "CLOUD_SCHEMA_VERSION",
     "ConfigClient",
     "ConfigPlaneUnreachableError",
     "ConfigRecord",
+    "ConfigRecordContract",
     "ConfigValidationError",
     "DESCRIPTOR_SCHEMA_VERSION",
     "AgentDescriptor",
+    "AgentDescriptorContract",
     "DescriptorCardMismatchError",
     "DescriptorError",
     "DiscoveredAgent",
@@ -76,6 +87,8 @@ __all__ = [
     "InMemoryAgentRegistry",
     "InMemoryConfigStore",
     "InMemoryObservabilityStore",
+    "ObservabilityBatchContract",
+    "ObservabilityEventContract",
     "SqliteAgentRegistry",
     "SqliteConfigStore",
     "SqliteObservabilityStore",
@@ -85,6 +98,7 @@ __all__ = [
     "PlaneAuthenticator",
     "SecretResolver",
     "SkillDescriptor",
+    "SkillDescriptorContract",
     "StaticTokenAuthenticator",
     "Target",
     "TraceSpan",
