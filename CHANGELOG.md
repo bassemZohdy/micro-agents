@@ -52,6 +52,8 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added a restricted-container CI smoke test that runs the image as an
   arbitrary UID with a read-only root filesystem and writable `/tmp`, plus
   manifest/image guard coverage.
+- Extended the release gate to load both definition compatibility fixtures and
+  verify append-only config rollback before package/image publication.
 
 ### Interoperability, state, and operations
 
