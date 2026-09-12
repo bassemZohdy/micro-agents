@@ -36,7 +36,8 @@ operated independently.
 
 The **Micro-Agent Cloud** workstream is separate from the standalone framework.
 The `cloud` package implements registry, discovery, distributed configuration,
-gateway, resilience, and cross-agent observability (C0–C4). It is not required
+gateway, resilience, cross-agent observability, and SQLite durability reference
+backends (C0–C5 reference slices). It is not required
 to run one Micro-Agent and is not part of the published `micro-agents`
 distribution.
 

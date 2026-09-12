@@ -15,7 +15,12 @@ from cloud.descriptors import (
     descriptor_from_definition,
 )
 from cloud.discovery import RegistryDiscoveryClient, RegistryUnreachableError
-from cloud.registry import InMemoryAgentRegistry, UnknownAgentError, create_registry_app
+from cloud.registry import (
+    InMemoryAgentRegistry,
+    SqliteAgentRegistry,
+    UnknownAgentError,
+    create_registry_app,
+)
 from micro_agent.definition import load_definition_from_dict
 
 
@@ -142,6 +147,34 @@ class TestRegistry:
         await registry.deregister("greeter", "1.0.0")
         assert await registry.query() == []
 
+    async def test_sqlite_registry_survives_reopen_and_renews_leases(self, tmp_path):
+        path = tmp_path / "registry.db"
+        descriptor = AgentDescriptor(
+            name="greeter",
+            version="1.0.0",
+            visibility=["acme"],
+            skills=[SkillDescriptor(id="greet", name="Greet")],
+        )
+        registry = SqliteAgentRegistry(path, default_lease_seconds=0.05)
+        await registry.register(descriptor)
+        reopened = SqliteAgentRegistry(path, default_lease_seconds=0.05)
+        found = await reopened.query(tenant="acme", skill="greet")
+        assert [entry.descriptor.name for entry in found] == ["greeter"]
+        assert await reopened.heartbeat("greeter", "1.0.0")
+        await registry.close()
+        await reopened.close()
+
+    async def test_sqlite_registry_retains_stale_then_prunes(self, tmp_path):
+        registry = SqliteAgentRegistry(
+            tmp_path / "registry.db", default_lease_seconds=0.05, stale_retention_seconds=0.5
+        )
+        await registry.register(AgentDescriptor(name="greeter", version="1.0.0"))
+        await __import__("asyncio").sleep(0.06)
+        assert (await registry.query())[0].healthy is False
+        registry._stale_retention = 0.01
+        assert await registry.query() == []
+        await registry.close()
+
 
 class TestRegistryHttp:
     def _client(self) -> TestClient:
@@ -169,6 +202,17 @@ class TestRegistryHttp:
             response = http.put("/registry/agents/other-name/1.0.0", json=descriptor.to_dict())
             assert response.status_code == 422
             assert "must match the URL path" in response.json()["detail"]
+
+    def test_durable_database_path_is_reused_by_new_app(self, tmp_path):
+        path = tmp_path / "registry.db"
+        descriptor = descriptor_from_definition(_definition(), card_url="http://greeter")
+        with TestClient(create_registry_app(database_path=path)) as http:
+            assert (
+                http.put("/registry/agents/greeter/1.0.0", json=descriptor.to_dict()).status_code
+                == 200
+            )
+        with TestClient(create_registry_app(database_path=path)) as http:
+            assert http.get("/registry/agents/greeter/1.0.0").status_code == 200
 
 
 class TestDiscovery:

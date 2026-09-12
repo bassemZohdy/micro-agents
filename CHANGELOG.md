@@ -30,10 +30,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   approval and credential stores, plugin loading, and the A2A server bridge.
   Added import smoke coverage for the remaining runtime submodules and an
   80% coverage floor in `pyproject.toml`.
-- Re-exported the implemented C1-C4 cloud control-plane surfaces from the
+- Re-exported the implemented C1-C5 reference cloud control-plane surfaces from the
   top-level `cloud` package and verified the public API contract. The current
-  verification baseline is 700 collected tests, 597 passing in the default
-  selection, 101 deselected integration/E2E/OTel tests, and 83.34% coverage.
+  verification baseline includes the default, integration, E2E, and OTel
+  suites with the coverage floor enforced in CI.
 - Wired A2A executor cancellation to cancel the in-flight Micro-Agent task,
   with a regression test for the canceled task transition.
 - Expanded Google ADK adapter coverage for identifier/message/tool mapping,
@@ -95,6 +95,16 @@ All notable changes to the Micro-Agents project are documented in this file.
   telemetry and audit locally at the source; the plane is read-mostly and
   never required for serving. See `docs/CLOUD_OBSERVABILITY.md` and
   ADR 0017.
+
+### Cloud (C5 reference durability)
+
+- Added restart-safe SQLite reference stores for the cloud registry, config
+  plane, and observability aggregation. Registry leases use wall-clock
+  timestamps with stale retention; configuration versions are transactional
+  and optionally retained; observability rows are retention-aware and bounded
+  by per-table eviction. The existing in-memory stores remain the lightweight
+  defaults, and shared-database operations plus plane authentication remain
+  deployment work.
 
 ### Cloud (C1)
 

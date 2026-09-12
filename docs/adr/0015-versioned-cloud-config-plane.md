@@ -15,8 +15,9 @@ monotonic versions and canonical-JSON digests. Rollback stores the old
 content as a new version instead of rewriting history. Secret management
 integrates through a one-method `SecretResolver` protocol resolved at use
 time (environment variables first; Vault/cloud stores implement the same
-protocol), keeping secret material out of the plane entirely. The store is
-in-memory in C2, to be replaced wholesale by a durable backend later. See
+protocol), keeping secret material out of the plane entirely. The in-memory
+store remains the lightweight C2 default, while `SqliteConfigStore` provides a
+restart-safe reference backend with optional retention. See
 [CLOUD_CONFIG.md](../CLOUD_CONFIG.md).
 
 ## Consequences
@@ -28,5 +29,5 @@ in-memory in C2, to be replaced wholesale by a durable backend later. See
   such;
 - rollback lineage is fully auditable and idempotent — a rollback is just
   another version;
-- swapping the in-memory store for a durable one (or fronting the plane with
-  authenticated gateway policy) replaces a component, not a contract.
+- swapping the in-memory store for a shared durable one (or fronting the plane
+  with authenticated gateway policy) replaces a component, not a contract.

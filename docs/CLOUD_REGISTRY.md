@@ -37,6 +37,14 @@ that stale descriptors are served with a stated age instead of vanishing;
 `healthy_only=True` restricts to live leases, and entries past a retention
 window are pruned on read.
 
+`SqliteAgentRegistry` implements the same async contract with restart-safe
+wall-clock leases, deterministic query ordering, stale-retention pruning, and
+transactional registration/heartbeat updates. Pass `database_path=` to
+`create_registry_app` to have the app construct and close the durable store,
+or inject an already-owned store with the `registry=` argument. SQLite is a
+portable reference backend; use a shared database implementation for multiple
+registry replicas.
+
 The FastAPI surface (`create_registry_app`, runnable standalone with
 `python -m cloud.registry` on port 8090):
 
@@ -55,9 +63,9 @@ store and the HTTP surface — pinned by tests.
 | `GET /health/ready` | registry readiness |
 
 The registry keeps control-plane state only and is never on an agent's
-serving path. Its API is deliberately unauthenticated in C1 — edge
-authentication is gateway work (C3) and persistence is config-plane work
-(C2); the in-memory store is the minimal credible C1 form.
+serving path. Its API is deliberately unauthenticated in this reference slice
+— edge authentication remains gateway work (C3). The in-memory store is the
+lightweight default; the SQLite store is the restart-safe reference option.
 
 ## Discovery client
 

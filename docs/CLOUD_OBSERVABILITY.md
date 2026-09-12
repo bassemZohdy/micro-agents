@@ -22,8 +22,11 @@ source) and push batches to the plane, which aggregates four views:
 
 The plane is read-mostly by construction: it can answer what happened, it
 cannot change it, and losing it costs visibility, never agents (the C0
-failure stance). The in-memory store is the minimal C4 form; a durable,
-retention-aware backend replaces it wholesale later.
+failure stance). `SqliteObservabilityStore` provides restart-safe normalized
+storage with age-based retention and bounded per-table eviction. Use
+`create_observability_app(database_path=...)` for an owned durable store, or
+inject the store directly. SQLite is the portable reference backend; use a
+shared database implementation for horizontally scaled ingestion.
 
 ## HTTP surface
 
@@ -41,8 +44,9 @@ gateway):
 
 ## Verification
 
-9 tests in `tests/test_cloud_observability.py` cover invalid-event
+Tests in `tests/test_cloud_observability.py` cover invalid-event
 rejection, cross-agent trace assembly, topology edge counting, per-tenant
 cost rollups, append-only tenant-filtered audit, and the HTTP surface.
 They also cover atomic malformed-batch rejection, non-object event
-validation, and audit-limit validation at the HTTP boundary.
+validation, and audit-limit validation at the HTTP boundary, plus durable
+restart, retention, and bounded eviction behavior.
