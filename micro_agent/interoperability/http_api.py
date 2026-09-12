@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -16,6 +17,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.types import Message
 
 from micro_agent.core import (
     AgentRequest,
@@ -156,6 +158,11 @@ API_VERSION_HEADER = "X-Micro-Agent-API-Version"
 STREAMING_MEDIA_TYPE = "text/event-stream"
 DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 
+
+class _RequestBodyTooLargeError(Exception):
+    """Internal signal raised while consuming a chunked request body."""
+
+
 # Routes that require a verified caller identity when an authenticator is
 # configured. Health probes and the A2A discovery card stay public by design.
 AUTHENTICATED_PATHS = frozenset({"/v1/invoke"})
@@ -197,6 +204,105 @@ class RateLimiter(Protocol):
 
     def check(self, request: Request) -> RateLimitCheckResult:
         """Return whether this request may proceed."""
+
+
+@dataclass
+class _TokenBucket:
+    tokens: float
+    updated_at: float
+
+
+class InMemoryRateLimitStore:
+    """Thread-safe token-bucket state store for one process."""
+
+    def __init__(self, *, max_buckets: int = 10_000, idle_seconds: float = 3600.0) -> None:
+        if max_buckets < 1 or idle_seconds <= 0:
+            raise ValueError("max_buckets and idle_seconds must be positive")
+        self._max_buckets = max_buckets
+        self._idle_seconds = idle_seconds
+        self._buckets: dict[str, _TokenBucket] = {}
+        self._lock = threading.Lock()
+
+    def consume(
+        self, key: str, *, rate_per_second: float, capacity: int, now: float | None = None
+    ) -> tuple[bool, float, int]:
+        """Consume one token and return ``(allowed, retry_seconds, remaining)``."""
+        reference = now if now is not None else time.monotonic()
+        with self._lock:
+            cutoff = reference - self._idle_seconds
+            self._buckets = {
+                name: bucket
+                for name, bucket in self._buckets.items()
+                if bucket.updated_at >= cutoff
+            }
+            if key not in self._buckets:
+                if len(self._buckets) >= self._max_buckets:
+                    oldest = min(self._buckets, key=lambda item: self._buckets[item].updated_at)
+                    del self._buckets[oldest]
+                self._buckets[key] = _TokenBucket(float(capacity), reference)
+            bucket = self._buckets[key]
+            bucket.tokens = min(
+                float(capacity),
+                bucket.tokens + max(0.0, reference - bucket.updated_at) * rate_per_second,
+            )
+            bucket.updated_at = reference
+            if bucket.tokens >= 1.0:
+                bucket.tokens -= 1.0
+                return True, 0.0, max(0, int(bucket.tokens))
+            retry_after = max(1.0, (1.0 - bucket.tokens) / rate_per_second)
+            return False, retry_after, 0
+
+    def bucket_count(self) -> int:
+        with self._lock:
+            return len(self._buckets)
+
+
+class TokenBucketRateLimiter:
+    """Built-in bounded rate limiter with an injectable state store.
+
+    The default store is process-local.  A deployment requiring replica-safe
+    enforcement can provide a shared object implementing ``consume`` (for
+    example a Redis-backed implementation) without changing the HTTP API.
+    """
+
+    def __init__(
+        self,
+        requests_per_minute: int,
+        *,
+        burst: int | None = None,
+        store: Any | None = None,
+        key_function: Callable[[Request], str] | None = None,
+    ) -> None:
+        if requests_per_minute < 1:
+            raise ValueError("requests_per_minute must be greater than zero")
+        if burst is not None and burst < 1:
+            raise ValueError("burst must be greater than zero")
+        self.requests_per_minute = requests_per_minute
+        self.burst = burst or requests_per_minute
+        self.store = store or InMemoryRateLimitStore()
+        self.key_function = key_function or self._default_key
+
+    @staticmethod
+    def _default_key(request: Request) -> str:
+        identity = getattr(request.state, "identity", None)
+        caller = getattr(getattr(identity, "caller", None), "caller_id", None)
+        tenant = getattr(getattr(identity, "user", None), "tenant_id", None)
+        if caller:
+            return f"caller:{tenant or '-'}:{caller}"
+        return "anonymous"
+
+    def check(self, request: Request) -> RateLimitDecision:
+        allowed, retry_after, remaining = self.store.consume(
+            self.key_function(request),
+            rate_per_second=self.requests_per_minute / 60.0,
+            capacity=self.burst,
+        )
+        return RateLimitDecision(
+            allowed=allowed,
+            retry_after_seconds=int(retry_after + 0.999),
+            limit=self.requests_per_minute,
+            remaining=remaining,
+        )
 
 
 def _validate_cors_origins(origins: Sequence[str] | None) -> list[str]:
@@ -320,6 +426,10 @@ def create_app(
     audit_sink: AuditSink | None = None,
     cors_origins: Sequence[str] | None = None,
     rate_limiter: RateLimiter | None = None,
+    a2a_task_store: Any | None = None,
+    a2a_push_config_store: Any | None = None,
+    a2a_push_sender: Any | None = None,
+    a2a_store_path: str | None = None,
 ) -> FastAPI:
     """Create a FastAPI application for a Micro-Agent.
 
@@ -378,6 +488,24 @@ def create_app(
     # enable it, and fails fast when enabled without the SDK.
     a2a_config = agent.definition.spec.interoperability.a2a
     a2a_paths: dict[str, str] = {}
+    owned_a2a_resources: list[Any] = []
+    if a2a_store_path is not None:
+        from micro_agent.interoperability.a2a_store import (
+            SqliteA2ATaskStore,
+            SqlitePushNotificationConfigStore,
+        )
+
+        if a2a_task_store is None:
+            a2a_task_store = SqliteA2ATaskStore(a2a_store_path)
+            owned_a2a_resources.append(a2a_task_store)
+        if a2a_push_config_store is None:
+            a2a_push_config_store = SqlitePushNotificationConfigStore(a2a_store_path)
+            owned_a2a_resources.append(a2a_push_config_store)
+    if a2a_config.enabled and a2a_push_config_store is not None and a2a_push_sender is None:
+        from micro_agent.interoperability.a2a_store import HttpxPushNotificationSender
+
+        a2a_push_sender = HttpxPushNotificationSender(a2a_push_config_store)
+        owned_a2a_resources.append(a2a_push_sender)
     try:
         from micro_agent.interoperability.a2a_server import attach_a2a
 
@@ -387,12 +515,27 @@ def create_app(
             base_url=base_url,
             security_scheme=authenticator.security_scheme() if authenticator else None,
             enable_rpc=bool(a2a_config.enabled),
+            task_store=a2a_task_store,
+            push_config_store=a2a_push_config_store,
+            push_sender=a2a_push_sender,
         )
     except A2aSdkUnavailableError:
         if a2a_config.enabled:
             raise
         # Discovery-only A2A stays optional when the definition does not
         # enable the transport and the SDK is not installed.
+
+    async def close_owned_a2a_resources() -> None:
+        for resource in reversed(owned_a2a_resources):
+            close = getattr(resource, "aclose", None) or getattr(resource, "close", None)
+            if close is None:
+                continue
+            result = close()
+            if inspect.isawaitable(result):
+                await result
+
+    if owned_a2a_resources:
+        app.router.on_shutdown.append(close_owned_a2a_resources)
 
     identity_requirements = agent.definition.spec.security.identity_requirements
     authenticated_paths = set(AUTHENTICATED_PATHS)
@@ -447,6 +590,8 @@ def create_app(
                 },
             )
         request.state.identity = identity
+        if identity.user is not None and identity.user.tenant_id:
+            request.state.tenant_id = identity.user.tenant_id
         telemetry.logger.info(
             "caller authenticated",
             route=request.url.path,
@@ -459,12 +604,7 @@ def create_app(
     async def enforce_request_size(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        """Reject oversized requests before FastAPI parses their JSON body.
-
-        Content-Length is checked before parsing. Clients using chunked transfer
-        should send a length header when operating behind a gateway that
-        enforces the same limit; deployment guidance requires that gateway guard.
-        """
+        """Reject oversized requests before FastAPI parses their JSON body."""
         raw_length = request.headers.get("content-length")
         if raw_length is not None:
             try:
@@ -482,7 +622,29 @@ def create_app(
                         "message": f"Request body exceeds {max_request_bytes} bytes",
                     },
                 )
-        return await call_next(request)
+        original_receive = request._receive
+        received_bytes = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received_bytes
+            message = await original_receive()
+            if message.get("type") == "http.request":
+                received_bytes += len(message.get("body", b""))
+                if received_bytes > max_request_bytes:
+                    raise _RequestBodyTooLargeError
+            return message
+
+        request._receive = limited_receive
+        try:
+            return await call_next(request)
+        except _RequestBodyTooLargeError:
+            return JSONResponse(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                content={
+                    "code": "request_too_large",
+                    "message": f"Request body exceeds {max_request_bytes} bytes",
+                },
+            )
 
     @app.middleware("http")
     async def add_api_version_header(
@@ -709,6 +871,11 @@ def create_app(
         finally:
             telemetry.record(
                 "http_request_latency_ms",
+                round((time.monotonic() - started) * 1000, 2),
+                {"route": request.url.path, "method": request.method},
+            )
+            telemetry.observe_histogram(
+                "http_request_latency_histogram_ms",
                 round((time.monotonic() - started) * 1000, 2),
                 {"route": request.url.path, "method": request.method},
             )

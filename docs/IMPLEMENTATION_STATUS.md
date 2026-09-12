@@ -1,8 +1,7 @@
 # Implementation Status
 
-Last audited: 2026-09-05
-Documentation-audit baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
-Cleanup verification baseline: `755cf68c4859f9dfefe9755227506de5107514ac`
+Last audited: 2026-09-12
+Audited implementation revision: `codex/backlog-completion` working tree
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -13,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 716 collected | 615 passed in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, where the PostgreSQL state-provider tests run against a real service container |
+| Tests | 700 collected | 597 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -21,7 +20,7 @@ readiness or protocol compliance.
 | Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
-| Overall GitHub CI | Required | see the [latest main workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain) |
+| Overall GitHub CI | Pass | [CI run #189](https://github.com/bassemZohdy/micro-agents/actions/runs/33966665580), all 17 jobs successful |
 | Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry (an owner action on pypi.org) |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
@@ -35,9 +34,11 @@ configuration; proxy policy remains part of production hardening.
 
 Implemented:
 
-- strict Pydantic `microagents.io/v1alpha1` model
+- strict Pydantic `microagents.io/v1alpha1` model plus a compatible
+  `microagents.io/v1beta1` migration path
 - YAML loader with diagnostics
-- generated draft-2020-12 JSON Schema and CI drift check
+- generated draft-2020-12 JSON Schemas for both supported API versions and CI
+  drift check
 - semantic validation for names, versions, references, transports, URLs,
   scopes, capabilities, and duplicate collections
 - runtime-neutral input/output contract enforcement with stable diagnostics
@@ -45,8 +46,9 @@ Implemented:
 - typed deployment-only `EnvironmentOverlay` endpoint bindings for model, MCP,
   memory, and session services; bindings are validated and applied without
   mutating the logical definition
-- a canonical `v1alpha1` compatibility fixture and migration guidance; the
-  loader continues to reject unsupported API versions and unknown fields
+- canonical v1alpha1 and v1beta1 compatibility fixtures; the beta loader
+  migrates camelCase wire fields while rejecting unsupported versions and
+  unknown fields
 - the bootstrap resolves model provider, endpoint, model ID, and credentials;
   built-in memory and SQLite/in-memory session bindings plus optional Redis
   external memory/session bindings, the built-in/plugin tool registry, MCP
@@ -58,8 +60,8 @@ Gaps:
 
 - model aliases and provider model IDs are separate fields; a versioned
   resource/catalog contract is still needed for alias resolution
-- only `microagents.io/v1alpha1` is currently supported; a future API version
-  needs a separate model, schema, compatibility fixture, and migration policy
+- model aliases and provider model IDs are separate fields; a versioned
+  resource/catalog contract is still needed for alias resolution
 
 ### Runtime
 
@@ -152,7 +154,7 @@ Current runtime capability matrix:
 | `structured_output` | provider-dependent | true for the OpenAI-compatible provider and the Google ADK adapter when its injected provider advertises structured output; native ADK model selection remains conservative |
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
-| `a2a` | transport-level | the runtime flag remains false; the official SDK transport provides the non-streaming task protocol separately |
+| `a2a` | transport-level | the runtime flag remains false; the official SDK transport provides non-streaming and streaming task protocols separately |
 | `checkpointing` | configured | true when a checkpoint store is injected; Google ADK additionally requires its ADK resumability configuration and stores an event/state snapshot |
 
 Gaps:
@@ -232,10 +234,11 @@ Implemented:
 - bounded automatic reconnect after unexpected transport termination, with
   exponential backoff, explicit shutdown suppression, and a terminal error
   state after attempts are exhausted
+- application-visible bounded `McpNotification` events with async callback
+  delivery and SDK-to-SPI normalization
 
 Gaps:
 
-- notifications are consumed by the SDK session but not surfaced as events
 - tests exercise loopback HTTP and local stdio servers, not remote
   production deployments
 
@@ -259,14 +262,19 @@ Implemented:
 - declared protocol versions are validated at startup against the versions
   the installed SDK supports, and requests declaring another version are
   rejected
+- bounded tenant-scoped SQLite task persistence with expiry and JSON snapshot
+  limits, plus durable push callback configuration storage
+- bounded HTTPS push delivery with callback authentication, host allowlists,
+  transient retry, and card capability advertisement
 - official-SDK client interop tests: resolver + client resolve the card and
   complete both non-streaming and streaming tasks end-to-end
 
 Gaps:
 
-- push notifications and extended authenticated cards are not implemented
-- task store is in-memory; durable task state arrives with production state
-  providers
+- the SQLite stores are a single-process reference backend; a shared
+  multi-replica implementation remains deployment work
+- extended authenticated cards and full A2A v1.0.1 conformance remain open
+  beyond the tested SDK subset
 
 
 ### Security and policy
@@ -297,8 +305,9 @@ Implemented:
   token/cost metric conventions and a Prometheus-compatible `/metrics` route
   are documented
 - durable, redacted audit events through an `AuditSink` SPI (stdout JSONL
-  default, optional file sink) covering policy denials, approval decisions,
-  and authentication failures
+  default, optional file and SQLite sinks) covering policy denials, approval
+  decisions, and authentication failures; SQLite rows have tenant filtering
+  and bounded retention
 - verified identity propagates through model, tool, and MCP operations via
   an invocation-scoped context binding; workload identity resolves from
   environment overrides, the Kubernetes service-account mount, or the
@@ -319,10 +328,9 @@ Gaps:
 
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; propagation currently makes the verified principal
-  observable to operations, and per-protocol delegation arrives with the
-  official MCP/A2A integrations
-- the audit sink persists to the platform log pipeline or a local file;
-  database-backed audit arrives with production state providers
+  observable to operations, but per-protocol delegated credentials remain open
+- external policy-store integration remains open; policy references resolve
+  through an injected policy or resolver callable
 
 ### State and knowledge
 
@@ -347,17 +355,21 @@ Implemented:
 - SQLite operations use an explicit per-provider async lock and bounded
   SQLite busy timeout; the provider is documented and tested as a
   single-process development store
-- in-memory keyword knowledge retriever, constructed from declared knowledge
-  sources and health-checked at startup in both runtimes
+- in-memory and durable tenant-scoped SQLite keyword knowledge retrievers,
+  with versioned documents, deterministic retrieval, and startup health checks
+  in both runtimes
 
 Gaps:
 
 - SQLite is a development persistence example, not a Kubernetes multi-replica
   external store; PostgreSQL providers require the optional extra and a
   provisioned database (not embedded with the framework)
-- no production knowledge provider; state providers scope records by verified
-  tenant when available and reject stale non-zero-version updates; unscoped
-  zero-version writes remain a compatibility path
+- SQLite knowledge, task, and audit stores are portable single-process
+  reference backends, not Kubernetes multi-replica shared services;
+  PostgreSQL providers require the optional extra and a provisioned database
+- state providers scope records by verified tenant when available and reject
+  stale non-zero-version updates; unscoped zero-version writes remain a
+  compatibility path
 
 ### HTTP, health, and observability
 
@@ -380,23 +392,25 @@ Implemented:
 - unknown/expired approval continuations map to a stable 404
   `continuation_not_found` contract; `approval_required` responses carry a
   continuation id and pending tool names
-- configurable `Content-Length` request-size guard (1 MiB default)
+- configurable fixed-length and chunked request-size guard (1 MiB default)
 - versioned `/v1/openapi.json`, `/v1/docs`, and `/v1/redoc` routes with an
   `X-Micro-Agent-API-Version` response header; `/openapi.json` remains a
   compatibility alias
 - opt-in CORS allowlists from `create_app()` or `MICRO_AGENT_CORS_ORIGINS`,
   with credentials disabled by default
-- injected synchronous/asynchronous `RateLimiter` hook with stable 429/503
-  contracts and retry/rate-limit headers
+- bounded process-local token-bucket limiter plus injectable
+  synchronous/asynchronous `RateLimiter` hook with stable 429/503 contracts
+  and retry/rate-limit headers
 - streaming negotiation rejects `text/event-stream` when the selected runtime
   does not advertise streaming; no unsupported stream is claimed
-- structured logger, in-memory metrics, and in-memory span tree
-
-Gaps:
-
 - response streaming is implemented for the built-in and Google ADK runtimes
   when their model providers advertise it, and both HTTP and A2A transports
   forward those chunks
+- structured logger, in-memory metrics and bounded histograms, and in-memory
+  span tree
+
+Gaps:
+
 - dashboards and alert thresholds remain deployment-owned; the full metric
   inventory, recommended dashboard panels, and PromQL alert examples are
   documented in docs/OBSERVABILITY.md (guarded by a source-vs-docs test), and
@@ -419,30 +433,18 @@ Gaps:
 
 ## Cloud workstream (C0–C4)
 
-Started 2026-09-03 on owner direction, ahead of the PyPI release-gate item.
-C0 defined the control-plane boundary (ADR 0013 + CLOUD_ARCHITECTURE.md) and
-C1 implemented the minimal registry/discovery slice in the top-level `cloud`
-package (ADR 0014 + CLOUD_REGISTRY.md): v1alpha1 descriptors derived from
-the definition and served A2A card, a lease-based in-memory registry with
-tenant/skill-filtered queries, and an outage-tolerant discovery client.
-C4 added the observability aggregation plane (ADR 0017 +
-CLOUD_OBSERVABILITY.md): cross-agent traces, topology edges, cost rollups,
-and an append-only audit view over pushed events, with an in-memory store
-as the documented C4 limit.
-C3 added the gateway (ADR 0016 + CLOUD_GATEWAY.md): edge authentication and
-tenant authorization, rate limits, and the resilience set (load balancing,
-fallbacks, circuit breakers, bulkheads, side-effect-safe retries), with
-in-memory per-process state and non-streaming pass-through as the documented
-C3 limits.
-C2 added the versioned configuration plane (ADR 0015 + CLOUD_CONFIG.md):
-append-only definition/overlay histories validated by the core's loader,
-rollback-as-append, secret references resolved at use time via the
-`SecretResolver` protocol, and a last-good-fallback client. Limitations: the
-registry and config stores are in-memory and the plane APIs are deliberately
-unauthenticated (durable storage and edge auth are later slices), and the
-`cloud` package is not part of the published `micro-agents` distribution. The core
-framework neither imports nor depends on any cloud code; standalone product
-claims are unchanged.
+Started 2026-09-03 as an explicitly scoped reference effort ahead of the PyPI
+release-gate item. C0 defined the control-plane boundary (ADR 0013 +
+CLOUD_ARCHITECTURE.md). C1 implemented the minimal registry/discovery slice
+(ADR 0014 + CLOUD_REGISTRY.md); C2 added the versioned configuration plane
+(ADR 0015 + CLOUD_CONFIG.md); C3 added the gateway and resilience set
+(ADR 0016 + CLOUD_GATEWAY.md); and C4 added cross-agent observability
+(ADR 0017 + CLOUD_OBSERVABILITY.md). The registry, config, and observability
+stores remain in-memory; gateway state is per-process and pass-through is
+non-streaming; plane APIs remain deliberately unauthenticated. The `cloud`
+package is not part of the published `micro-agents` distribution. The core
+framework neither imports nor depends on cloud code; standalone product claims
+are unchanged.
 
 ## Production-readiness conclusion
 
@@ -452,11 +454,8 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The remaining implementation sequence is the PyPI trusted-publisher
-configuration (an owner action on pypi.org) and the deferred standalone
-production gaps in
+The immediate release-gate action is the PyPI trusted-publisher configuration
+(an owner action on pypi.org). The next code slice is a shared multi-replica
+state backend and full A2A conformance; Cloud C5 hardening remains gated until
+the release task is complete. The complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).
-The Micro-Agent Cloud C0–C4 workstream (architecture, registry/discovery,
-configuration plane, gateway/resilience, and observability) is implemented in
-the `cloud` package; the core framework and standalone product claims are
-unchanged.

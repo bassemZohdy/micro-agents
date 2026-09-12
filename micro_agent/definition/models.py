@@ -561,7 +561,7 @@ class MicroAgentDefinition(BaseModel, extra="forbid"):
         "microagents.io/v1alpha1",
         alias="apiVersion",
         description="API version of this definition.",
-        pattern=r"^microagents\.io/v1alpha1$",
+        pattern=r"^microagents\.io/v1(?:alpha1|beta1)$",
     )
     kind: str = Field(
         "MicroAgent",

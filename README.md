@@ -19,15 +19,16 @@ operated independently.
 
 - Micro-Agent Architecture and qualification criteria
 - Twelve-Factor Micro-Agent guidance
-- `microagents.io/v1alpha1` Pydantic models and generated JSON Schema
+- `microagents.io/v1alpha1` and `microagents.io/v1beta1` Pydantic loading,
+  compatibility migration, and generated JSON Schemas
 - YAML definition loader and runtime-neutral core contracts
 - a small `AgentRuntime` service-provider interface
 - a custom reference agent loop currently located under `runtimes/adk`
 - an optional Google ADK adapter under `runtimes/google_adk`
 - fake and OpenAI-compatible model-provider implementations
 - tool, MCP, session, memory, idempotency, knowledge, policy, health, and
-  telemetry seams (including optional Redis-backed shared memory, session, and
-  operation-registry providers)
+  telemetry seams (including SQLite durability and optional Redis-backed
+  shared memory, session, and operation-registry providers)
 - FastAPI invocation, health, capability, and standard A2A agent-card/task endpoints
 - Prometheus-compatible operational metrics at `/metrics`
 - deterministic runtime/HTTP benchmarks with versioned resource budgets
@@ -94,7 +95,9 @@ spec:
 ```
 
 The complete schema is
-[`docs/schemas/micro-agent-v1alpha1.json`](docs/schemas/micro-agent-v1alpha1.json).
+[`docs/schemas/micro-agent-v1alpha1.json`](docs/schemas/micro-agent-v1alpha1.json);
+the compatible beta schema is
+[`docs/schemas/micro-agent-v1beta1.json`](docs/schemas/micro-agent-v1beta1.json).
 The larger residency example demonstrates the available definition fields; it
 also declares integrations (such as external MCP and state providers) that the
 default command-line bootstrap rejects until matching providers are installed.
@@ -196,16 +199,16 @@ state, or A2A task interoperability.
 
 | Area | Current state | Production gap |
 |---|---|---|
-| Definition | Typed loader, generated schema, semantic uniqueness/format checks, runtime contract enforcement, deployment endpoint overlays, and a v1alpha1 compatibility fixture | versioned policy for a future API release |
+| Definition | Typed loader, v1alpha1/v1beta1 schemas and migration fixture, semantic uniqueness/format checks, runtime contract enforcement, and deployment endpoint overlays | catalog contract for model aliases |
 | Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests and native confirmation continuations | external production state |
 | Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
-| MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and interop tests | durable notifications and remote production load testing |
-| A2A | official SDK card and JSON-RPC non-streaming/streaming task lifecycles with authenticated integration tests and runtime-wired cancellation | push notifications, durable task store |
-| State | definition-wired in-memory memory/session, SQLite development sessions, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits; startup dependency probes, bounded concurrency, cancellation-aware shutdown, and shared invocation deadlines | durable Google ADK approval state |
-| Security | authentication, verified caller/workload propagation, policy and credential resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, and redacted audit events | downstream delegation, external policy stores, and database-backed audit persistence |
-| Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, and token/cost conventions | operational dashboards/alerts |
-| Operations | container, package/release gates, versioned OpenAPI, request-size guard, opt-in CORS, rate-limit hook, and sample manifests | production bootstrap and OpenShift hardening |
+| MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and application-visible bounded notifications | remote production load testing |
+| A2A | official SDK card and JSON-RPC non-streaming/streaming task lifecycles, tenant-scoped SQLite task/push stores, authenticated integration tests, and runtime-wired cancellation | full A2A v1.0.1 conformance and production shared-state backend |
+| State | definition-wired in-memory and durable SQLite knowledge/task/audit stores, SQLite sessions, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits | durable Google ADK approval state and multi-replica shared stores |
+| Security | authentication, verified caller/workload propagation, policy and credential resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, redacted audit events, and database-backed audit persistence | downstream delegation and external policy stores |
+| Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, token/cost conventions, and Prometheus histograms | operational dashboards/alerts |
+| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, proxy defaults, and sample manifests | production bootstrap and OpenShift hardening |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.
@@ -219,28 +222,25 @@ The project follows released standards rather than drafts:
   release candidate until finalized
 
 The implementation covers a tested subset of both baselines through their
-official Python SDKs; push notifications, durable state, and some production
-features remain open. Details and official references are in [Standards](docs/STANDARDS.md).
+official Python SDKs; full conformance, remote production testing, and some
+production features remain open. Details and official references are in
+[Standards](docs/STANDARDS.md).
 
 ## Development
 
 ```bash
 ruff check .
 ruff format --check .
-mypy micro_agent runtimes
-pytest -m "not integration and not e2e"
+mypy micro_agent cloud runtimes
+pytest -m "not integration and not e2e and not otel"
 pytest -m integration
 pytest -m e2e
 python -m micro_agent.definition.schema
 git diff --exit-code docs/schemas/
 ```
 
-The current suite collects 716 tests: 615 pass in the default CI selection
-(`not integration`, `not e2e`, and `not otel`), while 101 integration/E2E/OTel
-tests are deselected for their dedicated CI jobs. The Redis extra adds three
-live integration tests in the Redis-enabled CI job, the optional Google ADK
-adapter adds 15 tests, and the optional OpenTelemetry extra adds five
-integration tests when those extras are installed. CI runs
+The current suite includes unit, integration, E2E, ADK, and OTel tests. The
+default local selection is the fast non-service suite; CI runs
 lint, typing, schema, unit, integration, E2E, package, container, separate
 runtime/development dependency audits, and strict documentation gates. Release
 tags repeat the quality gates, validate the tag against the package version,

@@ -22,6 +22,7 @@ objects, logs, or errors.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 from collections.abc import Awaitable, Callable
@@ -135,6 +136,24 @@ class SdkMcpClient(McpClient):
         self._connected_once = False
         self._telemetry = telemetry
         self._trace_contexts: dict[int, dict[str, str]] = {}
+        self._notification_handler: Callable[[Any], Any] | None = None
+
+    def set_notification_handler(self, handler: Callable[[Any], Any] | None) -> None:
+        self._notification_handler = handler
+
+    async def _handle_message(self, message: Any) -> None:
+        """Forward server notifications while retaining SDK request handling."""
+        if self._notification_handler is None:
+            return
+        try:
+            from mcp.types import ServerNotification
+
+            if isinstance(message, ServerNotification):
+                result = self._notification_handler(message)
+                if inspect.isawaitable(result):
+                    await result
+        except ImportError:  # pragma: no cover - optional dependency
+            return
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -184,7 +203,12 @@ class SdkMcpClient(McpClient):
             try:
                 async with AsyncExitStack() as stack:
                     read, write = await self._enter_transport(stack, config, sdk)
-                    session = await stack.enter_async_context(sdk.ClientSession(read, write))
+                    session_kwargs: dict[str, Any] = {}
+                    if "message_handler" in inspect.signature(sdk.ClientSession).parameters:
+                        session_kwargs["message_handler"] = self._handle_message
+                    session = await stack.enter_async_context(
+                        sdk.ClientSession(read, write, **session_kwargs)
+                    )
                     init = await asyncio.wait_for(
                         session.initialize(), timeout=self._connect_timeout
                     )

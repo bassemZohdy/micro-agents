@@ -21,7 +21,7 @@
           "default": null,
           "title": "Endpoint"
         },
-        "protocol_version": {
+        "protocolVersion": {
           "anyOf": [
             {
               "type": "string"
@@ -47,10 +47,10 @@
           "title": "Instructions",
           "type": "string"
         },
-        "input_contract": {
+        "inputContract": {
           "$ref": "#/$defs/InputContract"
         },
-        "output_contract": {
+        "outputContract": {
           "$ref": "#/$defs/OutputContract"
         }
       },
@@ -91,13 +91,6 @@
           "title": "Tools",
           "type": "array"
         },
-        "mcp_servers": {
-          "items": {
-            "$ref": "#/$defs/McpServerRef"
-          },
-          "title": "Mcp Servers",
-          "type": "array"
-        },
         "skills": {
           "items": {
             "$ref": "#/$defs/SkillDefinition"
@@ -125,6 +118,13 @@
         },
         "session": {
           "$ref": "#/$defs/SessionConfig"
+        },
+        "mcpServers": {
+          "items": {
+            "$ref": "#/$defs/McpServerRef"
+          },
+          "title": "Mcp Servers",
+          "type": "array"
         }
       },
       "title": "Dependencies",
@@ -178,19 +178,6 @@
           "title": "Ref",
           "type": "string"
         },
-        "source_type": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Type of knowledge source.",
-          "title": "Source Type"
-        },
         "version": {
           "anyOf": [
             {
@@ -203,7 +190,20 @@
           "default": null,
           "title": "Version"
         },
-        "max_results": {
+        "sourceType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Type of knowledge source.",
+          "title": "Source Type"
+        },
+        "maxResults": {
           "default": 5,
           "description": "Maximum entries retrieved from this source per invocation.",
           "maximum": 50,
@@ -211,7 +211,7 @@
           "title": "Max Results",
           "type": "integer"
         },
-        "max_context_characters": {
+        "maxContextCharacters": {
           "default": 4000,
           "description": "Maximum knowledge-content characters contributed by this source.",
           "maximum": 32768,
@@ -289,20 +289,7 @@
           "title": "Args",
           "type": "array"
         },
-        "credential_ref": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Reference to external credential.",
-          "title": "Credential Ref"
-        },
-        "allowed_capabilities": {
+        "allowedCapabilities": {
           "description": "Allowed MCP capabilities.",
           "items": {
             "type": "string"
@@ -310,7 +297,7 @@
           "title": "Allowed Capabilities",
           "type": "array"
         },
-        "timeout_seconds": {
+        "timeoutSeconds": {
           "anyOf": [
             {
               "minimum": 1,
@@ -322,6 +309,19 @@
           ],
           "default": null,
           "title": "Timeout Seconds"
+        },
+        "credentialRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to external credential.",
+          "title": "Credential Ref"
         }
       },
       "required": [
@@ -401,7 +401,53 @@
           "title": "Ref",
           "type": "string"
         },
-        "model_id": {
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model endpoint URL.",
+          "title": "Endpoint"
+        },
+        "generation": {
+          "additionalProperties": true,
+          "description": "Generation configuration.",
+          "title": "Generation",
+          "type": "object"
+        },
+        "timeoutSeconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model call timeout.",
+          "title": "Timeout Seconds"
+        },
+        "credentialRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to external credential.",
+          "title": "Credential Ref"
+        },
+        "modelId": {
           "anyOf": [
             {
               "maxLength": 256,
@@ -416,7 +462,7 @@
           "description": "Provider-specific model identifier.",
           "title": "Model Id"
         },
-        "provider": {
+        "modelProvider": {
           "anyOf": [
             {
               "maxLength": 64,
@@ -431,52 +477,6 @@
           "default": null,
           "description": "Model provider name.",
           "title": "Provider"
-        },
-        "endpoint": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Model endpoint URL.",
-          "title": "Endpoint"
-        },
-        "credential_ref": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Reference to external credential.",
-          "title": "Credential Ref"
-        },
-        "generation": {
-          "additionalProperties": true,
-          "description": "Generation configuration.",
-          "title": "Generation",
-          "type": "object"
-        },
-        "timeout_seconds": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Model call timeout.",
-          "title": "Timeout Seconds"
         }
       },
       "required": [
@@ -608,7 +608,15 @@
       "additionalProperties": false,
       "description": "Runtime behavior configuration.",
       "properties": {
-        "timeout_seconds": {
+        "capabilities": {
+          "description": "Declared runtime capabilities.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "timeoutSeconds": {
           "anyOf": [
             {
               "minimum": 1,
@@ -622,7 +630,7 @@
           "description": "Overall invocation timeout.",
           "title": "Timeout Seconds"
         },
-        "max_iterations": {
+        "maxIterations": {
           "anyOf": [
             {
               "minimum": 1,
@@ -636,7 +644,7 @@
           "description": "Maximum agent iterations.",
           "title": "Max Iterations"
         },
-        "max_concurrency": {
+        "maxConcurrency": {
           "anyOf": [
             {
               "minimum": 1,
@@ -650,7 +658,7 @@
           "description": "Maximum concurrent invocations for this agent.",
           "title": "Max Concurrency"
         },
-        "shutdown_timeout_seconds": {
+        "shutdownTimeoutSeconds": {
           "anyOf": [
             {
               "exclusiveMinimum": 0,
@@ -664,16 +672,16 @@
           "description": "Maximum time to drain invocations during shutdown.",
           "title": "Shutdown Timeout Seconds"
         },
-        "concurrency_policy": {
+        "concurrencyPolicy": {
           "$ref": "#/$defs/ConcurrencyPolicy",
           "default": "wait",
           "description": "Whether invocations wait for capacity or are rejected."
         },
-        "error_policy": {
+        "errorPolicy": {
           "$ref": "#/$defs/ErrorPolicy",
           "default": "fail"
         },
-        "retry_max_attempts": {
+        "retryMaxAttempts": {
           "default": 1,
           "description": "Maximum retries after the initial failure (when error_policy is retry).",
           "maximum": 10,
@@ -681,7 +689,7 @@
           "title": "Retry Max Attempts",
           "type": "integer"
         },
-        "retry_backoff_seconds": {
+        "retryBackoffSeconds": {
           "default": 0.0,
           "description": "Base delay before retries; each retry doubles the delay.",
           "maximum": 60,
@@ -689,7 +697,7 @@
           "title": "Retry Backoff Seconds",
           "type": "number"
         },
-        "retry_jitter_seconds": {
+        "retryJitterSeconds": {
           "default": 0.0,
           "description": "Maximum random delay added to each retry backoff.",
           "maximum": 60,
@@ -697,7 +705,7 @@
           "title": "Retry Jitter Seconds",
           "type": "number"
         },
-        "retry_budget_seconds": {
+        "retryBudgetSeconds": {
           "anyOf": [
             {
               "exclusiveMinimum": 0,
@@ -711,7 +719,7 @@
           "description": "Optional wall-clock budget for retry delays and attempts.",
           "title": "Retry Budget Seconds"
         },
-        "circuit_breaker_failures": {
+        "circuitBreakerFailures": {
           "anyOf": [
             {
               "minimum": 1,
@@ -725,7 +733,7 @@
           "description": "Consecutive invocation failures that open the circuit; unset disables circuit breaking.",
           "title": "Circuit Breaker Failures"
         },
-        "circuit_breaker_cooldown_seconds": {
+        "circuitBreakerCooldownSeconds": {
           "anyOf": [
             {
               "exclusiveMinimum": 0,
@@ -738,14 +746,6 @@
           "default": null,
           "description": "How long an open circuit rejects calls before allowing one probe invocation.",
           "title": "Circuit Breaker Cooldown Seconds"
-        },
-        "capabilities": {
-          "description": "Declared runtime capabilities.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Capabilities",
-          "type": "array"
         }
       },
       "title": "RuntimeSemantics",
@@ -755,7 +755,12 @@
       "additionalProperties": false,
       "description": "Security configuration.",
       "properties": {
-        "credential_refs": {
+        "identityRequirements": {
+          "additionalProperties": true,
+          "title": "Identity Requirements",
+          "type": "object"
+        },
+        "credentialRefs": {
           "description": "References to external credentials.",
           "items": {
             "type": "string"
@@ -763,12 +768,7 @@
           "title": "Credential Refs",
           "type": "array"
         },
-        "identity_requirements": {
-          "additionalProperties": true,
-          "title": "Identity Requirements",
-          "type": "object"
-        },
-        "policy_refs": {
+        "policyRefs": {
           "description": "References to policy definitions.",
           "items": {
             "type": "string"
@@ -839,22 +839,22 @@
           "default": null,
           "title": "Description"
         },
-        "input_metadata": {
-          "additionalProperties": true,
-          "title": "Input Metadata",
-          "type": "object"
-        },
-        "output_metadata": {
-          "additionalProperties": true,
-          "title": "Output Metadata",
-          "type": "object"
-        },
         "tags": {
           "items": {
             "type": "string"
           },
           "title": "Tags",
           "type": "array"
+        },
+        "inputMetadata": {
+          "additionalProperties": true,
+          "title": "Input Metadata",
+          "type": "object"
+        },
+        "outputMetadata": {
+          "additionalProperties": true,
+          "title": "Output Metadata",
+          "type": "object"
         }
       },
       "required": [
@@ -901,7 +901,7 @@
           "description": "Tool source (native, mcp, openapi).",
           "title": "Source"
         },
-        "timeout_seconds": {
+        "timeoutSeconds": {
           "anyOf": [
             {
               "minimum": 1,
@@ -914,7 +914,7 @@
           "default": null,
           "title": "Timeout Seconds"
         },
-        "side_effect": {
+        "sideEffect": {
           "default": "unsafe",
           "description": "Tool side-effect classification: read_only performs no writes, idempotent can be retried with a stable idempotency key, and unsafe may have non-repeatable effects.",
           "enum": [
@@ -937,9 +937,9 @@
   "description": "Micro-Agent Definition v1alpha1.\n\nThis is the top-level declarative definition of a Micro-Agent.\nIt contains no ADK-native or framework-native types.",
   "properties": {
     "apiVersion": {
-      "default": "microagents.io/v1alpha1",
+      "default": "microagents.io/v1beta1",
       "description": "API version of this definition.",
-      "pattern": "^microagents\\.io/v1alpha1$",
+      "pattern": "^microagents\\.io/v1beta1$",
       "title": "Apiversion",
       "type": "string"
     },
@@ -961,8 +961,8 @@
     "metadata",
     "spec"
   ],
-  "title": "MicroAgentDefinition v1alpha1",
+  "title": "MicroAgentDefinition v1beta1",
   "type": "object",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microagents.io/schemas/v1alpha1/micro-agent.json"
+  "$id": "https://microagents.io/schemas/v1beta1/micro-agent.json"
 }

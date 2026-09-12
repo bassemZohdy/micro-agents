@@ -6,6 +6,7 @@ from micro_agent.knowledge import (
     KnowledgeEntry,
     KnowledgeRetriever,
     KnowledgeSource,
+    SqliteKnowledgeRetriever,
 )
 
 
@@ -51,3 +52,24 @@ class TestKnowledgeRetrieverInterface:
     def test_cannot_instantiate_abstract(self):
         with pytest.raises(TypeError):
             KnowledgeRetriever()  # type: ignore[abstract]
+
+
+@pytest.mark.asyncio
+async def test_sqlite_knowledge_is_versioned_and_tenant_scoped(tmp_path) -> None:
+    retriever = SqliteKnowledgeRetriever(tmp_path / "knowledge.db")
+    tenant_a = KnowledgeSource(ref="rules", version="v2", metadata={"tenant_id": "a"})
+    tenant_b = KnowledgeSource(ref="rules", metadata={"tenant_id": "b"})
+    document_id = await retriever.add_document(
+        tenant_a, "Tenant A renewal rule", document_id="rule-1"
+    )
+    await retriever.add_document(tenant_b, "Tenant B renewal rule", document_id="rule-1")
+
+    entries = await retriever.retrieve("renewal", tenant_a)
+    assert document_id == "rule-1"
+    assert entries[0].content == "Tenant A renewal rule"
+    assert entries[0].metadata["version"] == "v2"
+    assert await retriever.retrieve("renewal", tenant_b)
+    assert await retriever.health_check(tenant_a)
+    await retriever.delete_document(tenant_a, "rule-1")
+    assert await retriever.retrieve("renewal", tenant_a) == []
+    await retriever.close()

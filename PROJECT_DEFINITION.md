@@ -34,10 +34,10 @@ source-code size.
 6. **Operational baseline** — HTTP, health, security, telemetry, container,
    and Kubernetes/OpenShift behavior.
 
-The repository currently delivers partial implementations of items 1–4, a
-custom reference loop, and an optional Google ADK adapter. Operational seams
-exist, but production service mappings and end-to-end security/state/protocol
-integration are incomplete.
+The repository delivers the architecture and definition artifacts, a custom
+reference loop, and an optional Google ADK adapter. Operational seams and
+selected end-to-end security, state, and protocol integrations are implemented;
+the remaining production gaps are tracked in `TODO.md`.
 
 ## Architectural principles
 
@@ -165,7 +165,7 @@ The project keeps the custom loop as a lightweight built-in runtime and
 implements Google ADK first as a separate optional adapter. Deployment
 configuration can select either runtime through `MICRO_AGENT_RUNTIME`; the
 `runtimes/google_adk` package is covered by ADK-native lifecycle and invocation
-tests, while production service mappings remain open work.
+tests. Broader production provider and service integrations remain open work.
 
 No second third-party runtime should be added merely to demonstrate abstraction
 purity.
@@ -196,9 +196,9 @@ explicit; caller-provided metadata is never treated as authenticated identity.
 Credential references are resolved through an external secret provider and
 secret values never enter definitions, cards, logs, or response metadata.
 
-The current code defines several of these data structures but does not yet
-provide transport authentication, delegation, policy-reference resolution, or
-an approval workflow.
+The current code provides transport authentication, policy-reference
+resolution, approval workflows, and verified identity propagation. Downstream
+token delegation and some durable audit/policy integrations remain open work.
 
 ## State model
 
@@ -232,7 +232,7 @@ containers. A production baseline requires:
 
 ## Micro-Agent Cloud boundary
 
-Micro-Agent Cloud is a later, separate workstream for distributed concerns:
+Micro-Agent Cloud is a separate workstream for distributed concerns:
 
 - agent registry and semantic discovery
 - distributed configuration
@@ -242,8 +242,8 @@ Micro-Agent Cloud is a later, separate workstream for distributed concerns:
 - cross-agent observability
 
 It does not own the standalone definition, runtime SPI, or the ability to run
-one Micro-Agent. Work starts only after the standalone production-readiness
-gate in [TODO.md](TODO.md) is satisfied.
+one Micro-Agent. The repository contains minimal C0–C4 reference slices in the
+top-level `cloud` package; production hardening remains gated in [TODO.md](TODO.md).
 
 ## Non-goals
 

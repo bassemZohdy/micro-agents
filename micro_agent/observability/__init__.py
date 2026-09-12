@@ -18,6 +18,7 @@ from micro_agent.observability.audit import (
     FileAuditSink,
     JsonlAuditSink,
     NullAuditSink,
+    SqliteAuditSink,
 )
 from micro_agent.observability.telemetry import (
     MetricPoint,
@@ -73,6 +74,7 @@ __all__ = [
     "RuntimeIdentity",
     "SecurityContext",
     "StructuredLogger",
+    "SqliteAuditSink",
     "Telemetry",
     "TraceSpan",
     "UserContext",

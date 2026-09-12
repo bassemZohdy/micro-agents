@@ -3,7 +3,7 @@
 Micro-Agents defines an architecture and provides a pre-release Python
 reference framework for narrowly scoped, independently deployable AI agents.
 
-The repository currently includes a strict definition schema, runtime-neutral
+The repository currently includes strict versioned definition schemas, runtime-neutral
 interfaces, a deterministic custom model/tool loop, an optional Google ADK
 adapter, official MCP and A2A SDK integrations, an HTTP service, container
 assets, and an extensive automated test suite. It remains a pre-release

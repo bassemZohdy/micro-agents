@@ -19,8 +19,10 @@ default and metric labels are bounded.
 
 ## Consequences
 
-- Agent/model/tool/MCP spans share the facade's correlation; OTel-enabled
-  deployments export standard spans/metrics without changing runtime code.
+- Agent/model/tool/MCP spans share the facade's correlation; the built-in
+  collector now exposes bounded cumulative latency histograms, while
+  OTel-enabled deployments export standard spans/metrics without changing
+  runtime code.
 - Secret redaction is centralized in the logger.
 - HTTP middleware and outbound model/MCP clients extract and inject W3C trace
   context when OTel is enabled; token/cost conventions and `/metrics` expose

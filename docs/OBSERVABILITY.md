@@ -17,10 +17,11 @@ scrape_configs:
 ```
 
 The built-in collector keeps a bounded in-memory series: counter points
-(`*_total`) accumulate per label set, other points export their latest value.
-This is scrape-ready and dependency-free. For production aggregation with
-histograms and exemplars, configure a native OpenTelemetry exporter from the
-optional `otel` extra instead — the metric names below are unchanged.
+(`*_total`) accumulate per label set, other points export their latest value,
+and histogram observations export cumulative buckets plus `_sum` and `_count`.
+This is scrape-ready and dependency-free. For production aggregation and
+exemplars, configure a native OpenTelemetry exporter from the optional `otel`
+extra instead — the metric names below are unchanged.
 
 ## Metric inventory
 
@@ -39,17 +40,21 @@ names the tool.
 | `agent_invocations_total` | counter | `agent` | Completed agent invocations |
 | `agent_invocation_errors_total` | counter | `agent` | Failed agent invocations (deadline, provider, runtime) |
 | `agent_invocation_latency_ms` | gauge | `agent` | Latest end-to-end invocation latency |
+| `agent_invocation_latency_histogram_ms` | histogram | `agent` | Cumulative end-to-end latency observations |
+| `model_latency_histogram_ms` | histogram | `agent` | Cumulative provider round-trip latency observations |
 | `agent_retries_total` | counter | `agent` | Retried invocations under the configured error policy |
 | `agent_retries_suppressed_total` | counter | `agent` | Retries suppressed after an unknown side-effect outcome |
 | `model_latency_ms` | gauge | `agent` | Latest provider round-trip latency |
 | `model_tokens_total` | counter | `agent` | Tokens consumed (usage reported by the provider) |
 | `tool_calls_total` | counter | `agent`, `tool` | Tool executions |
 | `tool_latency_ms` | gauge | `agent`, `tool` | Latest tool execution latency |
+| `tool_latency_histogram_ms` | histogram | `agent`, `tool` | Cumulative tool execution latency observations |
 | `policy_denials_total` | counter | `agent`, `tool` | Deterministic policy denials (tool, side effect) |
 | `circuit_breaker_trips_total` | counter | `agent` | Circuit breaker transitions to open after consecutive failures |
 | `approval_requests_total` | counter | `tool` | Tool executions paused awaiting an approval decision |
 | `operation_record_errors_total` | counter | `agent`, `tool` | Idempotency-store write failures (outcome unknown — inspect, do not blindly retry) |
 | `http_request_latency_ms` | gauge | `route`, `method` | Latest HTTP request latency |
+| `http_request_latency_histogram_ms` | histogram | `route`, `method` | Cumulative HTTP latency observations |
 | `model_cost_usd_total` | counter | `agent`, `currency` | Estimated model cost, priced from configured per-1k-token rates |
 
 Audit events (policy denials, approval decisions, authentication failures)
@@ -65,9 +70,9 @@ Panels that map directly onto the emitted series:
 2. **Errors** — invocation error ratio
    `rate(agent_invocation_errors_total[5m]) / clamp_min(rate(agent_invocations_total[5m]), 1e-9)`;
    HTTP 401/429 rejection rates from the `http_*_total` counters.
-3. **Latency** — `agent_invocation_latency_ms` and `model_latency_ms` per
-   `agent` (latest-value gauges; for percentile panels, feed a native
-   OpenTelemetry histogram exporter instead).
+3. **Latency** — latest-value gauges for quick diagnosis and the corresponding
+   built-in histogram series for percentile panels; feed a native
+   OpenTelemetry histogram exporter for durable multi-replica aggregation.
 4. **Tools** — `rate(tool_calls_total[5m])` by `tool`, `tool_latency_ms`,
    and `rate(policy_denials_total[5m])` (a spike usually means a policy or
    prompt-injection investigation, not a code defect).
@@ -81,8 +86,8 @@ Panels that map directly onto the emitted series:
 7. **Cost** — `increase(model_tokens_total[1h])` and
    `increase(model_cost_usd_total[1h])` by `agent` (cost is populated when
    the deployment configures per-1k-token rates).
-8. **HTTP latency** — `http_request_latency_ms` per `route` (latest-value
-   gauge).
+8. **HTTP latency** — `http_request_latency_ms` and its histogram counterpart
+   per `route`.
 9. **Saturation** — in-flight invocations from
    `rate(agent_invocations_total[5m])` against the definition's
    `max_concurrency`; readiness failures from `/health/ready`.

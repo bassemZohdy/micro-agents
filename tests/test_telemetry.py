@@ -101,6 +101,25 @@ class TestMetricsCollector:
         assert 'requests_total{route="/v1/\\"invoke\\""} 2' in output
         assert 'latency_ms{route="/v1/invoke"} 12.5' in output
 
+    def test_histogram_records_cumulative_buckets_and_prometheus_output(self):
+        collector = MetricsCollector()
+        collector.observe_histogram(
+            "request_latency_ms", 3.0, {"route": "invoke"}, buckets=(1, 5, 10)
+        )
+        collector.observe_histogram(
+            "request_latency_ms", 8.0, {"route": "invoke"}, buckets=(1, 5, 10)
+        )
+
+        snapshot = collector.get_histogram("request_latency_ms", {"route": "invoke"})
+        assert snapshot is not None
+        assert snapshot["count"] == 2
+        assert snapshot["sum"] == 11.0
+        assert snapshot["buckets"] == {1.0: 0, 5.0: 1, 10.0: 2}
+        output = collector.prometheus_text()
+        assert "# TYPE request_latency_ms histogram" in output
+        assert 'request_latency_ms_bucket{le="5.0",route="invoke"} 1' in output
+        assert 'request_latency_ms_count{route="invoke"} 2' in output
+
     @pytest.mark.otel
     def test_otel_environment_is_opt_in(self, monkeypatch):
         monkeypatch.delenv("MICRO_AGENT_OTEL_ENABLED", raising=False)

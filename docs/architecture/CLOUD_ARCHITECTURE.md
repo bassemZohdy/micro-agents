@@ -1,10 +1,10 @@
 # Micro-Agent Cloud — Control-Plane Architecture (C0)
 
-C0 defines the architecture of Micro-Agent Cloud on paper only: the boundary
-between the standalone framework and cloud services, the two kinds of agent
-discovery, and the extension, tenancy, security, and failure models. No cloud
-service is implemented in this repository, and nothing here changes the
-standalone definition, runtime SPI, or single-agent serving path (see
+C0 defines the architecture of Micro-Agent Cloud: the boundary between the
+standalone framework and cloud services, the two kinds of agent discovery, and
+the extension, tenancy, security, and failure models. Minimal C1–C4 reference
+slices are implemented in the top-level `cloud` package; they do not change
+the standalone definition, runtime SPI, or single-agent serving path (see
 [ADR 0013](../adr/0013-cloud-control-plane-boundary.md)).
 
 ## 1. Boundary: core framework vs cloud services
@@ -163,8 +163,9 @@ standalone system, never to a hung one.
 
 ## 7. What this definition does not decide
 
-Deferred to C1+ implementation, deliberately: registry storage and API
-shapes, descriptor file format and version negotiation, gateway
-implementation, config-plane API, and the observability aggregation schema.
-C0 only fixes the boundaries and models above so those designs cannot leak
-control-plane concerns into the core.
+C1–C4 currently provide minimal reference implementations for the registry,
+configuration plane, gateway, and observability aggregation. Durable storage,
+production authentication, gateway streaming, and formal cloud compatibility
+policies remain deferred to the C5 hardening work in `TODO.md`. The C0 rules
+continue to govern those implementations so control-plane concerns cannot leak
+into the core.

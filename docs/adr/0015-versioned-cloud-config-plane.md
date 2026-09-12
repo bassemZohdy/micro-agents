@@ -28,5 +28,5 @@ in-memory in C2, to be replaced wholesale by a durable backend later. See
   such;
 - rollback lineage is fully auditable and idempotent — a rollback is just
   another version;
-- swapping the in-memory store for a durable one (or adding plane
-  authentication with the C3 gateway) replaces a component, not a contract.
+- swapping the in-memory store for a durable one (or fronting the plane with
+  authenticated gateway policy) replaces a component, not a contract.

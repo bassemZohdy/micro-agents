@@ -6,6 +6,7 @@ MCP is a first-class Micro-Agent dependency.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,6 +76,16 @@ class McpDiscovery:
     prompts: list[McpPrompt] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class McpNotification:
+    """Application-visible server notification from an MCP connection."""
+
+    server_ref: str
+    method: str
+    params: dict[str, Any] = field(default_factory=dict)
+    raw: Any = None
+
+
 # ---------------------------------------------------------------------------
 # MCP Connection State
 # ---------------------------------------------------------------------------
@@ -121,3 +132,7 @@ class McpClient(ABC):
     @abstractmethod
     def state(self) -> str:
         """Return current connection state."""
+
+    def set_notification_handler(self, handler: Callable[[Any], Any] | None) -> None:
+        """Install an optional callback for server notifications."""
+        return None

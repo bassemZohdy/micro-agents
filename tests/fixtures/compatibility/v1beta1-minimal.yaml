@@ -1,0 +1,21 @@
+# Compatibility fixture for the v1beta1 camelCase wire format.
+apiVersion: microagents.io/v1beta1
+kind: MicroAgent
+metadata:
+  name: compatibility-beta
+  version: 1.0.0
+spec:
+  behavior:
+    instructions: Respond with a concise acknowledgement.
+    inputContract:
+      parameters:
+        - name: message
+          type: string
+  dependencies:
+    knowledge:
+      - ref: policy-docs
+        sourceType: sqlite
+        maxResults: 3
+    mcpServers:
+      - ref: support-tools
+        credentialRef: mcp-token

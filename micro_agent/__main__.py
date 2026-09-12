@@ -15,7 +15,7 @@ import uvicorn
 from micro_agent.config import build_audit_sink, build_authenticator, build_runtime
 from micro_agent.core import DefaultMicroAgent
 from micro_agent.definition import load_definition_from_file
-from micro_agent.interoperability import create_app
+from micro_agent.interoperability import TokenBucketRateLimiter, create_app
 from micro_agent.observability import HealthChecker, Telemetry
 
 
@@ -56,6 +56,9 @@ async def run(args: argparse.Namespace) -> None:
     for name, probe in runtime.health_probes().items():
         health_checker.add_dependency(name, probe=probe)
 
+    rate_limit_per_minute = getattr(bootstrap.resolved, "rate_limit_per_minute", None)
+    rate_limit_burst = getattr(bootstrap.resolved, "rate_limit_burst", None)
+
     app = create_app(
         agent,
         health_checker,
@@ -63,6 +66,16 @@ async def run(args: argparse.Namespace) -> None:
         authenticator=build_authenticator(bootstrap.resolved),
         audit_sink=build_audit_sink(bootstrap.resolved),
         cors_origins=bootstrap.resolved.cors_origins or None,
+        max_request_bytes=getattr(bootstrap.resolved, "max_request_bytes", None) or 1_048_576,
+        rate_limiter=(
+            TokenBucketRateLimiter(
+                rate_limit_per_minute,
+                burst=rate_limit_burst,
+            )
+            if isinstance(rate_limit_per_minute, int)
+            else None
+        ),
+        a2a_store_path=getattr(bootstrap.resolved, "a2a_store_path", None),
     )
 
     config = uvicorn.Config(

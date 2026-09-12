@@ -25,6 +25,7 @@ green.
 | Surface | Tier | Contract |
 |---|---|---|
 | Definition schema (`microagents.io/v1alpha1`) | Stable (within alpha) | Additive fields only; removals require a new `apiVersion`; compatibility fixtures and migration notes ship in `docs/schemas` |
+| Definition schema (`microagents.io/v1beta1`) | Compatibility beta | The loader accepts the beta camelCase wire shape through an explicit migration layer; schema divergence or removals require a new version |
 | HTTP API (`/v1/invoke`, health, capabilities, `/metrics`) | Stable | Response contracts (422/429/401/403/404/503/504) are additive; `/openapi.json` alias retained |
 | Environment variables (`MICRO_AGENT_*`) | Stable | New variables are additive; renames are deprecations |
 | Python core contracts (`micro_agent.core`, definition models) | Stable-ish | Additive; renames/removes follow the deprecation process |
@@ -72,6 +73,9 @@ future cleanup cannot remove import paths silently.
 - For definitions: run the loader against your YAML; the strict Pydantic
   model reports every incompatibility with stable diagnostics, and schema
   fixtures under `docs/schemas` document the contract for each `apiVersion`.
+  v1beta1 camelCase fields are migrated at load time; the normalized runtime
+  model remains the same until a future schema revision requires a separate
+  model.
 - For deployments: `tools/validate_release.py` (release workflow) verifies
   schema version, image tag, package version, and changelog alignment; the
   manifest guard tests keep the Kubernetes samples honest.

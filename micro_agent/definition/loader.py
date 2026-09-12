@@ -2,12 +2,65 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
 from micro_agent.definition.models import MicroAgentDefinition
+
+SUPPORTED_API_VERSIONS = frozenset({"microagents.io/v1alpha1", "microagents.io/v1beta1"})
+
+
+_V1BETA1_FIELD_ALIASES = {
+    "inputContract": "input_contract",
+    "outputContract": "output_contract",
+    "mcpServers": "mcp_servers",
+    "inputMetadata": "input_metadata",
+    "outputMetadata": "output_metadata",
+    "allowedCapabilities": "allowed_capabilities",
+    "sourceType": "source_type",
+    "maxResults": "max_results",
+    "maxContextCharacters": "max_context_characters",
+    "timeoutSeconds": "timeout_seconds",
+    "maxIterations": "max_iterations",
+    "maxConcurrency": "max_concurrency",
+    "shutdownTimeoutSeconds": "shutdown_timeout_seconds",
+    "concurrencyPolicy": "concurrency_policy",
+    "errorPolicy": "error_policy",
+    "retryMaxAttempts": "retry_max_attempts",
+    "retryBackoffSeconds": "retry_backoff_seconds",
+    "retryJitterSeconds": "retry_jitter_seconds",
+    "retryBudgetSeconds": "retry_budget_seconds",
+    "circuitBreakerFailures": "circuit_breaker_failures",
+    "circuitBreakerCooldownSeconds": "circuit_breaker_cooldown_seconds",
+    "protocolVersion": "protocol_version",
+    "identityRequirements": "identity_requirements",
+    "credentialRefs": "credential_refs",
+    "policyRefs": "policy_refs",
+    "sideEffect": "side_effect",
+    "credentialRef": "credential_ref",
+    "modelId": "model_id",
+    "modelProvider": "provider",
+}
+
+
+def _migrate_v1beta1(data: dict[str, object]) -> dict[str, object]:
+    """Translate the beta camelCase wire spelling into the stable model."""
+    migrated = deepcopy(data)
+
+    def visit(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                _V1BETA1_FIELD_ALIASES.get(str(key), key): visit(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [visit(item) for item in value]
+        return value
+
+    return visit(migrated)  # type: ignore[return-value]
 
 
 class DefinitionError(Exception):
@@ -23,8 +76,15 @@ def load_definition_from_dict(data: dict[str, object]) -> MicroAgentDefinition:
 
     Raises DefinitionError with useful diagnostics on validation failure.
     """
+    version = data.get("apiVersion", data.get("api_version", "microagents.io/v1alpha1"))
+    if version not in SUPPORTED_API_VERSIONS:
+        raise DefinitionError(
+            f"Unsupported Micro-Agent API version: {version}",
+            errors=[{"loc": "apiVersion", "msg": "unsupported API version", "type": "value_error"}],
+        )
+    normalized = _migrate_v1beta1(data) if version == "microagents.io/v1beta1" else data
     try:
-        return MicroAgentDefinition.model_validate(data)
+        return MicroAgentDefinition.model_validate(normalized)
     except ValidationError as exc:
         errors = []
         for err in exc.errors():
@@ -64,3 +124,13 @@ def load_definition_from_file(path: Path | str) -> MicroAgentDefinition:
         raise DefinitionError(f"Definition path is a directory, not a file: {path}")
     content = path.read_text(encoding="utf-8")
     return load_definition_from_yaml(content)
+
+
+__all__ = [
+    "DefinitionError",
+    "SUPPORTED_API_VERSIONS",
+    "_V1BETA1_FIELD_ALIASES",
+    "load_definition_from_dict",
+    "load_definition_from_file",
+    "load_definition_from_yaml",
+]

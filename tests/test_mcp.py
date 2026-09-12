@@ -1,16 +1,21 @@
 """Tests for Micro-Agent MCP integration."""
 
+from types import SimpleNamespace
+
 import pytest
 
+from micro_agent.definition import McpServerRef
 from micro_agent.mcp import (
     McpClient,
     McpConfig,
+    McpConnectionManager,
     McpConnectionState,
     McpDiscovery,
     McpPrompt,
     McpResource,
     McpTool,
 )
+from micro_agent.mcp.client import FakeMcpClient
 
 
 class TestMcpConfig:
@@ -91,3 +96,37 @@ class TestMcpClientInterface:
     def test_cannot_instantiate_abstract(self):
         with pytest.raises(TypeError):
             McpClient()  # type: ignore[abstract]
+
+
+@pytest.mark.asyncio
+async def test_server_notifications_are_exposed_to_application() -> None:
+    received = []
+
+    class NotifyingClient(FakeMcpClient):
+        def set_notification_handler(self, handler):
+            self._handler = handler
+
+        async def connect(self, config, credential=None):
+            await super().connect(config, credential)
+            await self._handler(
+                SimpleNamespace(
+                    root=SimpleNamespace(
+                        method="notifications/tools/list_changed",
+                        params=SimpleNamespace(model_dump=lambda **_: {"changed": True}),
+                    )
+                )
+            )
+
+    client = NotifyingClient()
+    manager = McpConnectionManager(
+        client_factory=lambda _config: client,
+        notification_handler=received.append,
+    )
+    await manager.connect_server(
+        McpServerRef(ref="notifications", transport="stdio", command="python")
+    )
+
+    assert len(received) == 1
+    assert received[0].method == "notifications/tools/list_changed"
+    assert received[0].params == {"changed": True}
+    assert manager.notifications() == received

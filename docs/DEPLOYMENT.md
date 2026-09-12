@@ -8,16 +8,20 @@ production deployment.
 The image:
 
 - installs the local Python package
-- runs as UID/GID 1000
+- runs as non-root UID 1001 by default and supports an arbitrary runtime UID in
+  group 0
 - exposes port 8080
 - starts `python -m micro_agent` with an externally mounted definition
 - probes `/health/live`
 
 The executable resolves an explicit fake or OpenAI-compatible model provider
 from the mounted definition and environment. It constructs local memory/session
-providers, optional Redis-backed external memory/session/idempotency providers, the official
+providers, optional Redis/PostgreSQL-backed external memory/session/idempotency
+providers, the official
 MCP SDK client for declared servers, knowledge and credential providers,
-policy, telemetry, and audit sinks from configuration.
+policy, telemetry, and audit sinks from configuration. It can also enable the
+SQLite knowledge, A2A task/push, and audit backends through their respective
+environment variables.
 Startup probes the configured model, state providers, knowledge sources, and
 declared MCP servers before readiness. Unsupported external state bindings and
 unavailable credentials fail before readiness.
@@ -115,10 +119,11 @@ export MICRO_AGENT_CORS_ORIGINS='https://console.example,https://admin.example'
 ```
 
 Use `*` only as the sole value, and do not treat it as a credentialed browser
-policy. Rate limiting is an injected `RateLimiter` integration point on
-`create_app()`; use a gateway or shared datastore implementation for replica-
-wide limits. The native API is versioned under `/v1` and publishes the
-OpenAPI document at `/v1/openapi.json`.
+policy. Set `MICRO_AGENT_MAX_REQUEST_BYTES` to tighten the fixed-length and
+chunked request limit. Set `MICRO_AGENT_RATE_LIMIT_PER_MINUTE` to enable the
+bounded process-local token bucket; use a gateway or shared datastore
+implementation for replica-wide limits. The native API is versioned under
+`/v1` and publishes the OpenAPI document at `/v1/openapi.json`.
 
 ## Cutting a release
 
@@ -150,10 +155,11 @@ Per release:
 
 ## OpenShift
 
-The current fixed `USER 1000` image and `runAsUser: 1000` pod settings do not
-represent OpenShift arbitrary-UID compatibility. A hardened image should use
-group-writable required paths, avoid a required fixed UID, and be tested under
-the restricted security context constraints used by the target cluster.
+The image declares UID 1001 as its ordinary Docker default, but application
+paths are group-writable and the Kubernetes manifest does not pin `runAsUser`,
+so an OpenShift arbitrary UID in group 0 is supported by design. Validation
+under the target restricted security context constraints and read-only
+filesystem remains an open production-hardening task.
 
 ## Multi-replica warning
 
@@ -174,7 +180,8 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
 
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
-- [ ] authenticated HTTP and enabled A2A standards endpoints
+- [ ] authenticated HTTP and enabled A2A standards endpoints, with a shared
+      multi-replica task/push backend where required
 - [x] external session, memory, and idempotency state with tenant isolation and
       optimistic versioning
 - [ ] immutable image, SBOM, signature, and provenance

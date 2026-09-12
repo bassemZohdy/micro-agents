@@ -161,7 +161,9 @@ class _InvocationDeadline:
     async def run(self, operation: Awaitable[_T], cap: float | int | None = None) -> _T:
         """Await an operation using the remaining budget and an optional cap."""
         remaining = self.remaining()
+        deadline_controls_timeout = cap is None
         if cap is not None:
+            deadline_controls_timeout = remaining is not None and float(cap) >= remaining
             remaining = min(float(cap), remaining) if remaining is not None else float(cap)
         if remaining is None:
             return await operation
@@ -173,7 +175,7 @@ class _InvocationDeadline:
         try:
             return await asyncio.wait_for(operation, timeout=remaining)
         except TimeoutError as exc:
-            if self.expired:
+            if deadline_controls_timeout or self.expired:
                 raise TimeoutError("invocation deadline exceeded") from exc
             raise
 
@@ -726,6 +728,9 @@ class AdkRuntime(AgentRuntime):
         latency_ms = round((time.monotonic() - start_time) * 1000, 2)
         self._telemetry.increment("agent_invocations_total", labels)
         self._telemetry.record("agent_invocation_latency_ms", latency_ms, labels)
+        self._telemetry.observe_histogram(
+            "agent_invocation_latency_histogram_ms", latency_ms, labels
+        )
         if breaker is not None:
             breaker.record_success()
         return response
@@ -1005,6 +1010,7 @@ class AdkRuntime(AgentRuntime):
             self._telemetry.finish_span(model_span)
 
             self._telemetry.record("model_latency_ms", model_latency, labels)
+            self._telemetry.observe_histogram("model_latency_histogram_ms", model_latency, labels)
             usage = {k: usage.get(k, 0) + v for k, v in response.usage.items()}
             self._telemetry.record_model_usage(response.usage, labels)
 
@@ -1482,6 +1488,11 @@ class AdkRuntime(AgentRuntime):
 
             self._telemetry.increment("tool_calls_total", {**labels, "tool": tool_name})
             self._telemetry.record("tool_latency_ms", tool_latency, {**labels, "tool": tool_name})
+            self._telemetry.observe_histogram(
+                "tool_latency_histogram_ms",
+                tool_latency,
+                {**labels, "tool": tool_name},
+            )
             results.append(
                 {
                     "tool": tool_name,

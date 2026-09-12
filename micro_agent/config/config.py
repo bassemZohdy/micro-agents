@@ -36,12 +36,19 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
     approval_endpoint: str | None = None
+    knowledge_endpoint: str | None = None
+    a2a_store_path: str | None = None
     log_level: str | None = None
     auth: str | None = None
     auth_issuer: str | None = None
     auth_audience: str | None = None
     audit_sink: str | None = None
     audit_file: str | None = None
+    audit_database: str | None = None
+    audit_retention_seconds: float | None = None
+    max_request_bytes: int | None = None
+    rate_limit_per_minute: int | None = None
+    rate_limit_burst: int | None = None
     cors_origins: list[str] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -61,6 +68,8 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
     approval_endpoint: str | None = None
+    knowledge_endpoint: str | None = None
+    a2a_store_path: str | None = None
 
     @classmethod
     def _validate_http_endpoint(cls, value: str, field_name: str) -> str:
@@ -94,6 +103,8 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             session_endpoint=self.session_endpoint,
             idempotency_endpoint=self.idempotency_endpoint,
             approval_endpoint=self.approval_endpoint,
+            knowledge_endpoint=self.knowledge_endpoint,
+            a2a_store_path=self.a2a_store_path,
         )
 
 
@@ -114,12 +125,19 @@ class ResolvedConfig:
     session_endpoint: str | None = None
     idempotency_endpoint: str | None = None
     approval_endpoint: str | None = None
+    knowledge_endpoint: str | None = None
+    a2a_store_path: str | None = None
     log_level: str = "INFO"
     auth: str | None = None
     auth_issuer: str | None = None
     auth_audience: str | None = None
     audit_sink: str = "stdout"
     audit_file: str | None = None
+    audit_database: str | None = None
+    audit_retention_seconds: float | None = None
+    max_request_bytes: int | None = None
+    rate_limit_per_minute: int | None = None
+    rate_limit_burst: int | None = None
     cors_origins: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -195,6 +213,10 @@ def resolve_config(
             config.idempotency_endpoint = env_config.idempotency_endpoint
         if env_config.approval_endpoint:
             config.approval_endpoint = env_config.approval_endpoint
+        if env_config.knowledge_endpoint:
+            config.knowledge_endpoint = env_config.knowledge_endpoint
+        if env_config.a2a_store_path:
+            config.a2a_store_path = env_config.a2a_store_path
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
         if env_config.auth:
@@ -207,6 +229,16 @@ def resolve_config(
             config.audit_sink = env_config.audit_sink
         if env_config.audit_file:
             config.audit_file = env_config.audit_file
+        if env_config.audit_database:
+            config.audit_database = env_config.audit_database
+        if env_config.audit_retention_seconds is not None:
+            config.audit_retention_seconds = env_config.audit_retention_seconds
+        if env_config.max_request_bytes is not None:
+            config.max_request_bytes = env_config.max_request_bytes
+        if env_config.rate_limit_per_minute is not None:
+            config.rate_limit_per_minute = env_config.rate_limit_per_minute
+        if env_config.rate_limit_burst is not None:
+            config.rate_limit_burst = env_config.rate_limit_burst
         if env_config.cors_origins:
             config.cors_origins = list(env_config.cors_origins)
         config.extra.update(env_config.extra)
@@ -252,6 +284,14 @@ def resolve_config(
     if env_approval_endpoint:
         config.approval_endpoint = env_approval_endpoint
 
+    env_knowledge_endpoint = _read_env("knowledge_endpoint")
+    if env_knowledge_endpoint:
+        config.knowledge_endpoint = env_knowledge_endpoint
+
+    env_a2a_store_path = _read_env("a2a_store_path")
+    if env_a2a_store_path:
+        config.a2a_store_path = env_a2a_store_path
+
     env_auth = _read_env("auth")
     if env_auth:
         config.auth = env_auth
@@ -271,6 +311,25 @@ def resolve_config(
     env_audit_file = _read_env("audit_file")
     if env_audit_file:
         config.audit_file = env_audit_file
+
+    env_audit_database = _read_env("audit_database")
+    if env_audit_database:
+        config.audit_database = env_audit_database
+
+    for name in ("max_request_bytes", "rate_limit_per_minute", "rate_limit_burst"):
+        raw_value = _read_env(name)
+        if raw_value is not None:
+            try:
+                setattr(config, name, int(raw_value))
+            except ValueError as exc:
+                raise ValueError(f"{_env_key(name)} must be an integer") from exc
+
+    env_audit_retention = _read_env("audit_retention_seconds")
+    if env_audit_retention is not None:
+        try:
+            config.audit_retention_seconds = float(env_audit_retention)
+        except ValueError as exc:
+            raise ValueError("MICRO_AGENT_AUDIT_RETENTION_SECONDS must be a number") from exc
 
     env_cors_origins = _read_env("cors_origins")
     if env_cors_origins is not None:
@@ -320,11 +379,14 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
         )
 
     audit_mode = (config.audit_sink or "").strip().lower()
-    if audit_mode not in ("", "none", "stdout", "file"):
+    if audit_mode not in ("", "none", "stdout", "file", "sqlite"):
         diagnostics.append(
             ConfigDiagnostic(
                 level="error",
-                message=(f"Invalid audit sink: {config.audit_sink}. Supported: none, stdout, file"),
+                message=(
+                    f"Invalid audit sink: {config.audit_sink}. "
+                    "Supported: none, stdout, file, sqlite"
+                ),
                 path="audit_sink",
             )
         )
@@ -334,6 +396,30 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                 level="error",
                 message="MICRO_AGENT_AUDIT_SINK=file requires MICRO_AGENT_AUDIT_FILE",
                 path="audit_file",
+            )
+        )
+    if audit_mode == "sqlite" and not (config.audit_database or config.audit_file):
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message="MICRO_AGENT_AUDIT_SINK=sqlite requires MICRO_AGENT_AUDIT_DATABASE",
+                path="audit_database",
+            )
+        )
+    for name in ("max_request_bytes", "rate_limit_per_minute", "rate_limit_burst"):
+        value = getattr(config, name)
+        if value is not None and value < 1:
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error", message=f"{name} must be greater than zero", path=name
+                )
+            )
+    if config.audit_retention_seconds is not None and config.audit_retention_seconds <= 0:
+        diagnostics.append(
+            ConfigDiagnostic(
+                level="error",
+                message="audit_retention_seconds must be greater than zero",
+                path="audit_retention_seconds",
             )
         )
 

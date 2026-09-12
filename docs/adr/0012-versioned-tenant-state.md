@@ -24,8 +24,9 @@ Add an optional `tenant_id` and a monotonic `version` to `SessionContext`,
 - A missing record accepts a zero-version write and starts at version 1.
 - A mismatch raises `StateConflictError`, allowing callers to reload, merge,
   and retry without losing an update.
-- Redis providers use `WATCH`/`MULTI`/`EXEC` for versioned writes; SQLite stays
-  a serialized single-process development provider.
+- Redis providers use `WATCH`/`MULTI`/`EXEC` for versioned writes, PostgreSQL
+  uses transactional version checks, and SQLite stays a serialized
+  single-process development provider.
 
 ## Consequences
 
@@ -41,5 +42,6 @@ Trade-offs and remaining work:
 
 - Callers must decide how to merge a `StateConflictError`.
 - Unverified/local calls intentionally retain the legacy provider-wide scope.
-- durable knowledge and production approval state remain separate backlog
-  items.
+- durable knowledge now has a tenant-scoped, versioned SQLite reference
+  retriever; production semantic search and durable approval state remain
+  separate backlog items.

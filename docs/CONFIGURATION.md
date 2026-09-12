@@ -29,6 +29,15 @@ the service becomes ready.
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
 | `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
+| `MICRO_AGENT_KNOWLEDGE_ENDPOINT` | `knowledge_endpoint` | wired for the durable SQLite knowledge retriever (`sqlite:///path` or a plain path); unsupported endpoints fail fast |
+| `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for the tenant-scoped SQLite A2A task and push-configuration stores |
+| `MICRO_AGENT_AUDIT_SINK` | `audit_sink` | wired; `stdout` (default), `file`, `sqlite`, or `none` |
+| `MICRO_AGENT_AUDIT_FILE` | `audit_file` | wired for the file sink, or as the SQLite database path when `audit_sink=sqlite` |
+| `MICRO_AGENT_AUDIT_DATABASE` | `audit_database` | wired for the SQLite audit sink |
+| `MICRO_AGENT_AUDIT_RETENTION_SECONDS` | `audit_retention_seconds` | wired; positive retention window for SQLite audit rows |
+| `MICRO_AGENT_MAX_REQUEST_BYTES` | `max_request_bytes` | wired; positive limit for fixed-length and chunked HTTP requests |
+| `MICRO_AGENT_RATE_LIMIT_PER_MINUTE` | `rate_limit_per_minute` | wired; enables the bounded process-local token-bucket limiter |
+| `MICRO_AGENT_RATE_LIMIT_BURST` | `rate_limit_burst` | wired; optional token-bucket capacity |
 | `MICRO_AGENT_LOG_LEVEL` | `log_level` | wired; applied to Uvicorn logging |
 | `MICRO_AGENT_CORS_ORIGINS` | `cors_origins` | wired; comma-separated absolute HTTP(S) origins, or `*` alone |
 | `MICRO_AGENT_OTEL_ENABLED` | telemetry bootstrap | wired; opt-in OpenTelemetry instrumentation (`true`/`false`, default `false`) |
@@ -118,16 +127,31 @@ policy, or the caller request. The custom runtime appends this context to the
 system prompt without persisting it; the Google ADK adapter injects the same
 framed context into the per-invocation user content because ADK system
 instructions are constructed when the agent is created. Deployments may inject
-a `KnowledgeRetriever` into `build_runtime`; without one, a declared source
-uses the empty in-memory retriever and therefore fails its startup health check
-instead of pretending knowledge is available.
+a `KnowledgeRetriever` into `build_runtime`. Set
+`MICRO_AGENT_KNOWLEDGE_ENDPOINT=sqlite:///var/lib/micro-agent/knowledge.db`
+to use the built-in durable, tenant-scoped SQLite retriever. It stores
+versioned documents and performs deterministic keyword retrieval behind the
+same SPI; it is a single-process reference backend, not a distributed vector
+search service. Without a configured retriever or SQLite endpoint, a declared
+source uses the empty in-memory retriever and therefore fails its startup
+health check instead of pretending knowledge is available.
+
+## A2A task state and push notifications
+
+Set `MICRO_AGENT_A2A_STORE_PATH` to a writable SQLite path when the definition
+enables A2A. The executable passes that path to the official SDK adapter,
+which persists bounded tenant-scoped task snapshots and push callback
+configurations. Callback delivery uses HTTPS outside loopback, optional host
+allowlists, configured callback authentication, and bounded transient retry.
+For a multi-replica deployment, inject store implementations backed by the
+deployment's shared database rather than sharing a local filesystem.
 
 HTTP CORS is disabled unless `MICRO_AGENT_CORS_ORIGINS` is set. The executable
 passes this allowlist to `create_app`; application embedders can use the same
 policy with `create_app(cors_origins=[...])`. The default policy never enables
-credentials. Rate limiting is intentionally an injected `RateLimiter` hook,
-not an environment-selected local counter; deployments should provide a
-shared gateway or datastore implementation to `create_app(rate_limiter=...)`.
+credentials. Rate limiting can use the environment-selected process-local
+token bucket above, or an injected `RateLimiter` hook backed by a shared
+gateway/datastore for replica-wide quotas.
 
 ```bash
 pip install 'micro-agents[redis]'
@@ -170,15 +194,16 @@ example, runtime or authentication) also need to be supplied.
 
 ## API compatibility fixtures and migration
 
-`tests/fixtures/compatibility/v1alpha1-minimal.yaml` is the canonical small
-fixture for the supported `microagents.io/v1alpha1` shape. The loader and
-generated schema reject other API versions and unknown fields, so a future
-version must be introduced as a new versioned model and fixture rather than
-silently widening v1alpha1. During migration, validate the new fixture in CI,
-keep endpoint bindings in an overlay, and update the schema, compatibility
-tests, this guide, and the changelog together. Existing v1alpha1 definitions
-remain valid until an explicit migration policy for the new API version is
-published.
+`tests/fixtures/compatibility/v1alpha1-minimal.yaml` and
+`tests/fixtures/compatibility/v1beta1-minimal.yaml` are the canonical small
+fixtures for the supported `microagents.io/v1alpha1` and
+`microagents.io/v1beta1` shapes. The beta loader translates its camelCase
+wire fields into the stable runtime model, while unknown fields and
+unsupported versions still fail closed. Both generated schemas are checked in
+under `docs/schemas/`; run `python -m micro_agent.definition.schema` after
+model changes to regenerate them. Keep endpoint bindings in an overlay and
+update the schema, compatibility tests, this guide, and the changelog
+together.
 
 ## Secret references
 
@@ -270,12 +295,17 @@ time; events carry identifiers and reasons, never payloads or credentials.
 
 | Variable | Meaning |
 |---|---|
-| `MICRO_AGENT_AUDIT_SINK` | `stdout` (default), `file`, or `none` |
-| `MICRO_AGENT_AUDIT_FILE` | Append path; required when the sink is `file` |
+| `MICRO_AGENT_AUDIT_SINK` | `stdout` (default), `file`, `sqlite`, or `none` |
+| `MICRO_AGENT_AUDIT_FILE` | Append path for `file`; also accepted as the database path for `sqlite` |
+| `MICRO_AGENT_AUDIT_DATABASE` | SQLite database path when the sink is `sqlite` |
+| `MICRO_AGENT_AUDIT_RETENTION_SECONDS` | Positive SQLite retention window; defaults to 30 days |
 
 The default `stdout` sink writes one JSON object per line for platform log
 collection (the 12-factor durability path); `file` appends to a local file
-for deployments without a log pipeline.
+for deployments without a log pipeline. `sqlite` stores redacted,
+tenant-filterable rows with bounded retention and is suitable for a local or
+single-process deployment; export it to a SIEM or replace it with a shared
+sink for multiple replicas.
 
 ## OpenTelemetry
 
@@ -525,8 +555,11 @@ spec:
 ```
 
 Retries are attempted only for failures before a non-read-only tool starts.
-The runtime still lacks a circuit breaker and configurable error taxonomy;
-those remain explicit backlog items.
+The runtime also provides an optional definition-configured circuit breaker and
+bounded retry classification. Model and MCP clients default to an explicit
+no-proxy posture, and the HTTP service provides a bounded process-local token
+bucket; deployment-owned proxy overrides and distributed rate-limit state remain
+backlog items.
 
 When `behavior.input_contract` or `behavior.output_contract` declares
 parameters, the runtime validates required fields, JSON-compatible types, and

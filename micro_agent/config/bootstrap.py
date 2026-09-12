@@ -42,7 +42,11 @@ from micro_agent.config.config import (
     validate_config,
 )
 from micro_agent.definition import MicroAgentDefinition
-from micro_agent.knowledge import InMemoryKnowledgeRetriever, KnowledgeRetriever
+from micro_agent.knowledge import (
+    InMemoryKnowledgeRetriever,
+    KnowledgeRetriever,
+    SqliteKnowledgeRetriever,
+)
 from micro_agent.mcp import McpConnectionManager
 from micro_agent.memory import (
     InMemoryMemoryProvider,
@@ -57,7 +61,13 @@ from micro_agent.models import (
     OpenAICompatConfig,
     OpenAICompatProvider,
 )
-from micro_agent.observability import FileAuditSink, JsonlAuditSink, NullAuditSink, Telemetry
+from micro_agent.observability import (
+    FileAuditSink,
+    JsonlAuditSink,
+    NullAuditSink,
+    SqliteAuditSink,
+    Telemetry,
+)
 from micro_agent.observability.audit import AuditSink
 from micro_agent.runtime import AgentRuntime
 from micro_agent.security import (
@@ -149,7 +159,7 @@ def build_runtime(
     tool_registry = _build_tool_registry(definition)
     _validate_tool_bindings(definition, tool_registry, mcp)
     effective_policy = _resolve_policy(definition, policy, policy_resolver)
-    knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever)
+    knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever, resolved)
     audit_sink = build_audit_sink(resolved)
 
     provider = _build_model_provider(
@@ -568,6 +578,7 @@ def _build_mcp_manager(
 def _build_knowledge_provider(
     definition: MicroAgentDefinition,
     injected: KnowledgeRetriever | None,
+    config: ResolvedConfig | None = None,
 ) -> KnowledgeRetriever | None:
     """Construct the knowledge provider for declared knowledge sources.
 
@@ -579,6 +590,12 @@ def _build_knowledge_provider(
         return None
     if injected is not None:
         return injected
+    endpoint = config.knowledge_endpoint if config is not None else None
+    if endpoint:
+        try:
+            return SqliteKnowledgeRetriever(_sqlite_path(endpoint))
+        except (OSError, ValueError) as exc:
+            raise BootstrapError(f"Invalid knowledge provider endpoint: {exc}") from exc
     return InMemoryKnowledgeRetriever()
 
 
@@ -716,8 +733,18 @@ def build_audit_sink(config: ResolvedConfig) -> AuditSink:
         return FileAuditSink(config.audit_file)
     if mode == "none":
         return NullAuditSink()
+    if mode == "sqlite":
+        path = config.audit_database or config.audit_file
+        if not path:
+            raise BootstrapError(
+                "MICRO_AGENT_AUDIT_SINK=sqlite requires MICRO_AGENT_AUDIT_DATABASE"
+            )
+        return SqliteAuditSink(
+            path,
+            retention_seconds=config.audit_retention_seconds or 30 * 24 * 60 * 60,
+        )
     raise BootstrapError(
-        f"Unsupported audit sink '{config.audit_sink}'. Supported: none, stdout, file"
+        f"Unsupported audit sink '{config.audit_sink}'. Supported: none, stdout, file, sqlite"
     )
 
 
