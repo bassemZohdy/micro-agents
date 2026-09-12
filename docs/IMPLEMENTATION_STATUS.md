@@ -58,10 +58,9 @@ Implemented:
 
 Gaps:
 
-- model aliases and provider model IDs are separate fields; a versioned
-  resource/catalog contract is still needed for alias resolution
-- model aliases and provider model IDs are separate fields; a versioned
-  resource/catalog contract is still needed for alias resolution
+- model alias resolution now has a versioned `ModelCatalog` SPI with injected
+  and strict HTTP implementations; broader resource catalog types remain
+  future work
 
 ### Runtime
 
@@ -186,6 +185,9 @@ Implemented:
 - injectable OpenAI-compatible chat-completions provider
 - native Anthropic Messages provider with `tool_use`/`tool_result` translation
   and SSE streaming
+- versioned `ModelCatalog` SPI with in-memory and strict HTTPS HTTP
+  implementations; bootstrap resolves a logical `model.ref` before provider
+  construction
 - built-in `echo` tool, installed-package extensions through
   `micro_agent.tools` entry points, programmatic tool injection, and injected
   MCP tool adapters

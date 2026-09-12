@@ -38,6 +38,8 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    model_catalog_endpoint: str | None = None
+    model_catalog_token_ref: SecretRef | None = None
     policy_store_endpoint: str | None = None
     policy_store_token_ref: SecretRef | None = None
     log_level: str | None = None
@@ -72,6 +74,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    model_catalog_endpoint: str | None = None
     policy_store_endpoint: str | None = None
 
     @classmethod
@@ -95,6 +98,13 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             return cls._validate_http_endpoint(value, "policy_store_endpoint")
         return value
 
+    @field_validator("model_catalog_endpoint")
+    @classmethod
+    def validate_model_catalog_endpoint(cls, value: str | None) -> str | None:
+        if value is not None:
+            return cls._validate_http_endpoint(value, "model_catalog_endpoint")
+        return value
+
     @field_validator("mcp_endpoints")
     @classmethod
     def validate_mcp_endpoints(cls, values: dict[str, str]) -> dict[str, str]:
@@ -115,6 +125,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             approval_endpoint=self.approval_endpoint,
             knowledge_endpoint=self.knowledge_endpoint,
             a2a_store_path=self.a2a_store_path,
+            model_catalog_endpoint=self.model_catalog_endpoint,
             policy_store_endpoint=self.policy_store_endpoint,
         )
 
@@ -138,6 +149,8 @@ class ResolvedConfig:
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    model_catalog_endpoint: str | None = None
+    model_catalog_token: str | None = field(default=None, repr=False)
     policy_store_endpoint: str | None = None
     policy_store_token: str | None = None
     log_level: str = "INFO"
@@ -232,6 +245,8 @@ def resolve_config(
             config.a2a_store_path = env_config.a2a_store_path
         if env_config.policy_store_endpoint:
             config.policy_store_endpoint = env_config.policy_store_endpoint
+        if env_config.model_catalog_endpoint:
+            config.model_catalog_endpoint = env_config.model_catalog_endpoint
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
         if env_config.auth:
@@ -311,6 +326,14 @@ def resolve_config(
     if env_policy_store_endpoint:
         config.policy_store_endpoint = env_policy_store_endpoint
 
+    env_model_catalog_endpoint = _read_env("model_catalog_endpoint")
+    if env_model_catalog_endpoint:
+        config.model_catalog_endpoint = env_model_catalog_endpoint
+
+    env_model_catalog_token = _read_env("model_catalog_token")
+    if env_model_catalog_token:
+        config.model_catalog_token = env_model_catalog_token
+
     env_policy_store_token = _read_env("policy_store_token")
     if env_policy_store_token:
         config.policy_store_token = env_policy_store_token
@@ -363,6 +386,8 @@ def resolve_config(
         config.model_api_key = _resolve_secret(env_config.model_api_key_ref)
     if env_config and env_config.policy_store_token_ref:
         config.policy_store_token = _resolve_secret(env_config.policy_store_token_ref)
+    if env_config and env_config.model_catalog_token_ref:
+        config.model_catalog_token = _resolve_secret(env_config.model_catalog_token_ref)
 
     return config
 
@@ -466,6 +491,27 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                         "credentials, query, or fragment"
                     ),
                     path="policy_store_endpoint",
+                )
+            )
+
+    if config.model_catalog_endpoint:
+        parsed = urlsplit(config.model_catalog_endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error",
+                    message=(
+                        "model_catalog_endpoint must be an absolute http(s) URL without "
+                        "credentials, query, or fragment"
+                    ),
+                    path="model_catalog_endpoint",
                 )
             )
 

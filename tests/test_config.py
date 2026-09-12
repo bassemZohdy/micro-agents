@@ -63,6 +63,15 @@ class TestResolveConfig:
         assert config.policy_store_endpoint == "https://policy.example.test/v1/resolve"
         assert config.policy_store_token == "secret-policy-token"
 
+    def test_model_catalog_environment_override(self, monkeypatch):
+        monkeypatch.setenv(
+            "MICRO_AGENT_MODEL_CATALOG_ENDPOINT", "https://catalog.example.test/resolve"
+        )
+        monkeypatch.setenv("MICRO_AGENT_MODEL_CATALOG_TOKEN", "secret-catalog-token")
+        config = resolve_config()
+        assert config.model_catalog_endpoint == "https://catalog.example.test/resolve"
+        assert config.model_catalog_token == "secret-catalog-token"
+
     def test_cors_origins_environment_override(self, monkeypatch):
         monkeypatch.setenv(
             "MICRO_AGENT_CORS_ORIGINS",
@@ -147,6 +156,12 @@ class TestValidateConfig:
             ResolvedConfig(policy_store_endpoint="https://policy.test/?x=1")
         )
         assert any(d.level == "error" and d.path == "policy_store_endpoint" for d in diagnostics)
+
+    def test_invalid_model_catalog_endpoint_error(self):
+        diagnostics = validate_config(
+            ResolvedConfig(model_catalog_endpoint="https://catalog.test/?x=1")
+        )
+        assert any(d.level == "error" and d.path == "model_catalog_endpoint" for d in diagnostics)
 
     def test_environment_auth_overrides(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_AUTH", "oidc")

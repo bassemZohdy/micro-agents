@@ -93,9 +93,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
 
 ### P2 — Definition and configuration
 
-- [ ] Design a versioned resource/catalog contract for model alias
-      resolution. `model_alias` and `model_provider_id` are currently separate
-      fields without a catalog mechanism.
+- [x] Design and implement a versioned model-alias catalog contract. The
+      injected and HTTP catalog implementations resolve `model.ref` to
+      provider/model/endpoint metadata with strict version and alias checks;
+      broader resource catalogs remain future work.
 - [x] Add a `v1beta1` compatibility version with generated schema, fixture,
       camelCase migration policy, and versioned loader. It reuses the strict
       runtime model behind an explicit migration boundary; a fully separate

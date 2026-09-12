@@ -24,6 +24,8 @@ Constructed from configuration:
   environment provider); every declared credential reference must resolve,
 - the platform policy, from an injected policy, an injected resolver, or the
   configured external policy store; unresolved policy references fail fast.
+- the model alias, from an injected or configured versioned model catalog
+  before provider construction.
 """
 
 from __future__ import annotations
@@ -58,8 +60,11 @@ from micro_agent.memory import (
 from micro_agent.models import (
     AnthropicConfig,
     AnthropicProvider,
+    CatalogError,
     FakeModelConfig,
     FakeModelProvider,
+    HttpModelCatalog,
+    ModelCatalog,
     ModelProvider,
     OpenAICompatConfig,
     OpenAICompatProvider,
@@ -132,6 +137,7 @@ def build_runtime(
     mcp_manager: McpConnectionManager | None = None,
     credential_provider: CredentialProvider | None = None,
     knowledge_retriever: KnowledgeRetriever | None = None,
+    model_catalog: ModelCatalog | None = None,
     environment: EnvironmentConfig | EnvironmentOverlay | None = None,
     approval_store: ApprovalStore | None = None,
 ) -> RuntimeBootstrap:
@@ -148,7 +154,12 @@ def build_runtime(
     """
 
     credential_provider = credential_provider or EnvironmentCredentialProvider()
-    resolved = _resolve_definition_config(definition, credential_provider, environment)
+    resolved = _resolve_definition_config(
+        definition,
+        credential_provider,
+        environment,
+        model_catalog=model_catalog,
+    )
     runtime_name = _runtime_name(resolved.runtime)
 
     telemetry = telemetry or Telemetry.from_environment()
@@ -275,6 +286,8 @@ def _resolve_definition_config(
     definition: MicroAgentDefinition,
     credential_provider: CredentialProvider,
     environment: EnvironmentConfig | EnvironmentOverlay | None = None,
+    *,
+    model_catalog: ModelCatalog | None = None,
 ) -> ResolvedConfig:
     model = definition.spec.dependencies.model
     overrides: dict[str, Any] = {}
@@ -327,7 +340,60 @@ def _resolve_definition_config(
         raise BootstrapError(
             f"Required policy-store credential '{policy_token_ref.name}' is not available"
         )
+    catalog_token_ref = environment_config.model_catalog_token_ref if environment_config else None
+    if catalog_token_ref is not None and resolved.model_catalog_token is None:
+        resolved.model_catalog_token = credential_provider.resolve(catalog_token_ref.name)
+    if catalog_token_ref is not None and resolved.model_catalog_token is None:
+        raise BootstrapError(
+            f"Required model-catalog credential '{catalog_token_ref.name}' is not available"
+        )
+
+    catalog = model_catalog
+    owned_catalog: HttpModelCatalog | None = None
+    if catalog is None and resolved.model_catalog_endpoint:
+        try:
+            owned_catalog = HttpModelCatalog(
+                resolved.model_catalog_endpoint,
+                token=resolved.model_catalog_token,
+            )
+        except (ValueError, CatalogError) as exc:
+            raise BootstrapError(f"Invalid model-catalog configuration: {exc}") from exc
+        catalog = owned_catalog
+    if catalog is not None and model is not None:
+        try:
+            entry = catalog.resolve(model.ref)
+        except CatalogError as exc:
+            raise BootstrapError(f"Model catalog resolution failed: {exc}") from exc
+        finally:
+            if owned_catalog is not None:
+                owned_catalog.close()
+        if entry is None:
+            raise BootstrapError(f"Model catalog has no entry for alias '{model.ref}'")
+        if resolved.model_provider is None:
+            resolved.model_provider = entry.provider
+        if resolved.model_id is None:
+            resolved.model_id = entry.model_id
+        if resolved.model_endpoint is None and entry.endpoint is not None:
+            resolved.model_endpoint = entry.endpoint
+        if credential_ref is None and entry.credential_ref is not None:
+            resolved.model_api_key = _resolve_catalog_credential(
+                entry.credential_ref,
+                credential_provider,
+                resolved.model_api_key,
+            )
     return resolved
+
+
+def _resolve_catalog_credential(
+    reference: str,
+    credential_provider: CredentialProvider,
+    configured_value: str | None,
+) -> str:
+    """Resolve a catalog-provided credential reference without logging it."""
+    value = configured_value or credential_provider.resolve(reference)
+    if value is None:
+        raise BootstrapError(f"Required model credential '{reference}' is not available")
+    return value
 
 
 def _validate_credential_bindings(
