@@ -10,6 +10,8 @@ never logged, serialized, or embedded in errors.
 
 from __future__ import annotations
 
+import importlib
+import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -172,9 +174,131 @@ class VaultCredentialProvider(CredentialProvider):
         return mount, secret_path, field
 
 
+class AwsSecretsManagerCredentialError(RuntimeError):
+    """Raised when an AWS Secrets Manager lookup cannot be completed safely."""
+
+
+class AwsSecretsManagerCredentialProvider(CredentialProvider):
+    """Resolve ``aws-secretsmanager://secret-id[#json-field]`` references.
+
+    The provider makes a fresh Secrets Manager lookup for each resolution so
+    rotation is observed at use time. AWS SDK construction is lazy and remains
+    optional; inject a client for tests or a deployment-owned session.
+    """
+
+    def __init__(self, *, region_name: str | None = None, client: object | None = None) -> None:
+        self._region_name = region_name
+        self._owns_client = client is None
+        if client is None:
+            try:
+                boto3 = importlib.import_module("boto3")
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError(
+                    "AWS Secrets Manager credentials require the 'aws' extra ('micro-agents[aws]')"
+                ) from exc
+            self._client = boto3.client("secretsmanager", region_name=region_name)
+        else:
+            self._client = client
+
+    def resolve(self, reference: str) -> str | None:
+        """Resolve an AWS Secrets Manager reference, or ignore other schemes."""
+        parsed = self._parse_reference(reference)
+        if parsed is None:
+            return None
+        secret_id, field = parsed
+        try:
+            response = self._client.get_secret_value(SecretId=secret_id)
+        except Exception as exc:  # noqa: BLE001 — SDK errors vary by botocore version
+            error_response = getattr(exc, "response", {})
+            error = error_response.get("Error", {}) if isinstance(error_response, dict) else {}
+            if isinstance(error, dict) and error.get("Code") == "ResourceNotFoundException":
+                return None
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager credential lookup failed"
+            ) from exc
+        if not isinstance(response, dict):
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager response did not match its contract"
+            )
+        secret_value = response.get("SecretString")
+        if secret_value is None:
+            binary = response.get("SecretBinary")
+            if not isinstance(binary, (bytes, bytearray)):
+                raise AwsSecretsManagerCredentialError(
+                    "AWS Secrets Manager response did not contain a string secret"
+                )
+            try:
+                secret_value = bytes(binary).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise AwsSecretsManagerCredentialError(
+                    "AWS Secrets Manager binary secret was not UTF-8"
+                ) from exc
+        if not isinstance(secret_value, str):
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager response did not contain a string secret"
+            )
+        if field is None:
+            return secret_value
+        try:
+            decoded = json.loads(secret_value)
+        except ValueError as exc:
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager secret is not valid JSON"
+            ) from exc
+        if not isinstance(decoded, dict):
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager JSON secret must be an object"
+            )
+        value = decoded.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise AwsSecretsManagerCredentialError(
+                "AWS Secrets Manager JSON field must contain a string"
+            )
+        return value
+
+    def close(self) -> None:
+        """Close an owned SDK client; injected clients remain host-owned."""
+        if self._owns_client:
+            close = getattr(self._client, "close", None)
+            if callable(close):
+                close()
+
+    def __repr__(self) -> str:
+        region = self._region_name or "default"
+        return f"AwsSecretsManagerCredentialProvider(region={region!r})"
+
+    @staticmethod
+    def _parse_reference(reference: str) -> tuple[str, str | None] | None:
+        parsed = urlsplit(reference)
+        if parsed.scheme != "aws-secretsmanager":
+            return None
+        if parsed.username or parsed.password or parsed.query:
+            raise AwsSecretsManagerCredentialError(
+                "invalid AWS Secrets Manager credential reference"
+            )
+        secret_id = f"{parsed.netloc}{parsed.path}"
+        if not parsed.netloc:
+            secret_id = parsed.path.lstrip("/")
+        segments = secret_id.split("/")
+        field = parsed.fragment or None
+        if (
+            not secret_id
+            or any(not segment or segment in {".", ".."} for segment in segments)
+            or (field is not None and (not field or "/" in field))
+        ):
+            raise AwsSecretsManagerCredentialError(
+                "invalid AWS Secrets Manager credential reference"
+            )
+        return secret_id, field
+
+
 __all__ = [
     "CredentialProvider",
     "EnvironmentCredentialProvider",
+    "AwsSecretsManagerCredentialError",
+    "AwsSecretsManagerCredentialProvider",
     "StaticCredentialProvider",
     "VaultCredentialError",
     "VaultCredentialProvider",

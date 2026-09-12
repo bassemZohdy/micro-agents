@@ -49,6 +49,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Credentials
 
+- Added an optional `AwsSecretsManagerCredentialProvider` with fresh lookups,
+  plain and JSON-field secret references, UTF-8 binary support, and redacted
+  failure handling. Install the `aws` extra or inject an AWS SDK client.
 - Added a strict `VaultCredentialProvider` for fresh Vault KV v2 lookups using
   `vault://mount/path#field` references; tokens stay in memory and HTTP is
   limited to loopback development.

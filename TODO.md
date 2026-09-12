@@ -30,10 +30,11 @@ Until the standalone release gate is complete:
 ## Next tasks
 
 The immediate release task is the owner-side PyPI trusted-publisher setup
-above. The next implementation task is a shared multi-replica A2A/state
-backend and full protocol conformance. SQLite durability now covers the
-framework and the Cloud registry/config/observability reference planes; shared
-database service operations and Cloud C5 edge hardening remain separate work.
+above. Implementation work now focuses on full A2A protocol conformance,
+remote MCP/load and capacity validation, and production-cluster admission and
+promotion checks. SQLite and Redis cover the tested reference state paths;
+shared database service operations and deployment-environment validation remain
+separate work.
 
 ## Standalone framework backlog
 
@@ -95,11 +96,11 @@ database service operations and Cloud C5 edge hardening remain separate work.
 - [x] Add a bundled native tool beyond `echo`: the bounded, side-effect-free
       `json_parse` utility is available for portable structured-data flows;
       domain tools still require installed plugins or programmatic injection.
-- [x] Add a Vault KV v2 credential integration beyond environment bindings and
-      `StaticCredentialProvider`; `VaultCredentialProvider` resolves
-      `vault://mount/path#field` references with strict HTTPS/loopback and
-      response validation. AWS Secrets Manager and cloud KMS remain optional
-      deployment-owned adapters.
+- [x] Add Vault KV v2 and AWS Secrets Manager credential integrations beyond
+      environment bindings and `StaticCredentialProvider`. Vault resolves
+      `vault://mount/path#field`; AWS resolves
+      `aws-secretsmanager://secret-id[#json-field]`; both use fresh lookups and
+      strict response validation. Cloud KMS remains a deployment-owned adapter.
 
 ### P2 — Definition and configuration
 
@@ -184,8 +185,9 @@ deferred until the standalone release gate closes.
 - [x] Add an OIDC-backed gateway authenticator to replace static bearer tokens;
       the gateway now validates issuer/audience/expiry/signature and maps the
       verified tenant claim, while static tokens remain available for local use.
-- [x] Add the Vault KV v2 resolver; cloud-managed secret-store resolvers remain
-      deployment-owned adapters behind the credential-provider interface.
+- [x] Add Vault KV v2 and AWS Secrets Manager resolvers; cloud KMS and
+      deployment-specific secret bindings remain deployment-owned adapters
+      behind the credential-provider interface.
 - [x] Add explicit authentication middleware to the registry, config, and
       observability plane APIs. Static-token and OIDC gateway authenticators
       can be supplied at app construction; readiness remains public and the

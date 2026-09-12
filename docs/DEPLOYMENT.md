@@ -196,9 +196,9 @@ Per release:
 
 The image declares UID 1001 as its ordinary Docker default, but application
 paths are group-writable and the Kubernetes manifest does not pin `runAsUser`,
-so an OpenShift arbitrary UID in group 0 is supported by design. Validation
-under the target restricted security context constraints and read-only
-filesystem remains an open production-hardening task.
+so an OpenShift arbitrary UID in group 0 is supported by design. CI validates
+the arbitrary-UID and read-only-filesystem assumptions; validation under the
+target restricted security context constraints remains a cluster review item.
 
 ## Multi-replica warning
 
@@ -224,8 +224,12 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
       multi-replica task/push backend where required
 - [x] external session, memory, and idempotency state with tenant isolation and
       optimistic versioning
-- [ ] immutable image, SBOM, signature, and provenance
-- [ ] arbitrary-UID and read-only-filesystem validation
+- [x] release CI produces an immutable image digest, SBOM, signature, and
+      provenance
+- [ ] target-cluster admission enforces the digest, SBOM, signature, and
+      provenance policy
+- [x] arbitrary-UID and read-only-filesystem validation in CI
+- [ ] target-cluster OpenShift SCC and read-only mount validation
 - [x] resource, disruption, autoscaling, topology, and NetworkPolicy baseline
       decisions (provider-specific selectors still require cluster review)
 - [x] optional OpenTelemetry instrumentation with content capture disabled and
@@ -233,4 +237,5 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
       production
 - [x] scrape `/metrics` through Service annotations and define latency, error,
       readiness, token, and cost dashboard/alert guidance
-- [ ] rollback and compatibility-tested release
+- [x] compatibility-tested release gate and rollback validation
+- [ ] live promotion and production rollback execution

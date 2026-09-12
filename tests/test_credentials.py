@@ -6,6 +6,8 @@ import httpx
 import pytest
 
 from micro_agent.security.credentials import (
+    AwsSecretsManagerCredentialError,
+    AwsSecretsManagerCredentialProvider,
     CredentialProvider,
     EnvironmentCredentialProvider,
     StaticCredentialProvider,
@@ -73,6 +75,9 @@ class TestCredentialProviderInterface:
 
     def test_vault_provider_is_subclass(self):
         assert issubclass(VaultCredentialProvider, CredentialProvider)
+
+    def test_aws_secrets_manager_provider_is_subclass(self):
+        assert issubclass(AwsSecretsManagerCredentialProvider, CredentialProvider)
 
     def test_cannot_instantiate_abstract(self):
         try:
@@ -145,3 +150,62 @@ class TestVaultCredentialProvider:
                     provider.resolve(reference)
         finally:
             client.close()
+
+
+class _FakeSecretsManagerClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def get_secret_value(self, **kwargs):
+        self.calls.append(kwargs)
+        if isinstance(self.response, Exception):
+            raise self.response
+        return self.response
+
+
+class TestAwsSecretsManagerCredentialProvider:
+    def test_resolves_json_field_and_fetches_fresh_values(self):
+        client = _FakeSecretsManagerClient({"SecretString": '{"api_key":"secret-value"}'})
+        provider = AwsSecretsManagerCredentialProvider(region_name="eu-west-1", client=client)
+        assert provider.resolve("aws-secretsmanager://apps/greeter#api_key") == "secret-value"
+        assert provider.resolve("aws-secretsmanager://apps/greeter#api_key") == "secret-value"
+        assert provider.resolve("OTHER_REF") is None
+        assert client.calls == [
+            {"SecretId": "apps/greeter"},
+            {"SecretId": "apps/greeter"},
+        ]
+        assert "apps/greeter" not in repr(provider)
+
+    def test_resolves_plain_and_binary_secrets(self):
+        plain = AwsSecretsManagerCredentialProvider(
+            client=_FakeSecretsManagerClient({"SecretString": "plain-secret"})
+        )
+        assert plain.resolve("aws-secretsmanager://plain") == "plain-secret"
+
+        binary = AwsSecretsManagerCredentialProvider(
+            client=_FakeSecretsManagerClient({"SecretBinary": b'{"token":"binary"}'})
+        )
+        assert binary.resolve("aws-secretsmanager://binary#token") == "binary"
+
+    def test_missing_and_invalid_responses_are_safe(self):
+        missing = RuntimeError("resource missing")
+        missing.response = {"Error": {"Code": "ResourceNotFoundException"}}
+        provider = AwsSecretsManagerCredentialProvider(client=_FakeSecretsManagerClient(missing))
+        assert provider.resolve("aws-secretsmanager://missing") is None
+
+        broken = AwsSecretsManagerCredentialProvider(
+            client=_FakeSecretsManagerClient({"SecretString": "not-json"})
+        )
+        with pytest.raises(AwsSecretsManagerCredentialError, match="valid JSON"):
+            broken.resolve("aws-secretsmanager://broken#token")
+
+    def test_reference_validation_is_strict(self):
+        provider = AwsSecretsManagerCredentialProvider(client=_FakeSecretsManagerClient({}))
+        for reference in (
+            "aws-secretsmanager://../secret#token",
+            "aws-secretsmanager://secret?version=1",
+            "aws-secretsmanager://secret#nested/token",
+        ):
+            with pytest.raises(AwsSecretsManagerCredentialError, match="invalid"):
+                provider.resolve(reference)

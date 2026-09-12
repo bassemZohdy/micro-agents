@@ -17,6 +17,8 @@ from micro_agent.security.auth import (
 )
 from micro_agent.security.context import build_security_context, resolve_credential
 from micro_agent.security.credentials import (
+    AwsSecretsManagerCredentialError,
+    AwsSecretsManagerCredentialProvider,
     CredentialProvider,
     EnvironmentCredentialProvider,
     StaticCredentialProvider,
@@ -66,6 +68,8 @@ from micro_agent.security.side_effects import (
 
 __all__ = [
     "AuthenticatedIdentity",
+    "AwsSecretsManagerCredentialError",
+    "AwsSecretsManagerCredentialProvider",
     "ApprovalStore",
     "Authenticator",
     "AgentIdentity",
