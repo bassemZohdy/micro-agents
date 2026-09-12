@@ -22,3 +22,14 @@ class TestReleaseValidation:
             assert "CHANGELOG" in str(exc)
         else:
             raise AssertionError("mismatched changelog must fail at release time")
+
+    def test_release_workflow_signs_and_attests_the_published_image(self):
+        workflow = (validate_release.ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "sigstore/cosign-installer@v3" in workflow
+        assert "cosign sign --yes" in workflow
+        assert "cosign verify" in workflow
+        assert "cosign attest --yes" in workflow
+        assert "cosign verify-attestation" in workflow
+        assert "steps.image-build.outputs.digest" in workflow

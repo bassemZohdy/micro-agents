@@ -466,9 +466,10 @@ Gaps:
 - PyPI trusted publishing must be configured before the first tag
 - provider-specific NetworkPolicy selectors and target-cluster OpenShift
   SecurityContextConstraints validation still require the target cluster
-- immutable digest/signature policy and live rollback-tested release promotion
-  remain deployment-owner work; the release gate now validates compatibility
-  fixtures and append-only rollback before publication
+- production-cluster immutable digest/signature admission and live rollback
+  promotion remain deployment-owner work; the release gate now signs and
+  verifies the exact image digest, SBOM attestation, SLSA provenance, and
+  compatibility fixtures before publication
 
 ## Cloud workstream (C0–C5 reference durability)
 

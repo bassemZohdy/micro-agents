@@ -103,8 +103,11 @@ default-deny ingress/egress policy with DNS and HTTPS egress.
   gh attestation verify oci://ghcr.io/bassemzohdy/micro-agents@sha256:<digest> -R bassemZohdy/micro-agents
   ```
 
-  Sign or re-attach organization policy with `cosign sign`/`cosign verify`
-  if your cluster enforces signature policy.
+  The release workflow also signs the exact GHCR digest with keyless Cosign,
+  verifies its GitHub Actions certificate identity, and attaches/verifies the
+  SPDX SBOM as an image attestation. Production admission should require the
+  same Cosign identity, SLSA provenance, and SBOM predicates before allowing
+  the digest to run.
 - **Dependency locking**: the checked-in `requirements.txt` is a Linux/Python
   3.11 runtime lock generated from `pyproject.toml` with exact versions and
   distribution hashes. The Dockerfile installs it with `pip --require-hashes` before
@@ -184,7 +187,10 @@ Per release:
    workflow then re-validates alignment, runs the full test suite and
    container smoke test, publishes the distributions to PyPI via trusted
    publishing, pushes the image to GHCR, attaches SLSA provenance and the
-   SBOM, and creates the GitHub release with generated notes.
+   SBOM, signs and attests the exact image digest with Cosign/SLSA, and creates
+   the GitHub release with generated notes. Promote that printed digest into
+   the production Deployment; do not deploy a mutable tag where admission
+   policy requires immutable references.
 
 ## OpenShift
 

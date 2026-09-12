@@ -145,8 +145,11 @@ database service operations and Cloud C5 edge hardening remain separate work.
       supported definition fixtures and verifies append-only config rollback,
       alongside package/schema/image/changelog alignment. Live promotion and
       production rollback execution remain deployment-environment work.
-- [ ] Validate immutable image references, SBOM, signatures, and SLSA
-      provenance in production deployment policy.
+- [x] Add release-CI validation for immutable image digests, SBOM
+      attestation, keyless Cosign signatures, and SLSA provenance. The exact
+      published digest is now signed and verified before the GitHub release.
+- [ ] Enforce digest, Cosign identity, SBOM, and SLSA admission policy in the
+      target production cluster and validate live promotion.
 
 ### P2 — Benchmarks
 
