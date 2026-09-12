@@ -16,9 +16,9 @@ framework defaults
 executable bootstrap uses it to construct the configured model provider before
 the service becomes ready.
 
-The optional-extra examples below assume a source checkout. PyPI publication
-is not required; install an extra locally with
-`python -m pip install -e ".[extra]"` before using the corresponding provider.
+The optional-extra examples below assume a source checkout. Install an extra
+locally with `python -m pip install -e ".[extra]"` before using the
+corresponding provider.
 
 ## Environment variables recognized by `resolve_config()` and telemetry bootstrap
 

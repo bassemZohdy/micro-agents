@@ -40,9 +40,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Packaging and deployment
 
-- Made PyPI publication opt-in through the `ENABLE_PYPI_PUBLISH` GitHub
-  repository variable; GitHub Releases and GHCR are now the default release
-  distribution paths.
+- Made Docker Hub publication opt-in through the
+  `ENABLE_DOCKERHUB_PUBLISH` GitHub repository variable; GitHub Releases and
+  GHCR remain the default release distribution paths.
 - Documented self-hosted supply-chain admission requirements and clarified
   that live cluster promotion and rollback are operator-owned checks.
 - Added an opt-in external benchmark harness for deployed Micro-Agent HTTP and
