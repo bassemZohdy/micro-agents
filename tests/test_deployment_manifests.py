@@ -75,3 +75,15 @@ class TestDeploymentHardening:
             "prometheus.io/path": "/metrics",
             "prometheus.io/port": "8080",
         }
+
+    def test_image_and_manifest_support_restricted_runtime_filesystem(self):
+        dockerfile = (DEPLOY_DIR.parent.parent / "Dockerfile").read_text(encoding="utf-8")
+        assert "chmod -R g=u /app /home/appuser" in dockerfile
+
+        deployment = yaml.safe_load((DEPLOY_DIR / "deployment.yaml").read_text(encoding="utf-8"))
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        assert container["securityContext"]["readOnlyRootFilesystem"] is True
+        assert any(
+            volume["name"] == "tmp" and volume["emptyDir"] == {}
+            for volume in deployment["spec"]["template"]["spec"]["volumes"]
+        )

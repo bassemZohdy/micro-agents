@@ -71,8 +71,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
 - [x] Add a database-backed SQLite audit sink with retention and tenant
       scoping. Shared-database delivery, failure policy, and SIEM export remain
       deployment decisions.
-- [ ] Validate OpenShift arbitrary-UID and read-only-filesystem execution
-      under the target restricted security context constraints.
+- [x] Validate the image's arbitrary-UID and read-only-filesystem execution in
+      CI with UID `12345:0`, a read-only root, and a writable `/tmp` tmpfs;
+      target-cluster OpenShift SecurityContextConstraints remain a deployment
+      review item.
 
 ### P2 — MCP
 
