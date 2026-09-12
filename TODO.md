@@ -167,7 +167,10 @@ deferred until the standalone release gate closes.
       the gateway now validates issuer/audience/expiry/signature and maps the
       verified tenant claim, while static tokens remain available for local use.
 - [ ] Add Vault and cloud-managed secret-store resolvers.
-- [ ] Authenticate the registry, config, and observability plane APIs.
+- [x] Add explicit authentication middleware to the registry, config, and
+      observability plane APIs. Static-token and OIDC gateway authenticators
+      can be supplied at app construction; readiness remains public and the
+      reference apps retain an unauthenticated local default.
 - [ ] Define formal schemas and compatibility policy for cloud descriptors,
       config-plane payloads, and observability events.
 - [ ] Evaluate splitting `cloud` into its own repository and deployment

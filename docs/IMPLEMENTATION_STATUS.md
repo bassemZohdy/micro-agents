@@ -461,8 +461,10 @@ CLOUD_ARCHITECTURE.md). C1 implemented the minimal registry/discovery slice
 (ADR 0016 + CLOUD_GATEWAY.md); and C4 added cross-agent observability
 (ADR 0017 + CLOUD_OBSERVABILITY.md). C5 now adds restart-safe SQLite reference
 stores for the registry, config plane, and observability aggregation, with
-retention/lease handling; gateway state remains per-process and pass-through
-is non-streaming; plane APIs remain deliberately unauthenticated. The `cloud`
+retention/lease handling; gateway state remains per-process while event-stream
+responses pass through without buffering; plane APIs now support explicit
+static/OIDC authentication while retaining an unauthenticated local default.
+The `cloud`
 package is not part of the published `micro-agents` distribution. The core
 framework neither imports nor depends on cloud code; standalone product claims
 are unchanged.
@@ -476,7 +478,7 @@ previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
 The immediate release-gate action is the PyPI trusted-publisher configuration
-(an owner action on pypi.org). The next code slice is a shared multi-replica
-state backend and full A2A conformance; gateway hardening and plane
-authentication remain open. The complete prioritized backlog is in
+(an owner action on pypi.org). Remaining implementation priorities are shared
+multi-replica state, full A2A conformance, and plane authentication; the
+complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).

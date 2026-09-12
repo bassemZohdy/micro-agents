@@ -30,8 +30,10 @@ shared database implementation for horizontally scaled ingestion.
 
 ## HTTP surface
 
-`create_observability_app` (unauthenticated; edge auth rides the C3
-gateway):
+`create_observability_app` accepts an optional `authenticator=` argument. Pass
+the static or OIDC gateway authenticator to protect the observability routes;
+readiness remains public for probes. Omitting it keeps the local reference app
+unauthenticated.
 
 | Route | Purpose |
 | --- | --- |

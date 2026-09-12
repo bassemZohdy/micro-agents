@@ -25,6 +25,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added an OIDC/JWT gateway authenticator with asymmetric signature,
   issuer/audience, required-claim, expiry, and injectable JWKS validation;
   static bearer grants remain available for local deployments.
+- Added optional auth middleware to the cloud registry, config, and
+  observability APIs, protecting plane routes while keeping readiness probes
+  public.
 
 ### Interoperability, state, and operations
 

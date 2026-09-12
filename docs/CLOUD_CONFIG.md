@@ -44,7 +44,10 @@ and never pass through, or live in, the config plane.
 
 ## HTTP surface
 
-`create_config_app` (unauthenticated in C2; edge auth is C3 gateway work):
+`create_config_app` accepts an optional `authenticator=` argument. Pass the
+static or OIDC gateway authenticator to protect every config route; readiness
+remains public for probes. Omitting it keeps the local reference app
+unauthenticated.
 
 | Route | Purpose |
 | --- | --- |
