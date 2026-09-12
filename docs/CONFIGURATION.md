@@ -16,6 +16,10 @@ framework defaults
 executable bootstrap uses it to construct the configured model provider before
 the service becomes ready.
 
+The optional-extra examples below assume a source checkout. PyPI publication
+is not required; install an extra locally with
+`python -m pip install -e ".[extra]"` before using the corresponding provider.
+
 ## Environment variables recognized by `resolve_config()` and telemetry bootstrap
 
 | Variable | Resolved field | Bootstrap status |
@@ -68,9 +72,9 @@ Persistence `sqlite` accepts `MICRO_AGENT_SESSION_ENDPOINT` as
 `sqlite:///absolute/path` (or a plain SQLite path) and defaults to `:memory:`
 for development. Persistence `external` accepts `redis://` or `rediss://`
 endpoints when the optional `redis` extra is installed
-(`pip install 'micro-agents[redis]'`), or `postgres://`/`postgresql://`
+(`python -m pip install -e ".[redis]"`), or `postgres://`/`postgresql://`
 endpoints when the optional `postgres` extra is installed
-(`pip install 'micro-agents[postgres]'`). The Redis provider uses transactional
+(`python -m pip install -e ".[postgres]"`). The Redis provider uses transactional
 writes, Redis key TTLs, and a shared index so independently scaled processes
 can share session state; the PostgreSQL provider guards updates with stored
 version checks so a stale writer raises `StateConflictError` instead of
@@ -173,7 +177,7 @@ token bucket above, or an injected `RateLimiter` hook backed by a shared
 gateway/datastore for replica-wide quotas.
 
 ```bash
-pip install 'micro-agents[redis]'
+python -m pip install -e ".[redis]"
 export MICRO_AGENT_SESSION_ENDPOINT='rediss://sessions.example:6380/0'
 export MICRO_AGENT_IDEMPOTENCY_ENDPOINT='rediss://operations.example:6380/0'
 ```
@@ -331,7 +335,7 @@ Behavior when `oidc` is configured:
   fails app creation if no authenticator is configured.
 
 Verification requires the optional `auth` extra (`PyJWT`): install with
-`pip install 'micro-agents[auth]'`.
+`python -m pip install -e ".[auth]"`.
 
 ## Audit events
 
@@ -359,7 +363,7 @@ sink for multiple replicas.
 Install the optional instrumentation extra and enable it explicitly:
 
 ```bash
-pip install 'micro-agents[otel]'
+python -m pip install -e ".[otel]"
 export MICRO_AGENT_OTEL_ENABLED=true
 export MICRO_AGENT_OTEL_SERVICE_NAME=orders-agent
 ```
@@ -443,7 +447,7 @@ remain deployment work.
 
 Declared MCP servers connect through the official MCP SDK (stable
 `2025-11-25`) when the optional `mcp` extra is installed
-(`pip install 'micro-agents[mcp]'`); without it, startup fails with an
+(`python -m pip install -e ".[mcp]"`); without it, startup fails with an
 installation message rather than ignoring the declarations. Streamable HTTP
 and stdio are the standard transports; `sse` exists for legacy migration
 only.

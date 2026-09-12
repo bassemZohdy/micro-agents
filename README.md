@@ -42,6 +42,14 @@ backends (C0–C5 reference slices). It is not required
 to run one Micro-Agent and is not part of the published `micro-agents`
 distribution.
 
+## Distribution
+
+The project can be run directly from a source checkout or from the container
+and wheel/sdist artifacts attached to a GitHub Release. GHCR images are the
+default container distribution path. PyPI publication is optional and is not
+required for self-hosted deployments; see [Deployment](docs/DEPLOYMENT.md) for
+the opt-in publisher configuration.
+
 ## Architecture
 
 ```text
@@ -210,7 +218,7 @@ state, or A2A task interoperability.
 | State | definition-wired in-memory and durable SQLite knowledge/task/audit stores, SQLite and Redis A2A task/push stores, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits | durable Google ADK approval state, shared database service operations, and deployment validation |
 | Security | authentication, verified caller/workload propagation, injected and HTTP policy-store resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, redacted audit events, database-backed audit persistence, Vault/AWS secret-provider adapters, and optional per-request remote-MCP token exchange | deployment-owned exchange service, KMS adapter, and cluster secret bindings |
 | Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, token/cost conventions, and Prometheus histograms | operational dashboards/alerts |
-| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, shared Redis gateway resilience state, proxy defaults, tested Kubernetes deployment baseline, external HTTP/MCP and rising-concurrency capacity harnesses, and reference cloud-gateway OIDC/streaming paths | target-cluster supply-chain policy/validation and production bootstrap |
+| Operations | container, GitHub Release/GHCR distribution, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, shared Redis gateway resilience state, proxy defaults, tested Kubernetes deployment baseline, external HTTP/MCP and rising-concurrency capacity harnesses, and reference cloud-gateway OIDC/streaming paths | self-host admission policy, provider wiring, and production bootstrap |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.

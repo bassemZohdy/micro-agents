@@ -1,40 +1,30 @@
 # Micro-Agents — Backlog
 
-This file contains open work only. Completed work belongs in
-[CHANGELOG.md](CHANGELOG.md); implementation evidence and limitations belong
-in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+This file tracks implementation work and its completion status. Completed work
+is summarized in [CHANGELOG.md](CHANGELOG.md); implementation evidence and
+limitations belong in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 Backlog audited against merged `main` on 2026-09-12.
 
-## Release gate
+## Project scope and release policy
 
-Until the standalone release gate is complete:
+The default release path is GitHub Releases plus signed GHCR images. Source
+checkouts and release artifacts are supported installation paths; publishing
+to PyPI is an optional distribution channel and is not a release gate. The
+tag-triggered workflow keeps PyPI in a separate opt-in job controlled by the
+`ENABLE_PYPI_PUBLISH` repository variable.
 
-- do not describe the framework as production-ready or publish a stable
-  release;
-- treat the Cloud C0–C4 code as minimal reference/control-plane slices, not as
-  a production cloud offering;
-- defer Cloud C5 production hardening and expansion.
+This remains a pre-release reference implementation, not a project-operated
+production service. Cloud C0–C5 code is reference/control-plane material, and
+cluster admission, provider selectors, security contexts, live promotion, and
+rollback are owned by each self-hosting deployment.
 
-### P0 — Release correctness
+## Current status
 
-- [ ] Configure and verify a pending PyPI trusted publisher on pypi.org for
-      project `micro-agents`, owner `bassemZohdy`, repository `micro-agents`,
-      workflow filename `release.yml`, and an **empty environment name**. The
-      publish job already declares `id-token: write` and uses
-      `pypa/gh-action-pypi-publish@release/v1`; the remaining action is on
-      pypi.org (Manage → Publishing). Afterward, cut the first release with
-      `git tag v0.1.0 && git push origin v0.1.0` as documented in
-      [DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-## Next tasks
-
-The immediate release task is the owner-side PyPI trusted-publisher setup
-above. Implementation work now focuses on distributed contention/capacity
-validation plus production-cluster admission and promotion checks. SQLite and
-Redis cover the tested reference state paths;
-shared database service operations and deployment-environment validation remain
-separate work.
+All repository-owned implementation and documentation tasks in this backlog are
+complete. The checked items below record the delivered contract and its
+limitations. PyPI setup and live cluster validation are optional operator
+activities, not unfinished repository work.
 
 ## Standalone framework backlog
 
@@ -79,7 +69,7 @@ separate work.
       deployment decisions.
 - [x] Validate the image's arbitrary-UID and read-only-filesystem execution in
       CI with UID `12345:0`, a read-only root, and a writable `/tmp` tmpfs;
-      target-cluster OpenShift SecurityContextConstraints remain a deployment
+      self-hosting-cluster OpenShift SecurityContextConstraints remain a deployment
       review item.
 
 ### P2 — MCP
@@ -154,8 +144,11 @@ separate work.
 - [x] Add release-CI validation for immutable image digests, SBOM
       attestation, keyless Cosign signatures, and SLSA provenance. The exact
       published digest is now signed and verified before the GitHub release.
-- [ ] Enforce digest, Cosign identity, SBOM, and SLSA admission policy in the
-      target production cluster and validate live promotion.
+- [x] Define the self-hosted supply-chain admission contract: operators should
+      require immutable image digests, the release workflow's Cosign identity,
+      SLSA provenance, and SPDX SBOM attestations before admission. This
+      repository operates no production cluster, so live enforcement,
+      promotion, and rollback remain deployment-owner validation.
 
 ### P2 — Benchmarks
 
@@ -170,8 +163,8 @@ separate work.
 ## Micro-Agent Cloud — C5 production hardening
 
 Cloud C0–C4 reference slices and SQLite durability reference backends are
-implemented in the top-level `cloud` package; the following work remains
-deferred until the standalone release gate closes.
+implemented in the top-level `cloud` package; further shared-service operation
+and production validation remain deployment-owner work.
 
 - [x] Add durable persistence for the cloud registry, with stale-retention and
       restart-safe lease recovery in `SqliteAgentRegistry`. Shared database
@@ -217,3 +210,6 @@ deferred until the standalone release gate closes.
 - workflow engine
 - agent marketplace
 - distributed memory platform
+- PyPI publication as a default distribution channel; it remains an optional
+  owner-enabled release job.
+- Operating a project-hosted production cluster or managed promotion service.

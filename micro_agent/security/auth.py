@@ -68,7 +68,7 @@ class OidcJwtAuthenticator(Authenticator):
         except ImportError as exc:  # pragma: no cover - exercised without extra
             raise RuntimeError(
                 "OIDC authentication requires the optional 'auth' extra: "
-                "pip install 'micro-agents[auth]'"
+                'from a checkout, run: python -m pip install -e ".[auth]"'
             ) from exc
         self._jwt = jwt
         self._issuer = issuer.rstrip("/")

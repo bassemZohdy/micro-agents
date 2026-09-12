@@ -1,7 +1,9 @@
 # Deployment Guide
 
-The checked-in Dockerfile and manifests are development baselines, not a
-production deployment.
+The checked-in Dockerfile and manifests are self-hosting reference baselines,
+not a project-operated production deployment. Micro-Agents does not provide a
+managed production service; each operator owns provider wiring, cluster
+security, admission, promotion, and rollback decisions.
 
 ## Container image
 
@@ -18,7 +20,7 @@ The CI container job also starts the same image as UID `12345` in group `0`
 with a read-only root filesystem and a bounded writable `/tmp` tmpfs. This
 exercises the image's arbitrary-UID and read-only-filesystem assumptions before
 deployment. OpenShift SecurityContextConstraints, namespace policy, storage
-classes, and admission configuration remain target-cluster checks.
+classes, and admission configuration remain self-hosting-cluster checks.
 
 The executable resolves an explicit fake, OpenAI-compatible, or Anthropic model
 provider from the mounted definition and environment. It constructs local memory/session
@@ -107,7 +109,8 @@ default-deny ingress/egress policy with DNS and HTTPS egress.
   verifies its GitHub Actions certificate identity, and attaches/verifies the
   SPDX SBOM as an image attestation. Production admission should require the
   same Cosign identity, SLSA provenance, and SBOM predicates before allowing
-  the digest to run.
+  the digest to run. The repository defines this as a self-hosting contract;
+  enforcing it requires the operator's admission engine and cluster.
 - **Dependency locking**: the checked-in `requirements.txt` is a Linux/Python
   3.11 runtime lock generated from `pyproject.toml` with exact versions and
   distribution hashes. The Dockerfile installs it with `pip --require-hashes` before
@@ -166,13 +169,9 @@ implementation for replica-wide limits. The native API is versioned under
 The release pipeline is gated by two active GitHub rulesets: `main-required-CI`
 requires every PR-visible CI check before `main` advances, and
 `release-tags-immutable` makes `v*` tags undeletable and unmovable once
-created — a cut release cannot be silently rewritten.
-
-One-time setup (owner): create the pending trusted publisher on pypi.org
-(Manage → Publishing) for project `micro-agents`, owner `bassemZohdy`,
-repository `micro-agents`, workflow filename `release.yml`, and an **empty
-environment name** (the publish job declares no GitHub environment). Without
-this entry the tag-time publish job fails its OIDC exchange.
+created — a cut release cannot be silently rewritten. The default tag flow
+publishes the signed image and release artifacts to GHCR and GitHub Releases;
+PyPI is optional.
 
 Per release:
 
@@ -184,13 +183,24 @@ Per release:
 2. Land those edits on `main` through a pull request so the required checks
    run.
 3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `Release`
-   workflow then re-validates alignment, runs the full test suite and
-   container smoke test, publishes the distributions to PyPI via trusted
-   publishing, pushes the image to GHCR, attaches SLSA provenance and the
-   SBOM, signs and attests the exact image digest with Cosign/SLSA, and creates
-   the GitHub release with generated notes. Promote that printed digest into
-   the production Deployment; do not deploy a mutable tag where admission
-   policy requires immutable references.
+   workflow re-validates alignment, runs the full test suite and container
+   smoke test, pushes the image to GHCR, attaches SLSA provenance and the SBOM,
+   signs and attests the exact image digest with Cosign/SLSA, and creates the
+   GitHub release with generated notes. Promote that printed digest into a
+   self-hosted Deployment only after its operator checks pass; do not deploy a
+   mutable tag where admission policy requires immutable references.
+
+### Optional PyPI publishing
+
+PyPI is not required for runtime use or self-hosting. To enable it for a
+release, first create a pending trusted publisher on pypi.org (Manage →
+Publishing) for project `micro-agents`, owner `bassemZohdy`, repository
+`micro-agents`, workflow filename `release.yml`, and an **empty environment
+name**. Then set the repository Actions variable
+`ENABLE_PYPI_PUBLISH=true` before pushing the release tag. The independent
+`publish-pypi` job uses GitHub OIDC and `pypa/gh-action-pypi-publish@release/v1`;
+when the variable is absent or false, the GitHub Release/GHCR flow does not
+depend on PyPI.
 
 ## OpenShift
 
@@ -198,7 +208,8 @@ The image declares UID 1001 as its ordinary Docker default, but application
 paths are group-writable and the Kubernetes manifest does not pin `runAsUser`,
 so an OpenShift arbitrary UID in group 0 is supported by design. CI validates
 the arbitrary-UID and read-only-filesystem assumptions; validation under the
-target restricted security context constraints remains a cluster review item.
+the operator's restricted security context constraints remains a cluster review
+item.
 
 ## Multi-replica warning
 
@@ -218,6 +229,10 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
 
 ## Production checklist
 
+The following are acceptance checks for an operator's self-hosted deployment.
+They are intentionally not claims about a project-operated production
+environment.
+
 - [ ] real provider bootstrap, with fake mode disabled
 - [ ] external definition/configuration/secret bindings
 - [ ] authenticated HTTP and enabled A2A standards endpoints, with a shared
@@ -226,10 +241,10 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
       optimistic versioning
 - [x] release CI produces an immutable image digest, SBOM, signature, and
       provenance
-- [ ] target-cluster admission enforces the digest, SBOM, signature, and
+- [ ] self-host cluster admission enforces the digest, SBOM, signature, and
       provenance policy
 - [x] arbitrary-UID and read-only-filesystem validation in CI
-- [ ] target-cluster OpenShift SCC and read-only mount validation
+- [ ] self-host OpenShift SCC and read-only mount validation
 - [x] resource, disruption, autoscaling, topology, and NetworkPolicy baseline
       decisions (provider-specific selectors still require cluster review)
 - [x] optional OpenTelemetry instrumentation with content capture disabled and
@@ -238,4 +253,5 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
 - [x] scrape `/metrics` through Service annotations and define latency, error,
       readiness, token, and cost dashboard/alert guidance
 - [x] compatibility-tested release gate and rollback validation
-- [ ] live promotion and production rollback execution
+- [ ] live promotion and production rollback execution in the operator's
+      environment

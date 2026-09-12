@@ -6,7 +6,7 @@ The `cloud` package contains the C0–C5 reference control-plane slices, while
 the standalone `micro_agent` package remains independently deployable and does
 not import cloud code. The cloud workstream has separate service boundaries,
 but its descriptor, configuration, gateway, and observability contracts are
-still evolving alongside the standalone release gate.
+still evolving alongside the standalone distribution and deployment boundary.
 
 The backlog calls for evaluating whether `cloud` should move to its own
 repository and deployment package. That evaluation must distinguish a
