@@ -163,9 +163,10 @@ standalone system, never to a hung one.
 
 ## 7. What this definition does not decide
 
-C1–C4 currently provide minimal reference implementations for the registry,
-configuration plane, gateway, and observability aggregation. Durable storage,
-production authentication, gateway streaming, and formal cloud compatibility
-policies remain deferred to the C5 hardening work in `TODO.md`. The C0 rules
+C1–C4 provide minimal reference implementations for the registry,
+configuration plane, gateway, and observability aggregation. C5 adds restart-
+safe SQLite reference durability, OIDC gateway authentication, and event-stream
+response pass-through; shared replica state, plane authentication, and formal
+cloud compatibility policies remain deferred in `TODO.md`. The C0 rules
 continue to govern those implementations so control-plane concerns cannot leak
 into the core.

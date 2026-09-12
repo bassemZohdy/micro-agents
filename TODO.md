@@ -118,8 +118,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
 
 ### P2 — Deployment hardening
 
-- [ ] Generate a hermetic, hash-pinned `requirements.txt` for reproducible
-      container builds; see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- [x] Generate a hermetic, hash-pinned Linux/Python 3.11 runtime
+      `requirements.txt` for reproducible container builds; the Dockerfile
+      installs it with `pip --require-hashes`. Regenerate only on runtime
+      dependency-bound changes; see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - [x] Define and validate the deployment shutdown deadline and cancellation
       policy: the sample definition drains for 25 seconds, cancels remaining
       invocations, and the Kubernetes Deployment grants a 30-second grace

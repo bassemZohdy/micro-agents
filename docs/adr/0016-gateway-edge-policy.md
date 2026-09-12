@@ -11,8 +11,9 @@ audit; verified credentials propagate end to end.
 ## Decision
 
 Implement the gateway as a policy-checked reverse proxy over ordered
-per-agent targets: a pluggable edge authenticator (static bearer tokens
-first, OIDC later behind the same protocol), per-route tenant
+per-agent targets: a pluggable edge authenticator (static bearer tokens for
+local deployments and OIDC JWT validation for production behind the same
+protocol), per-route tenant
 authorization on the verified claim, per-tenant token-bucket rate limits,
 round-robin selection with ordered fallbacks, per-target circuit breakers
 with half-open probes, per-target bulkheads that skip saturated targets,

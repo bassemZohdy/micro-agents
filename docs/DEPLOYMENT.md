@@ -99,12 +99,23 @@ default-deny ingress/egress policy with DNS and HTTPS egress.
 
   Sign or re-attach organization policy with `cosign sign`/`cosign verify`
   if your cluster enforces signature policy.
-- **Dependency locking**: CI installs from `pyproject.toml` bounds and runs
-  `pip-audit` on every pull request; releases build from the verified
-  environment. For hermetic deployments, generate a hash-pinned
-  `requirements.txt` (for example with `pip-compile --generate-hashes`) from
-  the committed bounds and install the image from that file; keep the lock
-  file in version control and regenerate on dependency bumps only.
+- **Dependency locking**: the checked-in `requirements.txt` is a Linux/Python
+  3.11 runtime lock generated from `pyproject.toml` with exact versions and
+  distribution hashes. The Dockerfile installs it with `pip --require-hashes` before
+  installing the local package without dependency resolution. Regenerate it
+  only after changing runtime bounds:
+
+  ```bash
+  uv pip compile pyproject.toml \
+    --python-version 3.11 \
+    --python-platform x86_64-manylinux_2_28 \
+    --generate-hashes --no-annotate \
+    --output-file requirements.txt
+  ```
+
+  The lock targets the checked-in `python:3.11-slim` image. Development and
+  optional extras intentionally remain managed from `pyproject.toml`; they are
+  not part of the runtime image contract.
 
 Before using this outside a disposable namespace:
 

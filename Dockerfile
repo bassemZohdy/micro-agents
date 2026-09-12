@@ -9,10 +9,13 @@ RUN useradd --uid 1001 --gid 0 --system --create-home appuser
 WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE ./
+COPY requirements.txt ./
 COPY micro_agent/ micro_agent/
 COPY runtimes/ runtimes/
 
-RUN pip install --no-cache-dir . &&     chmod -R g=u /app /home/appuser
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
+    && pip install --no-cache-dir --no-deps . \
+    && chmod -R g=u /app /home/appuser
 
 USER 1001
 
