@@ -21,7 +21,7 @@ readiness or protocol compliance.
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
 | Overall GitHub CI | Pass | [CI run #245](https://github.com/bassemZohdy/micro-agents/actions/runs/34705655560), all required jobs successful |
-| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); GitHub Releases/GHCR do not depend on PyPI, whose publication job is opt-in |
+| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); GitHub Releases/GHCR do not depend on Docker Hub, whose mirror job is opt-in |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
 so ambient proxy variables cannot unexpectedly route model traffic or loopback
@@ -454,7 +454,7 @@ Implemented:
 - CI jobs for tests, schema, package/container smoke, separate dependency
   audits, SBOM, and strict docs
 - tag-triggered, quality-gated GitHub Release/GHCR workflow with an opt-in
-  PyPI publication job
+  Docker Hub mirror job
 - package metadata and `micro-agent` console entrypoint
 - hash-pinned Linux/Python 3.11 runtime requirements with `pip --require-hashes`
   installation in the Dockerfile
@@ -475,9 +475,10 @@ Implemented:
 
 Gaps and operator-owned checks:
 
-- PyPI is an optional distribution channel. Its pending trusted publisher must
-  be configured only when the owner chooses to publish there; it is not needed
-  for GitHub Releases, GHCR, source installs, or self-hosting.
+- Docker Hub is an optional public mirror. Its repository, namespace, and
+  scoped access token must be configured by the owner only when that mirror is
+  wanted; it is not needed for GitHub Releases, GHCR, source installs, or
+  self-hosting. PyPI publication is outside the current distribution plan.
 - provider-specific NetworkPolicy selectors and self-hosting-cluster OpenShift
   SecurityContextConstraints validation require the self-hosting cluster
 - immutable digest/signature admission and live promotion/rollback require an
@@ -515,8 +516,9 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The default release path is complete through GitHub Releases and GHCR; PyPI is
-an optional owner-enabled distribution channel. Remaining deployment checks—
+The default release path is complete through GitHub Releases and GHCR; Docker
+Hub is an optional owner-enabled image mirror. PyPI is outside the current
+distribution plan. Remaining deployment checks—
 provider wiring, self-host supply-chain admission, OpenShift policy,
 capacity/SLO review, and live promotion/rollback—belong to each self-hosting
 operator. The complete implementation record is in

@@ -151,19 +151,98 @@ jobs:
             dist/*
             micro-agents-sbom.spdx.json
 
-  publish-pypi:
-    name: Publish Python distributions to PyPI (opt-in)
-    if: vars.ENABLE_PYPI_PUBLISH == 'true'
-    needs: verify
+  publish-dockerhub:
+    name: Publish image to Docker Hub (opt-in)
+    if: vars.ENABLE_DOCKERHUB_PUBLISH == 'true'
+    needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: python-distributions
-          path: dist/
+      - uses: actions/checkout@v4
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Validate Docker Hub configuration
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME"
+          test -n "$DOCKERHUB_TOKEN"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        id: image-build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign and verify Docker Hub image
+        env:
+          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          DIGEST: ${{ steps.image-build.outputs.digest }}
+          COSIGN_EXPERIMENTAL: "1"
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${CERTIFICATE_IDENTITY}" \
+            "${IMAGE}@${DIGEST}"
+
+      - name: Attest Docker Hub image provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          subject-digest: ${{ steps.image-build.outputs.digest }}
+
+      - name: Generate Docker Hub image SBOM
+        env:
+          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          DIGEST: ${{ steps.image-build.outputs.digest }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ env.DIGEST }}
+          format: spdx-json
+          output-file: dockerhub-micro-agents-sbom.spdx.json
+
+      - name: Attest and verify Docker Hub image SBOM
+        env:
+          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          DIGEST: ${{ steps.image-build.outputs.digest }}
+          COSIGN_EXPERIMENTAL: "1"
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
+        run: |
+          cosign attest --yes \
+            --type spdxjson \
+            --predicate dockerhub-micro-agents-sbom.spdx.json \
+            "${IMAGE}@${DIGEST}"
+          cosign verify-attestation \
+            --type spdxjson \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${CERTIFICATE_IDENTITY}" \
+            "${IMAGE}@${DIGEST}"

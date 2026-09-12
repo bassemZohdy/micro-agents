@@ -46,9 +46,9 @@ distribution.
 
 The project can be run directly from a source checkout or from the container
 and wheel/sdist artifacts attached to a GitHub Release. GHCR images are the
-default container distribution path. PyPI publication is optional and is not
-required for self-hosted deployments; see [Deployment](docs/DEPLOYMENT.md) for
-the opt-in publisher configuration.
+canonical container distribution path; Docker Hub can be enabled as a public
+mirror. PyPI is not required for self-hosted deployments; see
+[Deployment](docs/DEPLOYMENT.md) for the Docker Hub configuration.
 
 ## Architecture
 

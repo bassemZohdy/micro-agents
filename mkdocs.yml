@@ -56,4 +56,4 @@ nav:
       - 0016 Gateway edge policy and resilience: adr/0016-gateway-edge-policy.md
       - 0017 Read-mostly observability aggregation: adr/0017-observability-aggregation.md
       - 0018 Cloud repository boundary: adr/0018-cloud-repository-boundary.md
-      - 0019 Optional PyPI distribution: adr/0019-optional-pypi-distribution.md
+      - 0019 Container-first distribution: adr/0019-container-first-distribution.md

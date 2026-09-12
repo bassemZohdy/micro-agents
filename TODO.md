@@ -9,10 +9,10 @@ Backlog audited against merged `main` on 2026-09-12.
 ## Project scope and release policy
 
 The default release path is GitHub Releases plus signed GHCR images. Source
-checkouts and release artifacts are supported installation paths; publishing
-to PyPI is an optional distribution channel and is not a release gate. The
-tag-triggered workflow keeps PyPI in a separate opt-in job controlled by the
-`ENABLE_PYPI_PUBLISH` repository variable.
+checkouts and release artifacts are supported installation paths; Docker Hub is
+an optional public image mirror and is not a release gate. The tag-triggered
+workflow keeps Docker Hub in a separate opt-in job controlled by the
+`ENABLE_DOCKERHUB_PUBLISH` repository variable.
 
 This remains a pre-release reference implementation, not a project-operated
 production service. Cloud C0–C5 code is reference/control-plane material, and
@@ -23,8 +23,9 @@ rollback are owned by each self-hosting deployment.
 
 All repository-owned implementation and documentation tasks in this backlog are
 complete. The checked items below record the delivered contract and its
-limitations. PyPI setup and live cluster validation are optional operator
-activities, not unfinished repository work.
+limitations. Docker Hub setup and live cluster validation are optional operator
+activities, not unfinished repository work. Python package publication to PyPI
+is outside the current distribution plan.
 
 ## Standalone framework backlog
 
@@ -210,6 +211,6 @@ and production validation remain deployment-owner work.
 - workflow engine
 - agent marketplace
 - distributed memory platform
-- PyPI publication as a default distribution channel; it remains an optional
-  owner-enabled release job.
+- PyPI publication as a distribution channel; container images and GitHub
+  Release artifacts are the supported distribution paths.
 - Operating a project-hosted production cluster or managed promotion service.
