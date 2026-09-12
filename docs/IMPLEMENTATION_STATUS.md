@@ -1,7 +1,7 @@
 # Implementation Status
 
 Last audited: 2026-09-12
-Audited implementation revision: merged `main` on 2026-09-12
+Audited implementation revision: `main` @ `14a2b02` on 2026-09-12
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -12,15 +12,15 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 700 collected | 597 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 101 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
+| Tests | 774 collected | 667 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
 | Documentation | Pass | strict MkDocs build on pull requests; publish only from `main` |
-| Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both |
+| Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both; the external HTTP/MCP harness is operator-invoked |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
-| Overall GitHub CI | Pass | [CI run #189](https://github.com/bassemZohdy/micro-agents/actions/runs/33966665580), all 17 jobs successful |
+| Overall GitHub CI | Pass | [CI run #233](https://github.com/bassemZohdy/micro-agents/actions/runs/34698661072), all required jobs successful |
 | Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry (an owner action on pypi.org) |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
