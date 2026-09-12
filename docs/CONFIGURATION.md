@@ -255,7 +255,13 @@ lookup for each resolution, accepts HTTP only for loopback development, sends
 the Vault token only as `X-Vault-Token`, and returns `None` for a missing path
 or field. Inject it into `build_runtime(..., credential_provider=provider)`;
 the provider owns its HTTP client when it creates one, so call `close()` during
-host shutdown. AWS Secrets Manager and cloud KMS adapters remain deployment-
+host shutdown. For AWS Secrets Manager, install `micro-agents[aws]` or inject
+an AWS SDK client and use `AwsSecretsManagerCredentialProvider`. It resolves
+`aws-secretsmanager://secret-id` as a plain string, or
+`aws-secretsmanager://secret-id#json_field` from a JSON object, with a fresh
+lookup for every resolution and support for UTF-8 `SecretBinary`. AWS
+credentials remain in the SDK/session provider; they are never copied into
+the framework's error or repr surfaces. Cloud KMS adapters remain deployment-
 owned integrations behind the same `CredentialProvider` interface.
 
 Policy references (`security.policy_refs`) resolve at bootstrap through an

@@ -453,6 +453,9 @@ Implemented:
   schemas with matching boundary validation and compatibility documentation
 - strict Vault KV v2 credential resolution with fresh lookups and safe
   endpoint/response handling
+- optional AWS Secrets Manager credential resolution with fresh lookups,
+  plain or JSON-field secret references, UTF-8 binary support, strict response
+  handling, and redacted error/repr surfaces
 - checked-in Kubernetes baseline with resource requests/limits, replica
   spreading, disruption budget, autoscaling, default-deny network policy,
   Prometheus scrape annotations, and a tested 25-second drain/30-second grace
@@ -499,8 +502,8 @@ previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
 The immediate release-gate action is the PyPI trusted-publisher configuration
-(an owner action on pypi.org). Remaining implementation priorities are shared
-multi-replica state, full A2A conformance, distributed knowledge-service
-operations, and plane authentication; the
-complete prioritized backlog is in
+(an owner action on pypi.org). Remaining implementation and deployment
+priorities are full A2A conformance, remote MCP/load and capacity validation,
+distributed knowledge-service operations, target-cluster supply-chain
+admission, and live promotion/rollback; the complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).
