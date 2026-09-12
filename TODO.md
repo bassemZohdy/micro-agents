@@ -116,15 +116,18 @@ database service operations and Cloud C5 edge hardening remain separate work.
 
 - [ ] Generate a hermetic, hash-pinned `requirements.txt` for reproducible
       container builds; see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- [ ] Define and validate the deployment shutdown deadline and cancellation
-      policy for requests that do not drain in time.
+- [x] Define and validate the deployment shutdown deadline and cancellation
+      policy: the sample definition drains for 25 seconds, cancels remaining
+      invocations, and the Kubernetes Deployment grants a 30-second grace
+      period.
 - [x] Enforce application request-body limits and deadline budgets, including
       chunked requests. The ingress/gateway must apply a matching limit before
       the application for complete edge protection.
-- [ ] Define production resource requests/limits, disruption budgets,
-      autoscaling, topology spread, and NetworkPolicy decisions.
-- [ ] Scrape `/metrics` and define deployment-owned latency, error, readiness,
-      token, and cost dashboards and alerts.
+- [x] Define the checked-in production baseline for resource requests/limits,
+      disruption budgets, autoscaling, topology spread, and NetworkPolicy;
+      provider-specific selectors remain a cluster review item.
+- [x] Add Service scrape metadata and define latency, error, readiness, token,
+      and cost dashboards and alerts in the observability documentation.
 - [ ] Perform rollback and compatibility-tested release validation.
 - [ ] Validate immutable image references, SBOM, signatures, and SLSA
       provenance in production deployment policy.

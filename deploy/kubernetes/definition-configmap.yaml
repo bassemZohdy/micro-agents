@@ -115,6 +115,9 @@ data:
 
       runtime:
         timeout_seconds: 120
+        # The process drains for 25s, then cancels in-flight work; the
+        # Deployment grants a 30s Kubernetes termination window.
+        shutdown_timeout_seconds: 25
         max_iterations: 10
         error_policy: retry
         capabilities:

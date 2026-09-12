@@ -14,23 +14,15 @@ kubectl apply -f production/
 - `hpa.yaml` — CPU-based autoscaling between 2 and 10 replicas; scale on
   request rate from the `/metrics` series for finer control.
 
+The base Deployment includes two topology-spread constraints: zone spreading
+is best-effort and hostname spreading is required. The base Service includes
+the conventional Prometheus scrape annotations for installations that enable
+annotation-based discovery. The NetworkPolicy permits DNS and HTTPS egress as
+a portable baseline; replace its empty `to` selectors with provider-specific
+IP blocks or namespace selectors before production use.
+
 ## Topology spread
 
-Add to the Deployment `spec.template.spec` (base image works with any
-distribution of replicas; spread prevents co-location failures):
-
-```yaml
-topologySpreadConstraints:
-  - maxSkew: 1
-    topologyKey: topology.kubernetes.io/zone
-    whenUnsatisfiable: ScheduleAnyway
-    labelSelector:
-      matchLabels:
-        app: micro-agent
-  - maxSkew: 1
-    topologyKey: kubernetes.io/hostname
-    whenUnsatisfiable: DoNotSchedule
-    labelSelector:
-      matchLabels:
-        app: micro-agent
-```
+The base Deployment already applies the zone and hostname spread constraints
+shown above. Keep the hostname rule as `DoNotSchedule` when two or more
+replicas are required to avoid co-location failures.

@@ -209,7 +209,7 @@ state, or A2A task interoperability.
 | State | definition-wired in-memory and durable SQLite knowledge/task/audit stores, SQLite sessions, optional Redis/PostgreSQL external memory/sessions, durable approval continuations, and operation idempotency with verified-tenant namespaces, versioned snapshots, conflict detection, transactional writes, atomic claims, TTL expiry, and retention limits | durable Google ADK approval state and multi-replica shared stores |
 | Security | authentication, verified caller/workload propagation, injected and HTTP policy-store resolution, conditional policy evaluation, approval flow with optional durable Redis continuations, redacted audit events, and database-backed audit persistence | downstream delegation |
 | Observability | in-memory metrics/spans and JSON logging plus opt-in OpenTelemetry SDK traces/metrics, W3C HTTP context propagation, model/MCP outbound carriers, safe content defaults, bounded labels, token/cost conventions, and Prometheus histograms | operational dashboards/alerts |
-| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, proxy defaults, and sample manifests | production bootstrap and OpenShift hardening |
+| Operations | container, package/release gates, versioned OpenAPI, chunked request-size guard, opt-in CORS, built-in token-bucket limiter, proxy defaults, and tested Kubernetes deployment baseline | immutable supply-chain policy, target-cluster validation, and production bootstrap |
 
 See [Implementation status](docs/IMPLEMENTATION_STATUS.md) for evidence and
 known limitations.

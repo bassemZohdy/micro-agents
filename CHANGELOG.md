@@ -65,6 +65,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   translation, SSE streaming, usage mapping, capability negotiation, and
   injectable HTTP transport; `provider: anthropic`/`claude` is now wired by
   executable bootstrap.
+- Hardened the checked-in Kubernetes baseline with active topology spread,
+  explicit shutdown-drain/grace alignment, and Prometheus scrape annotations;
+  the production overlay documents resource, disruption, autoscaling, and
+  network-policy defaults.
 - Added a durable Redis-backed approval continuation store with expiry-safe
   serialization, malformed-record cleanup, health checks, and executable
   bootstrap configuration via `MICRO_AGENT_APPROVAL_ENDPOINT`.
