@@ -14,6 +14,7 @@ class FakeRedisBackend:
 
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
+        self.hashes: dict[str, dict[str, str]] = {}
         self.expiry: dict[str, float] = {}
         self.index: dict[str, dict[str, float]] = {}
 
@@ -93,10 +94,31 @@ class FakeRedis:
         return [await self.get(key) for key in keys]
 
     async def delete(self, key: str) -> int:
-        existed = key in self.backend.values
+        existed = key in self.backend.values or key in self.backend.hashes
         self.backend.values.pop(key, None)
+        self.backend.hashes.pop(key, None)
         self.backend.expiry.pop(key, None)
         return int(existed)
+
+    async def hset(self, key: str, field: str, value: str) -> int:
+        fields = self.backend.hashes.setdefault(key, {})
+        created = field not in fields
+        fields[field] = value
+        return int(created)
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        return dict(self.backend.hashes.get(key, {}))
+
+    async def hdel(self, key: str, field: str) -> int:
+        fields = self.backend.hashes.get(key, {})
+        deleted = fields.pop(field, None) is not None
+        if not fields:
+            self.backend.hashes.pop(key, None)
+        return int(deleted)
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        self.backend.expiry[key] = asyncio.get_running_loop().time() + seconds
+        return True
 
     async def zadd(self, index: str, values: dict[str, float]) -> int:
         members = self.backend.index.setdefault(index, {})

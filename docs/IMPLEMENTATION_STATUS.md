@@ -454,6 +454,9 @@ Implemented:
   spreading, disruption budget, autoscaling, default-deny network policy,
   Prometheus scrape annotations, and a tested 25-second drain/30-second grace
   shutdown policy
+- optional Redis-backed A2A task and push-configuration stores selected by a
+  `redis://`/`rediss://` A2A store location, with tenant-scoped task keys,
+  bounded snapshots, TTLs, and shared-worker integration coverage
 
 Gaps:
 

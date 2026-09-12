@@ -12,6 +12,8 @@ from micro_agent.interoperability.a2a import (
 )
 from micro_agent.interoperability.a2a_store import (
     HttpxPushNotificationSender,
+    RedisA2ATaskStore,
+    RedisPushNotificationConfigStore,
     SqliteA2ATaskStore,
     SqlitePushNotificationConfigStore,
 )
@@ -46,6 +48,8 @@ __all__ = [
     "HealthResponse",
     "HealthResponseModel",
     "HttpxPushNotificationSender",
+    "RedisA2ATaskStore",
+    "RedisPushNotificationConfigStore",
     "InvokeRequest",
     "InvokeRequestModel",
     "InvokeResponse",

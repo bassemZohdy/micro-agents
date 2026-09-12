@@ -6,6 +6,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Security and downstream protocols
 
+- Added optional Redis-backed A2A task and push-configuration stores for
+  cross-replica persistence. `MICRO_AGENT_A2A_STORE_PATH` now accepts a
+  `redis://`/`rediss://` URL in addition to the SQLite reference path.
 - Added a bounded `HttpKnowledgeRetriever` semantic-search adapter with strict
   HTTPS/loopback endpoint validation, optional bearer authentication, tenant
   and version propagation, content-integrity metadata, and readiness probes.

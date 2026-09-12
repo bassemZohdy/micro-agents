@@ -490,17 +490,30 @@ def create_app(
     a2a_paths: dict[str, str] = {}
     owned_a2a_resources: list[Any] = []
     if a2a_store_path is not None:
-        from micro_agent.interoperability.a2a_store import (
-            SqliteA2ATaskStore,
-            SqlitePushNotificationConfigStore,
-        )
+        if a2a_store_path.startswith(("redis://", "rediss://")):
+            from micro_agent.interoperability.a2a_store import (
+                RedisA2ATaskStore,
+                RedisPushNotificationConfigStore,
+            )
 
-        if a2a_task_store is None:
-            a2a_task_store = SqliteA2ATaskStore(a2a_store_path)
-            owned_a2a_resources.append(a2a_task_store)
-        if a2a_push_config_store is None:
-            a2a_push_config_store = SqlitePushNotificationConfigStore(a2a_store_path)
-            owned_a2a_resources.append(a2a_push_config_store)
+            if a2a_task_store is None:
+                a2a_task_store = RedisA2ATaskStore(a2a_store_path)
+                owned_a2a_resources.append(a2a_task_store)
+            if a2a_push_config_store is None:
+                a2a_push_config_store = RedisPushNotificationConfigStore(a2a_store_path)
+                owned_a2a_resources.append(a2a_push_config_store)
+        else:
+            from micro_agent.interoperability.a2a_store import (
+                SqliteA2ATaskStore,
+                SqlitePushNotificationConfigStore,
+            )
+
+            if a2a_task_store is None:
+                a2a_task_store = SqliteA2ATaskStore(a2a_store_path)
+                owned_a2a_resources.append(a2a_task_store)
+            if a2a_push_config_store is None:
+                a2a_push_config_store = SqlitePushNotificationConfigStore(a2a_store_path)
+                owned_a2a_resources.append(a2a_push_config_store)
     if a2a_config.enabled and a2a_push_config_store is not None and a2a_push_sender is None:
         from micro_agent.interoperability.a2a_store import HttpxPushNotificationSender
 

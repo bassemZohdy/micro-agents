@@ -100,18 +100,21 @@ across replicas.
 ## A2A task persistence and push notifications
 
 When the official `a2a` extra is installed and A2A is enabled in the
-definition, `create_app(a2a_store_path=...)` enables the SQLite reference
-backend. Tasks are stored as bounded JSON snapshots with expiry and a tenant
-namespace derived from verified identity. The same database stores push
-callback configurations. A2A push delivery validates callback URLs, requires
-HTTPS outside loopback, applies optional host allowlists, forwards configured
+definition, `create_app(a2a_store_path=...)` enables durable storage. A local
+filesystem path selects the SQLite reference backend; a `redis://` or
+`rediss://` URL selects the optional Redis backend for independently scaled
+workers. Tasks are stored as bounded JSON snapshots with expiry and a tenant
+namespace derived from verified identity. Push configurations are stored with
+the task lifecycle. A2A push delivery validates callback URLs, requires HTTPS
+outside loopback, applies optional host allowlists, forwards configured
 notification credentials, and retries transient failures with bounded
 backoff. Supply custom `a2a_task_store`, `a2a_push_config_store`, or
-`a2a_push_sender` implementations for a shared production backend.
+`a2a_push_sender` implementations when a different shared backend is needed.
 
 The standard card advertises push support only when a push configuration store
-is mounted. The SQLite backend is a portable reference and single-process
-deployment baseline; it does not replace a multi-replica database service.
+is mounted. SQLite is a portable single-process reference; Redis provides the
+shared task/push state needed by independently scheduled replicas, while Redis
+availability, sizing, and failover remain deployment responsibilities.
 
 ## OpenAI-compatible model calls
 
@@ -272,8 +275,8 @@ and handles `message/send` with submitted → working → completed/failed task
 states. In-flight `message/send` work is canceled when the SDK calls the
 executor cancellation hook. `message/stream` emits artifacts when the bound
 runtime advertises streaming. Push callbacks and task snapshots are enabled
-with the `a2a_store_path` or store injection described above; full conformance
-and a shared multi-replica backend remain open. Requests may declare
+with the `a2a_store_path` or store injection described above. Full protocol
+conformance remains open. Requests may declare
 `x-a2a-version`; unsupported versions receive a stable 400 response.
 
 ## MCP notifications
