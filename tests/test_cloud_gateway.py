@@ -3,18 +3,55 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 
 import httpx
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from jwt.algorithms import RSAAlgorithm
 
 from cloud.gateway import (
     Caller,
     Gateway,
     GatewayRoute,
+    OidcGatewayAuthenticator,
     StaticTokenAuthenticator,
     Target,
     create_gateway_app,
 )
+
+_OIDC_ISSUER = "https://idp.example.test"
+_OIDC_AUDIENCE = "cloud-gateway"
+_OIDC_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_OIDC_JWK = json.loads(RSAAlgorithm.to_jwk(_OIDC_PRIVATE_KEY.public_key()))
+_OIDC_JWK["kid"] = "gateway-test"
+
+
+class _FakeJwksClient:
+    def get_signing_key_from_jwt(self, _token: str):
+        class _Key:
+            key = RSAAlgorithm.from_jwk(_OIDC_JWK)
+
+        return _Key()
+
+
+def _oidc_token(**overrides: object) -> str:
+    claims: dict[str, object] = {
+        "iss": _OIDC_ISSUER,
+        "aud": _OIDC_AUDIENCE,
+        "sub": "alice",
+        "tid": "acme",
+        "exp": int(time.time()) + 300,
+    }
+    claims.update(overrides)
+    return jwt.encode(
+        claims,
+        _OIDC_PRIVATE_KEY,
+        algorithm="RS256",
+        headers={"kid": "gateway-test"},
+    )
 
 
 def _make_gateway(
@@ -72,6 +109,24 @@ class TestAuthNAndAuthZ:
         assert (caller.tenant, caller.subject) == ("acme", "alice")
         assert authenticator.authenticate(httpx.Headers({"Authorization": "Bearer nope"})) is None
         assert authenticator.authenticate(httpx.Headers()) is None
+
+    def test_oidc_authenticator_verifies_claims_and_maps_tenant(self):
+        authenticator = OidcGatewayAuthenticator(
+            _OIDC_ISSUER,
+            _OIDC_AUDIENCE,
+            jwks_client=_FakeJwksClient(),
+        )
+        caller = authenticator.authenticate(
+            httpx.Headers({"Authorization": f"Bearer {_oidc_token()}"})
+        )
+        assert caller is not None
+        assert (caller.subject, caller.tenant) == ("alice", "acme")
+        assert (
+            authenticator.authenticate(
+                httpx.Headers({"Authorization": f"Bearer {_oidc_token(aud='wrong')}"})
+            )
+            is None
+        )
 
     def test_tenant_not_allowed_on_route_is_forbidden(self):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -263,6 +318,41 @@ class TestGatewayHardening:
             response = http.get("/gateway/health")
             assert response.status_code == 200
             assert "greeter" in response.json()["targets"]
+
+    def test_event_stream_is_forwarded_without_buffering_response(self):
+        target = Target(base_url="http://stream.test")
+
+        class EventStream(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield b"data: first\n\n"
+                yield b"data: second\n\n"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["accept"] == "text/event-stream"
+            return httpx.Response(
+                200,
+                stream=EventStream(),
+                headers={"content-type": "text/event-stream", "x-stream": "upstream"},
+            )
+
+        gateway = _make_gateway(
+            [GatewayRoute(agent="greeter", targets=[target])],
+            handler,
+            tokens=_default_tokens(),
+        )
+        with TestClient(create_gateway_app(gateway)) as http:
+            response = http.get(
+                "/greeter/events",
+                headers={
+                    "Authorization": "Bearer acme-token",
+                    "Accept": "text/event-stream",
+                },
+            )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert response.headers["x-stream"] == "upstream"
+        assert response.content == b"data: first\n\ndata: second\n\n"
+        assert target._semaphore is not None and target._semaphore._value == 16
 
     def test_query_string_is_forwarded_to_upstream(self):
         seen: list[str] = []

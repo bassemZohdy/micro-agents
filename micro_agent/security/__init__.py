@@ -21,6 +21,12 @@ from micro_agent.security.credentials import (
     EnvironmentCredentialProvider,
     StaticCredentialProvider,
 )
+from micro_agent.security.delegation import (
+    DelegatedToken,
+    HttpTokenExchangeProvider,
+    TokenExchangeError,
+    TokenExchangeProvider,
+)
 from micro_agent.security.identity import (
     AgentIdentity,
     CallerIdentity,
@@ -62,7 +68,9 @@ __all__ = [
     "Authenticator",
     "AgentIdentity",
     "AgentPolicy",
+    "DelegatedToken",
     "HttpPolicyResolver",
+    "HttpTokenExchangeProvider",
     "CallerIdentity",
     "CredentialProvider",
     "EnvironmentCredentialProvider",
@@ -86,6 +94,8 @@ __all__ = [
     "RuntimeIdentity",
     "SecurityContext",
     "StaticCredentialProvider",
+    "TokenExchangeError",
+    "TokenExchangeProvider",
     "UserContext",
     "build_security_context",
     "agent_policy_from_dict",

@@ -4,6 +4,7 @@ import pytest
 
 from micro_agent.tools import (
     EchoTool,
+    JsonParseTool,
     Tool,
     ToolError,
     ToolMetadata,
@@ -97,3 +98,29 @@ class TestEchoTool:
         tool = EchoTool()
         result = await tool.execute({})
         assert result.output == {"echoed": ""}
+
+
+class TestJsonParseTool:
+    """Test the bounded, side-effect-free JSON utility."""
+
+    def test_metadata_and_schema(self):
+        tool = JsonParseTool()
+        assert tool.metadata.name == "json_parse"
+        assert tool.metadata.side_effect == "read_only"
+        assert "document" in tool.input_schema.parameters["properties"]
+
+    @pytest.mark.asyncio
+    async def test_execute(self):
+        result = await JsonParseTool().execute({"document": '{"ok": true, "items": [1, 2]}'})
+        assert result.output == {"value": {"ok": True, "items": [1, 2]}}
+        assert result.is_error is False
+
+    @pytest.mark.asyncio
+    async def test_invalid_and_oversized_documents_fail_closed(self):
+        invalid = await JsonParseTool().execute({"document": "{"})
+        assert invalid.is_error is True
+        assert "invalid JSON" in (invalid.error or "")
+
+        oversized = await JsonParseTool(max_bytes=2).execute({"document": "{} "})
+        assert oversized.is_error is True
+        assert "too large" in (oversized.error or "")

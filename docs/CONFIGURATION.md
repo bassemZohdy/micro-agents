@@ -35,6 +35,8 @@ the service becomes ready.
 | `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for the tenant-scoped SQLite A2A task and push-configuration stores |
 | `MICRO_AGENT_POLICY_STORE_ENDPOINT` | `policy_store_endpoint` | wired for declared `security.policy_refs`; HTTPS is required except loopback HTTP |
 | `MICRO_AGENT_POLICY_STORE_TOKEN` | `policy_store_token` | optional bearer token for the policy store; held in bootstrap memory only |
+| `MICRO_AGENT_TOKEN_EXCHANGE_ENDPOINT` | `token_exchange_endpoint` | optional HTTPS token-exchange service for per-request remote MCP credentials; loopback HTTP is permitted for local development |
+| `MICRO_AGENT_TOKEN_EXCHANGE_TOKEN` | `token_exchange_token` | optional actor credential for the exchange service; held in bootstrap memory only |
 | `MICRO_AGENT_AUDIT_SINK` | `audit_sink` | wired; `stdout` (default), `file`, `sqlite`, or `none` |
 | `MICRO_AGENT_AUDIT_FILE` | `audit_file` | wired for the file sink, or as the SQLite database path when `audit_sink=sqlite` |
 | `MICRO_AGENT_AUDIT_DATABASE` | `audit_database` | wired for the SQLite audit sink |
@@ -561,6 +563,27 @@ does not exist and also fails bootstrap when a catalog is configured. Remote
 catalog endpoints require HTTPS; loopback HTTP is permitted for local
 development. Use `model_catalog_token_ref` with an injected credential
 provider when the bearer token comes from a secret manager.
+
+### Downstream token exchange
+
+Remote MCP calls can use per-invocation delegated credentials by configuring
+`MICRO_AGENT_TOKEN_EXCHANGE_ENDPOINT`. The exchange service receives an
+RFC-8693-inspired form request with `audience`, an actor credential when one is
+available, and the verified caller/user/workload identity in the
+`micro_agent_identity` extension field. It must return a strict JSON response:
+
+```json
+{"access_token":"short-lived-token","token_type":"Bearer","expires_in":60}
+```
+
+The MCP connection manager resolves the first credential during startup and
+refreshes it for each remote MCP JSON-RPC request. Stdio servers are not
+rotated per call because their credential is injected into the child-process
+environment at connection time. Configure the exchange service over HTTPS;
+loopback HTTP is accepted only for local development. The endpoint client
+disables ambient proxy variables and follows no redirects. A service that
+cannot issue a token fails the MCP operation closed without exposing secret
+values.
 
 ## Invocation limits
 

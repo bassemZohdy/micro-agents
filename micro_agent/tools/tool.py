@@ -5,6 +5,7 @@ Tool definition, runtime contract, and observability.
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -149,6 +150,73 @@ class EchoTool(Tool):
         return ToolResult(output={"echoed": message})
 
 
+class JsonParseTool(Tool):
+    """Parse a bounded JSON document without performing side effects."""
+
+    def __init__(self, max_bytes: int = 65_536) -> None:
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be greater than zero")
+        self._max_bytes = max_bytes
+
+    @property
+    def metadata(self) -> ToolMetadata:
+        return ToolMetadata(
+            name="json_parse",
+            description="Parses a bounded JSON document into a structured value.",
+            source="native",
+            timeout_seconds=5,
+            side_effect="read_only",
+        )
+
+    @property
+    def input_schema(self) -> ToolInputSchema:
+        return ToolInputSchema(
+            parameters={
+                "type": "object",
+                "properties": {
+                    "document": {
+                        "type": "string",
+                        "description": "JSON document to parse.",
+                    }
+                },
+                "required": ["document"],
+                "additionalProperties": False,
+            }
+        )
+
+    @property
+    def output_schema(self) -> ToolOutputSchema:
+        return ToolOutputSchema(
+            parameters={
+                "type": "object",
+                "properties": {"value": {"description": "Parsed JSON value."}},
+                "required": ["value"],
+                "additionalProperties": False,
+            }
+        )
+
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
+        document = arguments.get("document", "")
+        if not isinstance(document, str):
+            return ToolResult(output=None, error="document must be a string", is_error=True)
+        size = len(document.encode("utf-8"))
+        if size > self._max_bytes:
+            return ToolResult(
+                output=None,
+                error=f"JSON document too large ({size} bytes > {self._max_bytes})",
+                is_error=True,
+            )
+        try:
+            value = json.loads(document)
+        except json.JSONDecodeError as exc:
+            return ToolResult(
+                output=None,
+                error=f"invalid JSON at position {exc.pos}",
+                is_error=True,
+            )
+        return ToolResult(output={"value": value})
+
+
 # ---------------------------------------------------------------------------
 # Built-in native tool registry
 # ---------------------------------------------------------------------------
@@ -160,4 +228,4 @@ def builtin_tool_registry() -> dict[str, Tool]:
     Definition-declared tools are matched by name against this registry; MCP
     tools are resolved separately through the MCP connection manager.
     """
-    return {"echo": EchoTool()}
+    return {"echo": EchoTool(), "json_parse": JsonParseTool()}

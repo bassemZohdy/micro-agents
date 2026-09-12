@@ -38,6 +38,8 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    token_exchange_endpoint: str | None = None
+    token_exchange_token_ref: SecretRef | None = None
     model_catalog_endpoint: str | None = None
     model_catalog_token_ref: SecretRef | None = None
     policy_store_endpoint: str | None = None
@@ -74,6 +76,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    token_exchange_endpoint: str | None = None
     model_catalog_endpoint: str | None = None
     policy_store_endpoint: str | None = None
 
@@ -105,6 +108,13 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             return cls._validate_http_endpoint(value, "model_catalog_endpoint")
         return value
 
+    @field_validator("token_exchange_endpoint")
+    @classmethod
+    def validate_token_exchange_endpoint(cls, value: str | None) -> str | None:
+        if value is not None:
+            return cls._validate_http_endpoint(value, "token_exchange_endpoint")
+        return value
+
     @field_validator("mcp_endpoints")
     @classmethod
     def validate_mcp_endpoints(cls, values: dict[str, str]) -> dict[str, str]:
@@ -125,6 +135,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             approval_endpoint=self.approval_endpoint,
             knowledge_endpoint=self.knowledge_endpoint,
             a2a_store_path=self.a2a_store_path,
+            token_exchange_endpoint=self.token_exchange_endpoint,
             model_catalog_endpoint=self.model_catalog_endpoint,
             policy_store_endpoint=self.policy_store_endpoint,
         )
@@ -149,6 +160,8 @@ class ResolvedConfig:
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    token_exchange_endpoint: str | None = None
+    token_exchange_token: str | None = field(default=None, repr=False)
     model_catalog_endpoint: str | None = None
     model_catalog_token: str | None = field(default=None, repr=False)
     policy_store_endpoint: str | None = None
@@ -243,6 +256,8 @@ def resolve_config(
             config.knowledge_endpoint = env_config.knowledge_endpoint
         if env_config.a2a_store_path:
             config.a2a_store_path = env_config.a2a_store_path
+        if env_config.token_exchange_endpoint:
+            config.token_exchange_endpoint = env_config.token_exchange_endpoint
         if env_config.policy_store_endpoint:
             config.policy_store_endpoint = env_config.policy_store_endpoint
         if env_config.model_catalog_endpoint:
@@ -322,6 +337,14 @@ def resolve_config(
     if env_a2a_store_path:
         config.a2a_store_path = env_a2a_store_path
 
+    env_token_exchange_endpoint = _read_env("token_exchange_endpoint")
+    if env_token_exchange_endpoint:
+        config.token_exchange_endpoint = env_token_exchange_endpoint
+
+    env_token_exchange_token = _read_env("token_exchange_token")
+    if env_token_exchange_token:
+        config.token_exchange_token = env_token_exchange_token
+
     env_policy_store_endpoint = _read_env("policy_store_endpoint")
     if env_policy_store_endpoint:
         config.policy_store_endpoint = env_policy_store_endpoint
@@ -388,6 +411,8 @@ def resolve_config(
         config.policy_store_token = _resolve_secret(env_config.policy_store_token_ref)
     if env_config and env_config.model_catalog_token_ref:
         config.model_catalog_token = _resolve_secret(env_config.model_catalog_token_ref)
+    if env_config and env_config.token_exchange_token_ref:
+        config.token_exchange_token = _resolve_secret(env_config.token_exchange_token_ref)
 
     return config
 
@@ -512,6 +537,27 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
                         "credentials, query, or fragment"
                     ),
                     path="model_catalog_endpoint",
+                )
+            )
+
+    if config.token_exchange_endpoint:
+        parsed = urlsplit(config.token_exchange_endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error",
+                    message=(
+                        "token_exchange_endpoint must be an absolute http(s) URL without "
+                        "credentials, query, or fragment"
+                    ),
+                    path="token_exchange_endpoint",
                 )
             )
 

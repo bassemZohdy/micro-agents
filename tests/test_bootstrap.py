@@ -12,6 +12,7 @@ from micro_agent.config import (
 )
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
+from micro_agent.mcp import FakeMcpClient, McpConnectionManager
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
 from micro_agent.models import (
@@ -23,9 +24,11 @@ from micro_agent.models import (
 )
 from micro_agent.security import (
     AgentPolicy,
+    DelegatedToken,
     RedisApprovalStore,
     RedisOperationRegistry,
     StaticCredentialProvider,
+    TokenExchangeProvider,
 )
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
 from micro_agent.session.postgres import PostgresSessionProvider
@@ -231,6 +234,61 @@ async def test_model_catalog_resolves_provider_metadata_before_bootstrap():
         assert bootstrap.resolved.model_endpoint == "https://api.anthropic.example"
     finally:
         await bootstrap.runtime.close()
+
+
+def test_bootstrap_wires_configured_token_exchange_into_injected_mcp_manager(monkeypatch):
+    calls: list[tuple[str, str | None]] = []
+
+    class FakeExchange(TokenExchangeProvider):
+        def __init__(self, endpoint: str):
+            calls.append((endpoint, None))
+
+        async def exchange(self, *, audience, actor_token=None, identity=None):
+            return DelegatedToken("delegated")
+
+        async def aclose(self):
+            calls.append(("closed", None))
+
+    monkeypatch.setattr("micro_agent.config.bootstrap.HttpTokenExchangeProvider", FakeExchange)
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "exchange-bootstrap", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "Use the remote tool."},
+                "dependencies": {
+                    "model": {"ref": "fake", "provider": "fake"},
+                    "mcp_servers": [
+                        {
+                            "ref": "orders",
+                            "transport": "streamable-http",
+                            "endpoint": "https://mcp.example.test/mcp",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+    manager = McpConnectionManager(client_factory=lambda _config: FakeMcpClient())
+    bootstrap = build_runtime(
+        definition,
+        mcp_manager=manager,
+        environment=EnvironmentConfig(
+            token_exchange_endpoint="https://tokens.example.test/exchange",
+            token_exchange_token_ref=SecretRef(name="ACTOR_TOKEN", source="vault"),
+        ),
+        credential_provider=StaticCredentialProvider({"ACTOR_TOKEN": "actor"}),
+    )
+    try:
+        assert calls == [("https://tokens.example.test/exchange", None)]
+        assert manager._token_exchange_actor_token == "actor"
+        assert manager._token_exchange is not None
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+    assert calls[-1] == ("closed", None)
 
 
 @pytest.mark.asyncio

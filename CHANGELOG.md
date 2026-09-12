@@ -4,6 +4,28 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Security and downstream protocols
+
+- Added an optional strict HTTP token-exchange provider for remote MCP
+  delegation. Verified invocation identity is exchanged for a short-lived
+  Bearer token and injected per MCP JSON-RPC request, with HTTPS/loopback,
+  redirect, proxy, and response-contract protections. Stdio credentials remain
+  startup-scoped by transport design.
+
+### Tools
+
+- Added the bounded, side-effect-free `json_parse` native tool for portable
+  structured-data flows; domain-specific tools remain plugin/injection-owned.
+
+### Cloud gateway
+
+- Added bounded `text/event-stream` response pass-through while retaining the
+  gateway request-size guard and target bulkhead ownership through stream
+  completion.
+- Added an OIDC/JWT gateway authenticator with asymmetric signature,
+  issuer/audience, required-claim, expiry, and injectable JWKS validation;
+  static bearer grants remain available for local deployments.
+
 ### Interoperability, state, and operations
 
 - Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,

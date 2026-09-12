@@ -6,7 +6,7 @@ MCP is a first-class Micro-Agent dependency.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -136,3 +136,15 @@ class McpClient(ABC):
     def set_notification_handler(self, handler: Callable[[Any], Any] | None) -> None:
         """Install an optional callback for server notifications."""
         return None
+
+    def set_credential_resolver(
+        self,
+        resolver: Callable[[], Awaitable[str | None]] | None,
+    ) -> None:
+        """Install an optional per-request downstream credential resolver.
+
+        Wire clients that support token exchange use this hook to refresh the
+        credential in the current verified invocation context. Static and fake
+        clients may keep the default no-op implementation.
+        """
+        del resolver

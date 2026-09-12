@@ -105,6 +105,9 @@ Implemented:
 - declared policy references resolve through an injected policy, resolver,
   or configured strict HTTP policy store; unresolvable references fail before
   runtime creation
+- optional downstream token exchange resolves a short-lived Bearer token from
+  the verified invocation identity and refreshes it for each remote MCP
+  request; stdio credentials remain startup-scoped by transport design
 - policy enforcement covers skills and model restrictions (allow/deny model
   and provider sets) in addition to tools and MCP servers; denied declared
   skills, models, or MCP servers fail startup
@@ -188,7 +191,8 @@ Implemented:
 - versioned `ModelCatalog` SPI with in-memory and strict HTTPS HTTP
   implementations; bootstrap resolves a logical `model.ref` before provider
   construction
-- built-in `echo` tool, installed-package extensions through
+- built-in `echo` and bounded side-effect-free `json_parse` tools,
+  installed-package extensions through
   `micro_agent.tools` entry points, programmatic tool injection, and injected
   MCP tool adapters
 
@@ -212,8 +216,8 @@ Gaps:
 - the built-in provider set currently covers fake, OpenAI-compatible chat
   completions, and Anthropic Messages; other model families require additional
   provider adapters
-- `echo` is the only bundled native tool; conceptual examples that declare
-  domain tools require installed plugins or programmatic injection
+- bundled native tools remain intentionally domain-neutral; conceptual examples
+  that declare domain tools require installed plugins or programmatic injection
 
 ### MCP
 
@@ -332,9 +336,8 @@ Implemented:
 
 Gaps:
 
-- downstream delegation (for example token exchange toward MCP servers) is
-  not implemented; propagation currently makes the verified principal
-  observable to operations, but per-protocol delegated credentials remain open
+- the token exchange service is an optional deployment dependency; its
+  endpoint contract and availability are not verified by local framework tests
 
 ### State and knowledge
 
@@ -393,6 +396,9 @@ Implemented:
   the stable 401 `authentication_required` contract with `WWW-Authenticate:
   Bearer` before the agent is reached; health and discovery routes stay
   public
+- the reference cloud gateway supports the same asymmetric OIDC JWT policy
+  through its synchronous `OidcGatewayAuthenticator`, in addition to static
+  bearer grants for local deployments
 - unknown/expired approval continuations map to a stable 404
   `continuation_not_found` contract; `approval_required` responses carry a
   continuation id and pending tool names
@@ -405,6 +411,8 @@ Implemented:
 - bounded process-local token-bucket limiter plus injectable
   synchronous/asynchronous `RateLimiter` hook with stable 429/503 contracts
   and retry/rate-limit headers
+- event-stream response pass-through for gateway calls requesting
+  `text/event-stream`, with bulkhead ownership held through stream completion
 - streaming negotiation rejects `text/event-stream` when the selected runtime
   does not advertise streaming; no unsupported stream is claimed
 - response streaming is implemented for the built-in and Google ADK runtimes

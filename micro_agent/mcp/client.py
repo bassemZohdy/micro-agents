@@ -26,6 +26,8 @@ from micro_agent.mcp.mcp import (
     McpResource,
     McpTool,
 )
+from micro_agent.security.delegation import TokenExchangeError, TokenExchangeProvider
+from micro_agent.security.propagation import get_invocation_identity
 from micro_agent.tools import Tool, ToolInputSchema, ToolMetadata, ToolOutputSchema, ToolResult
 
 _SUPPORTED_TRANSPORTS = {"streamable-http", "sse", "stdio"}
@@ -247,12 +249,16 @@ class McpConnectionManager:
         client_factory: Callable[[McpConfig], McpClient] | None = None,
         credential_resolver: Callable[[str], str | None] | None = None,
         endpoint_overrides: Mapping[str, str] | None = None,
+        token_exchange_provider: TokenExchangeProvider | None = None,
+        token_exchange_actor_token: str | None = None,
         notification_handler: Callable[[McpNotification], Awaitable[None] | None] | None = None,
         max_notifications: int = 1000,
     ) -> None:
         self._security = security_policy or McpSecurityPolicy()
         self._client_factory = client_factory
         self._credential_resolver = credential_resolver
+        self._token_exchange = token_exchange_provider
+        self._token_exchange_actor_token = token_exchange_actor_token
         self._endpoint_overrides = dict(endpoint_overrides or {})
         self._clients: dict[str, McpClient] = {}
         self._tools: dict[str, McpToolAdapter] = {}
@@ -305,6 +311,41 @@ class McpConnectionManager:
             )
         return self._client_factory(config)
 
+    async def _resolve_downstream_credential(
+        self,
+        config: McpConfig,
+        actor_token: str | None,
+    ) -> str | None:
+        """Resolve a per-request token for one verified invocation."""
+        if self._token_exchange is None:
+            return actor_token
+        if config.transport == "stdio":
+            # Environment injection happens once at process startup; silently
+            # pretending it can rotate per call would overstate delegation.
+            return actor_token
+        try:
+            delegated = await self._token_exchange.exchange(
+                audience=config.ref,
+                actor_token=actor_token or self._token_exchange_actor_token,
+                identity=get_invocation_identity(),
+            )
+        except TokenExchangeError as exc:
+            raise McpSecurityError(
+                f"mcp '{config.ref}': downstream credential exchange failed"
+            ) from exc
+        return delegated.access_token
+
+    def set_token_exchange_provider(
+        self,
+        provider: TokenExchangeProvider | None,
+        *,
+        actor_token: str | None = None,
+    ) -> None:
+        """Set delegation for an injected manager during bootstrap wiring."""
+        self._token_exchange = provider
+        if actor_token is not None:
+            self._token_exchange_actor_token = actor_token
+
     async def connect_server(self, ref: McpServerRef) -> None:
         """Validate, connect to, and discover one configured MCP server.
 
@@ -323,13 +364,17 @@ class McpConnectionManager:
             config.endpoint = endpoint_override
         self._security.validate(config)
         credential = self._resolve_credential(config)
+        delegated_credential = await self._resolve_downstream_credential(config, credential)
         client = self._default_client(config)
 
         async def handle_notification(message: Any) -> None:
             await self._on_notification(ref.ref, message)
 
         client.set_notification_handler(handle_notification)
-        await client.connect(config, credential)
+        client.set_credential_resolver(
+            lambda: self._resolve_downstream_credential(config, credential)
+        )
+        await client.connect(config, delegated_credential)
         if client.state() != McpConnectionState.CONNECTED:
             raise ConnectionError(f"mcp '{ref.ref}' did not reach connected state")
         discovery = await client.discover()
@@ -385,3 +430,5 @@ class McpConnectionManager:
         self._clients.clear()
         self._tools.clear()
         self._discovery.clear()
+        if self._token_exchange is not None:
+            await self._token_exchange.aclose()
