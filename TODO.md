@@ -30,7 +30,7 @@ Until the standalone release gate is complete:
 ## Next tasks
 
 The immediate release task is the owner-side PyPI trusted-publisher setup
-above. Implementation work now focuses on remote MCP/load and capacity
+above. Implementation work now focuses on distributed contention/capacity
 validation plus production-cluster admission and promotion checks. SQLite and
 Redis cover the tested reference state paths;
 shared database service operations and deployment-environment validation remain
@@ -86,8 +86,11 @@ separate work.
 
 - [x] Surface MCP notifications as bounded application-level events through
       the connection-manager callback and snapshot API.
-- [ ] Add remote production MCP load testing beyond loopback HTTP and local
-      stdio servers.
+- [x] Add an operator-invoked remote benchmark harness for deployed Micro-Agent
+      HTTPS endpoints and Streamable HTTP MCP servers. It uses bounded
+      concurrency, reports latency/error/throughput metrics, and keeps bearer
+      tokens out of arguments and reports; live execution and SLO review remain
+      deployment-owned.
 
 ### P2 — Models, tools, and credentials
 
@@ -156,8 +159,9 @@ separate work.
 
 ### P2 — Benchmarks
 
-- [ ] Add live-model, network, and tool latency benchmarks. Existing scenarios
-      intentionally measure framework overhead with the fake provider.
+- [x] Add an external benchmark harness for live-model, network, and tool
+      latency through deployed HTTP/MCP endpoints. Existing CI remains fake and
+      deterministic; production baselines remain deployment-owned.
 - [ ] Add distributed contention and production capacity-planning scenarios.
 
 ## Micro-Agent Cloud — C5 production hardening

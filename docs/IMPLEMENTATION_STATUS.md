@@ -173,12 +173,15 @@ Implemented:
   traced memory
 - versioned per-scenario budgets in `benchmarks/budgets.json`, with both
   scenarios enforced in the unit CI job and small-load regression tests
+- an operator-invoked external harness for deployed Micro-Agent HTTP and
+  Streamable HTTP MCP endpoints, measuring bounded live model/network/tool
+  latency with redacted token handling
 
 Gaps:
 
-- the benchmarks intentionally exclude live model/network/tool latency,
-  distributed contention, and production capacity planning; they are
-  framework-overhead guardrails rather than production SLOs
+- distributed contention and production capacity planning still require
+  deployment-owned Redis/Postgres environments; the checked-in CI scenarios
+  remain deterministic framework-overhead guardrails
 
 ### Models and tools
 
@@ -505,7 +508,7 @@ production capabilities.
 
 The immediate release-gate action is the PyPI trusted-publisher configuration
 (an owner action on pypi.org). Remaining implementation and deployment
-priorities are full A2A conformance, remote MCP/load and capacity validation,
-distributed knowledge-service operations, target-cluster supply-chain
-admission, and live promotion/rollback; the complete prioritized backlog is in
+priorities are distributed contention/capacity validation, distributed
+knowledge-service operations, target-cluster supply-chain admission, and live
+promotion/rollback; the complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).
