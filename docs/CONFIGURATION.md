@@ -25,6 +25,8 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
 | `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake`, OpenAI-compatible aliases, or `anthropic`/`claude` |
+| `MICRO_AGENT_MODEL_CATALOG_ENDPOINT` | `model_catalog_endpoint` | optional versioned alias catalog; fills provider/model endpoint metadata before bootstrap |
+| `MICRO_AGENT_MODEL_CATALOG_TOKEN` | `model_catalog_token` | optional bearer token for the catalog; held in bootstrap memory only |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
@@ -533,6 +535,32 @@ secret-provider bindings. Use `EnvironmentOverlay` for provider endpoints that
 vary by environment rather than editing the base logical definition; use
 `EnvironmentConfig` when runtime, authentication, or audit fields also need
 deployment-specific values.
+
+### Model alias catalogs
+
+Definitions may keep a portable logical model alias in `dependencies.model.ref`
+while deployment configuration resolves provider-specific metadata through an
+injected `ModelCatalog` or `MICRO_AGENT_MODEL_CATALOG_ENDPOINT`. The versioned
+catalog contract is:
+
+```text
+POST <endpoint>
+{"api_version":"microagents.io/model-catalog/v1","alias":"reasoning"}
+
+{"api_version":"microagents.io/model-catalog/v1","model":{
+  "alias":"reasoning","provider":"anthropic",
+  "model_id":"claude-3-5-sonnet-latest",
+  "endpoint":"https://api.anthropic.com"
+}}
+```
+
+`provider`, `model_id`, and `alias` are required; `endpoint` and
+`credential_ref` are optional. Unknown fields, version mismatches, alias
+mismatches, and non-success responses fail bootstrap. A 404 means the alias
+does not exist and also fails bootstrap when a catalog is configured. Remote
+catalog endpoints require HTTPS; loopback HTTP is permitted for local
+development. Use `model_catalog_token_ref` with an injected credential
+provider when the bearer token comes from a secret manager.
 
 ## Invocation limits
 

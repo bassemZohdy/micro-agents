@@ -69,6 +69,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   explicit shutdown-drain/grace alignment, and Prometheus scrape annotations;
   the production overlay documents resource, disruption, autoscaling, and
   network-policy defaults.
+- Added a versioned `ModelCatalog` contract with in-memory and authenticated
+  HTTP implementations. Bootstrap can resolve a portable `model.ref` into
+  provider, model ID, endpoint, and credential-reference metadata with strict
+  version/alias validation.
 - Added a durable Redis-backed approval continuation store with expiry-safe
   serialization, malformed-record cleanup, health checks, and executable
   bootstrap configuration via `MICRO_AGENT_APPROVAL_ENDPOINT`.

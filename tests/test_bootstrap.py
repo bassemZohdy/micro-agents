@@ -14,7 +14,13 @@ from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
-from micro_agent.models import AnthropicProvider, FakeModelProvider, OpenAICompatProvider
+from micro_agent.models import (
+    AnthropicProvider,
+    FakeModelProvider,
+    InMemoryModelCatalog,
+    ModelCatalogEntry,
+    OpenAICompatProvider,
+)
 from micro_agent.security import (
     AgentPolicy,
     RedisApprovalStore,
@@ -199,6 +205,30 @@ async def test_definition_selects_anthropic_messages_provider():
         assert provider._config.endpoint == "https://api.anthropic.example"
         assert provider._config.model_id == "claude-3-5-sonnet-latest"
         assert provider._config.timeout_seconds == 17.0
+    finally:
+        await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_model_catalog_resolves_provider_metadata_before_bootstrap():
+    definition = _definition(ref="reasoning-model")
+    catalog = InMemoryModelCatalog(
+        [
+            ModelCatalogEntry(
+                alias="reasoning-model",
+                provider="anthropic",
+                model_id="claude-3-5-sonnet-latest",
+                endpoint="https://api.anthropic.example",
+            )
+        ]
+    )
+    bootstrap = build_runtime(definition, model_catalog=catalog)
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, AnthropicProvider)
+        assert bootstrap.resolved.model_provider == "anthropic"
+        assert bootstrap.resolved.model_id == "claude-3-5-sonnet-latest"
+        assert bootstrap.resolved.model_endpoint == "https://api.anthropic.example"
     finally:
         await bootstrap.runtime.close()
 
