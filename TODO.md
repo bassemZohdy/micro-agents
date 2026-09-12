@@ -173,8 +173,10 @@ deferred until the standalone release gate closes.
       observability plane APIs. Static-token and OIDC gateway authenticators
       can be supplied at app construction; readiness remains public and the
       reference apps retain an unauthenticated local default.
-- [ ] Define formal schemas and compatibility policy for cloud descriptors,
-      config-plane payloads, and observability events.
+- [x] Define formal schemas and compatibility policy for cloud descriptors,
+      config-record payloads, and observability events. Generated v1alpha1
+      artifacts are checked in under `docs/schemas/` and the registry/config/
+      observability boundaries validate the same contracts.
 - [ ] Evaluate splitting `cloud` into its own repository and deployment
       package after the standalone contracts stabilize.
 

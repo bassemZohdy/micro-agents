@@ -27,6 +27,11 @@ unrestricted). Descriptors round-trip through plain dictionaries via
 `to_dict()` / `from_dict()`; unknown schema versions are rejected, never
 silently accepted.
 
+The generated JSON Schema is
+`schemas/cloud-descriptor-v1alpha1.json`; registry boundaries reject unknown
+descriptor fields. See [Cloud Contract Schemas](CLOUD_SCHEMAS.md) for the
+compatibility policy.
+
 ## Registry
 
 `cloud.registry.InMemoryAgentRegistry` stores registrations with a lease: a

@@ -35,6 +35,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   the Dockerfile now installs runtime dependencies with `pip --require-hashes`
   and installs the local package without reopening dependency resolution.
 
+### Cloud contracts
+
+- Added generated v1alpha1 JSON Schemas for registry descriptors, config
+  response records, and observability ingestion, with boundary validation and
+  a documented additive-versus-breaking compatibility policy.
+
 ### Interoperability, state, and operations
 
 - Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,
