@@ -30,9 +30,9 @@ Until the standalone release gate is complete:
 ## Next tasks
 
 The immediate release task is the owner-side PyPI trusted-publisher setup
-above. Implementation work now focuses on full A2A protocol conformance,
-remote MCP/load and capacity validation, and production-cluster admission and
-promotion checks. SQLite and Redis cover the tested reference state paths;
+above. Implementation work now focuses on remote MCP/load and capacity
+validation plus production-cluster admission and promotion checks. SQLite and
+Redis cover the tested reference state paths;
 shared database service operations and deployment-environment validation remain
 separate work.
 
@@ -51,9 +51,11 @@ separate work.
 - [x] Implement authenticated A2A card declarations and test their security
       scheme against the configured authenticator. Extended card fields beyond
       the supported SDK model remain part of conformance validation.
-- [ ] Validate full A2A v1.0.1 conformance with the official SDK, including
-      unsupported/error paths beyond the currently tested non-streaming and
-      streaming subset.
+- [x] Validate the supported A2A v1.0.1 surface with the official SDK,
+      including card discovery, non-streaming/streaming tasks, cancellation,
+      task get/list, push-configuration CRUD, not-found errors, and protocol
+      version rejection. Optional extended-card features remain unadvertised
+      until their deployment contract is defined.
 - [x] Implement a production-facing semantic knowledge provider adapter. The
       bounded `HttpKnowledgeRetriever` supports HTTPS semantic/vector or hybrid
       search services with tenant/version propagation, strict result parsing,

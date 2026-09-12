@@ -48,10 +48,10 @@ class TestWellKnownPath:
 
 class TestProtocolVersion:
     def test_supported_versions_declared_explicitly(self):
-        assert frozenset({"0.3.0"}) == SUPPORTED_PROTOCOL_VERSIONS
+        assert frozenset({"1.0.1"}) == SUPPORTED_PROTOCOL_VERSIONS
 
     def test_default_version_is_normalized(self):
-        assert normalize_protocol_version(None) == "0.3.0"
+        assert normalize_protocol_version(None) == "1.0.1"
 
     def test_unsupported_version_rejected(self):
         with pytest.raises(UnsupportedProtocolVersionError, match="9.9"):
@@ -59,7 +59,7 @@ class TestProtocolVersion:
 
     def test_card_declares_normalized_version(self):
         card = agent_card_from_definition(_definition())
-        assert card.protocol_version == "0.3.0"
+        assert card.supported_interfaces[0].protocol_version == "1.0.1"
 
 
 class TestAgentCard:
@@ -67,8 +67,9 @@ class TestAgentCard:
         card = agent_card_from_definition(_definition(), base_url="https://agent.example.com")
         assert card.name == "card-agent"
         assert card.version == "1.0.0"
-        assert card.url == "https://agent.example.com"
-        assert card.preferred_transport == "JSONRPC"
+        assert card.supported_interfaces[0].url == "https://agent.example.com"
+        assert card.supported_interfaces[0].protocol_binding == "JSONRPC"
+        assert card.supported_interfaces[0].protocol_version == "1.0.1"
         assert card.capabilities.streaming is False
         assert card.capabilities.push_notifications is False
         assert card.default_input_modes == ["application/json"]
@@ -82,7 +83,7 @@ class TestAgentCard:
     def test_card_url_falls_back_to_a2a_endpoint(self):
         definition = _definition(endpoint="https://a2a.example.com")
         card = agent_card_from_definition(definition)
-        assert card.url == "https://a2a.example.com"
+        assert card.supported_interfaces[0].url == "https://a2a.example.com"
 
     def test_security_scheme_advertised(self):
         from a2a.types import OpenIdConnectSecurityScheme
@@ -95,10 +96,14 @@ class TestAgentCard:
                 "open_id_connect_url": "https://idp/.well-known/openid-configuration",
             },
         )
-        assert card.security == [{"oidc": []}]
         scheme = card.security_schemes["oidc"]
-        assert isinstance(scheme.root, OpenIdConnectSecurityScheme)
-        assert scheme.root.open_id_connect_url == "https://idp/.well-known/openid-configuration"
+        assert scheme.HasField("open_id_connect_security_scheme")
+        assert isinstance(scheme.open_id_connect_security_scheme, OpenIdConnectSecurityScheme)
+        assert (
+            scheme.open_id_connect_security_scheme.open_id_connect_url
+            == "https://idp/.well-known/openid-configuration"
+        )
+        assert card.security_requirements[0].schemes["oidc"].list == []
 
     def test_skills_mapping(self):
         skills = skills_mapping(_definition())

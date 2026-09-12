@@ -18,7 +18,7 @@ import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
@@ -30,6 +30,35 @@ _DEFAULT_TENANT = "__default__"
 _DEFAULT_TASK_TTL_SECONDS = 24 * 60 * 60
 _DEFAULT_MAX_TASK_BYTES = 2 * 1024 * 1024
 _DEFAULT_MAX_PUSH_CONFIG_BYTES = 64 * 1024
+
+
+def _model_to_dict(value: Any) -> dict[str, Any]:
+    """Serialize either a v1 protobuf model or a legacy Pydantic model."""
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return cast(dict[str, Any], dump(by_alias=True, mode="json", exclude_none=False))
+    try:
+        from google.protobuf.json_format import MessageToDict
+        from google.protobuf.message import Message
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise TypeError("A2A model serialization requires the 'a2a' extra") from exc
+    if isinstance(value, Message):
+        return cast(dict[str, Any], MessageToDict(value, preserving_proto_field_name=True))
+    raise TypeError("A2A value must be an SDK model")
+
+
+def _model_from_dict(model_type: Any, payload: dict[str, Any]) -> Any:
+    """Rebuild either a v1 protobuf model or a legacy Pydantic model."""
+    validate = getattr(model_type, "model_validate", None)
+    if callable(validate):
+        return validate(payload)
+    try:
+        from google.protobuf.json_format import ParseDict
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("A2A model parsing requires the 'a2a' extra") from exc
+    model = model_type()
+    ParseDict(payload, model)
+    return model
 
 
 def _tenant_from_context(context: Any) -> str:
@@ -127,12 +156,7 @@ class SqliteA2ATaskStore:
 
     @staticmethod
     def _task_json(task: Any) -> str:
-        dump = getattr(task, "model_dump", None)
-        if not callable(dump):
-            raise TypeError("A2A task must provide model_dump()")
-        return json.dumps(
-            dump(by_alias=True, mode="json", exclude_none=False), separators=(",", ":")
-        )
+        return json.dumps(_model_to_dict(task), separators=(",", ":"))
 
     async def save(self, task: Any, context: Any = None) -> None:
         """Persist or replace one task snapshot."""
@@ -196,7 +220,74 @@ class SqliteA2ATaskStore:
             from a2a.types import Task
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("SqliteA2ATaskStore requires the 'a2a' extra") from exc
-        return Task.model_validate(json.loads(task_json))
+        return _model_from_dict(Task, json.loads(task_json))
+
+    async def list(self, params: Any, context: Any = None) -> Any:
+        """List non-expired tasks using the v1 SDK filtering contract."""
+        tenant_id = _tenant_from_context(context)
+        now = time.time()
+
+        def operation(connection: sqlite3.Connection) -> list[str]:
+            rows = connection.execute(
+                """
+                SELECT task_json
+                FROM a2a_tasks
+                WHERE tenant_id = ? AND expires_at > ?
+                """,
+                (tenant_id, now),
+            ).fetchall()
+            connection.execute("DELETE FROM a2a_tasks WHERE expires_at <= ?", (now,))
+            connection.commit()
+            return [str(row["task_json"]) for row in rows]
+
+        rows = await self._run_async(operation)
+        try:
+            from a2a.types import ListTasksResponse, Task
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("SqliteA2ATaskStore requires the 'a2a' extra") from exc
+        tasks = [_model_from_dict(Task, json.loads(payload)) for payload in rows]
+        context_id = str(getattr(params, "context_id", ""))
+        status = int(getattr(params, "status", 0))
+        if context_id:
+            tasks = [task for task in tasks if task.context_id == context_id]
+        if status:
+            tasks = [task for task in tasks if int(task.status.state) == status]
+        tasks.sort(
+            key=lambda task: (
+                task.status.timestamp.ToJsonString() if task.status.HasField("timestamp") else "",
+                task.id,
+            ),
+            reverse=True,
+        )
+        total_size = len(tasks)
+        page_size = int(getattr(params, "page_size", 0)) or 50
+        start = 0
+        page_token = str(getattr(params, "page_token", ""))
+        if page_token:
+            try:
+                from a2a.utils.task import decode_page_token
+
+                marker = decode_page_token(page_token)
+            except (ImportError, ValueError) as exc:
+                raise ValueError("invalid A2A page token") from exc
+            for index, task in enumerate(tasks):
+                if task.id == marker:
+                    start = index
+                    break
+            else:
+                raise ValueError("invalid A2A page token")
+        page = tasks[start : start + page_size]
+        next_page_token = None
+        if start + page_size < total_size:
+            from a2a.utils.task import encode_page_token
+
+            next_page_token = encode_page_token(tasks[start + page_size].id)
+        return ListTasksResponse(
+            tasks=page,
+            next_page_token=next_page_token or "",
+            total_size=total_size,
+            page_size=page_size,
+        )
 
     async def delete(self, task_id: str, context: Any = None) -> None:
         tenant_id = _tenant_from_context(context)
@@ -280,12 +371,9 @@ class SqlitePushNotificationConfigStore:
             with _connect(self.path) as connection:
                 return operation(connection)
 
-    async def set_info(self, task_id: str, notification_config: Any) -> None:
-        dump = getattr(notification_config, "model_dump", None)
-        if not callable(dump):
-            raise TypeError("notification_config must provide model_dump()")
+    async def set_info(self, task_id: str, notification_config: Any, context: Any = None) -> None:
         config_id = str(getattr(notification_config, "id", None) or uuid4())
-        payload = json.dumps(dump(by_alias=True, mode="json", exclude_none=False))
+        payload = json.dumps(_model_to_dict(notification_config), separators=(",", ":"))
         now = time.time()
 
         def operation(connection: sqlite3.Connection) -> None:
@@ -304,7 +392,7 @@ class SqlitePushNotificationConfigStore:
 
         await asyncio.to_thread(self._run, operation)
 
-    async def get_info(self, task_id: str) -> list[Any]:
+    async def get_info(self, task_id: str, context: Any = None) -> list[Any]:
         def operation(connection: sqlite3.Connection) -> list[str]:
             return [
                 str(row["config_json"])
@@ -320,12 +408,19 @@ class SqlitePushNotificationConfigStore:
 
         rows = await asyncio.to_thread(self._run, operation)
         try:
-            from a2a.types import PushNotificationConfig
+            from a2a.types import TaskPushNotificationConfig
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("push notification storage requires the 'a2a' extra") from exc
-        return [PushNotificationConfig.model_validate(json.loads(payload)) for payload in rows]
+        return [
+            _model_from_dict(TaskPushNotificationConfig, json.loads(payload)) for payload in rows
+        ]
 
-    async def delete_info(self, task_id: str, config_id: str | None = None) -> None:
+    async def delete_info(
+        self, task_id: str, context: Any = None, config_id: str | None = None
+    ) -> None:
+        if config_id is None and isinstance(context, str):
+            config_id = context
+
         def operation(connection: sqlite3.Connection) -> None:
             if config_id:
                 connection.execute(
@@ -397,12 +492,7 @@ class RedisA2ATaskStore:
         return value.decode() if isinstance(value, bytes) else str(value)
 
     async def save(self, task: Any, context: Any = None) -> None:
-        dump = getattr(task, "model_dump", None)
-        if not callable(dump):
-            raise TypeError("A2A task must provide model_dump()")
-        payload = json.dumps(
-            dump(by_alias=True, mode="json", exclude_none=False), separators=(",", ":")
-        )
+        payload = json.dumps(_model_to_dict(task), separators=(",", ":"))
         if len(payload.encode("utf-8")) > self._max_task_bytes:
             raise ValueError("A2A task exceeds the configured persistence limit")
         task_id = str(getattr(task, "id", ""))
@@ -414,6 +504,9 @@ class RedisA2ATaskStore:
             payload,
             ex=max(1, math.ceil(self._ttl_seconds)),
         )
+        await self._client.zadd(
+            self._index_key(context), {self._key(task_id, context): time.time()}
+        )
 
     async def get(self, task_id: str, context: Any = None) -> Any | None:
         key = self._key(task_id, context)
@@ -423,7 +516,7 @@ class RedisA2ATaskStore:
         try:
             from a2a.types import Task
 
-            return Task.model_validate(json.loads(self._text(raw)))
+            return _model_from_dict(Task, json.loads(self._text(raw)))
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("RedisA2ATaskStore requires the 'a2a' extra") from exc
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
@@ -431,7 +524,71 @@ class RedisA2ATaskStore:
             return None
 
     async def delete(self, task_id: str, context: Any = None) -> None:
-        await self._client.delete(self._key(task_id, context))
+        key = self._key(task_id, context)
+        await self._client.delete(key)
+        await self._client.zrem(self._index_key(context), key)
+
+    def _index_key(self, context: Any = None) -> str:
+        tenant = quote(_tenant_from_context(context), safe="")
+        return f"{self._prefix}index:tenant:{tenant}"
+
+    async def list(self, params: Any, context: Any = None) -> Any:
+        """List indexed, non-expired tasks using the v1 SDK contract."""
+        try:
+            from a2a.types import ListTasksResponse, Task
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("RedisA2ATaskStore requires the 'a2a' extra") from exc
+        keys = list(reversed(await self._client.zrange(self._index_key(context), 0, -1)))
+        raw_values = await self._client.mget(keys)
+        tasks: list[Any] = []
+        for key, raw in zip(keys, raw_values, strict=True):
+            if raw is None:
+                await self._client.zrem(self._index_key(context), key)
+                continue
+            try:
+                tasks.append(_model_from_dict(Task, json.loads(self._text(raw))))
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                await self._client.delete(key)
+                await self._client.zrem(self._index_key(context), key)
+        context_id = str(getattr(params, "context_id", ""))
+        status = int(getattr(params, "status", 0))
+        if context_id:
+            tasks = [task for task in tasks if task.context_id == context_id]
+        if status:
+            tasks = [task for task in tasks if int(task.status.state) == status]
+        tasks.sort(
+            key=lambda task: (
+                task.status.timestamp.ToJsonString() if task.status.HasField("timestamp") else "",
+                task.id,
+            ),
+            reverse=True,
+        )
+        total_size = len(tasks)
+        page_size = int(getattr(params, "page_size", 0)) or 50
+        start = 0
+        page_token = str(getattr(params, "page_token", ""))
+        if page_token:
+            from a2a.utils.task import decode_page_token
+
+            marker = decode_page_token(page_token)
+            for index, task in enumerate(tasks):
+                if task.id == marker:
+                    start = index
+                    break
+            else:
+                raise ValueError("invalid A2A page token")
+        page = tasks[start : start + page_size]
+        next_page_token = ""
+        if start + page_size < total_size:
+            from a2a.utils.task import encode_page_token
+
+            next_page_token = encode_page_token(tasks[start + page_size].id)
+        return ListTasksResponse(
+            tasks=page,
+            next_page_token=next_page_token,
+            total_size=total_size,
+            page_size=page_size,
+        )
 
     async def health_check(self) -> bool:
         """Return whether Redis answers a ping probe."""
@@ -502,35 +659,36 @@ class RedisPushNotificationConfigStore:
     def _text(value: Any) -> str:
         return value.decode() if isinstance(value, bytes) else str(value)
 
-    async def set_info(self, task_id: str, notification_config: Any) -> None:
-        dump = getattr(notification_config, "model_dump", None)
-        if not callable(dump):
-            raise TypeError("notification_config must provide model_dump()")
+    async def set_info(self, task_id: str, notification_config: Any, context: Any = None) -> None:
         config_id = str(getattr(notification_config, "id", None) or uuid4())
-        payload = json.dumps(dump(by_alias=True, mode="json", exclude_none=False))
+        payload = json.dumps(_model_to_dict(notification_config), separators=(",", ":"))
         if len(payload.encode("utf-8")) > self._max_config_bytes:
             raise ValueError("A2A push configuration exceeds the configured limit")
         key = self._key(task_id)
         await self._client.hset(key, config_id, payload)
         await self._client.expire(key, max(1, math.ceil(self._ttl_seconds)))
 
-    async def get_info(self, task_id: str) -> list[Any]:
+    async def get_info(self, task_id: str, context: Any = None) -> list[Any]:
         rows = await self._client.hgetall(self._key(task_id))
         try:
-            from a2a.types import PushNotificationConfig
+            from a2a.types import TaskPushNotificationConfig
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("Redis push notification storage requires the 'a2a' extra") from exc
         configs: list[Any] = []
         for payload in rows.values():
             try:
                 configs.append(
-                    PushNotificationConfig.model_validate(json.loads(self._text(payload)))
+                    _model_from_dict(TaskPushNotificationConfig, json.loads(self._text(payload)))
                 )
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
         return configs
 
-    async def delete_info(self, task_id: str, config_id: str | None = None) -> None:
+    async def delete_info(
+        self, task_id: str, context: Any = None, config_id: str | None = None
+    ) -> None:
+        if config_id is None and isinstance(context, str):
+            config_id = context
         key = self._key(task_id)
         if config_id:
             await self._client.hdel(key, config_id)
@@ -604,7 +762,10 @@ class HttpxPushNotificationSender:
         if token:
             headers["X-A2A-Notification-Token"] = str(token)
         authentication = getattr(config, "authentication", None)
-        schemes = {str(scheme).lower() for scheme in (getattr(authentication, "schemes", []) or [])}
+        configured_schemes = getattr(authentication, "schemes", None)
+        if configured_schemes is None:
+            configured_schemes = [getattr(authentication, "scheme", "")]
+        schemes = {str(scheme).lower() for scheme in (configured_schemes or [])}
         credentials = getattr(authentication, "credentials", None)
         if credentials and "bearer" in schemes:
             headers["Authorization"] = f"Bearer {credentials}"
@@ -612,16 +773,24 @@ class HttpxPushNotificationSender:
             headers["X-A2A-Notification-Credentials"] = str(credentials)
         return headers
 
-    async def send_notification(self, task: Any) -> None:
-        dump = getattr(task, "model_dump", None)
-        if not callable(dump):
-            raise TypeError("task must provide model_dump()")
-        payload = json.dumps(
-            dump(by_alias=True, mode="json", exclude_none=False), separators=(",", ":")
-        )
+    async def send_notification(self, task_or_id: Any, event: Any | None = None) -> None:
+        """Send a v1 event; retain one-argument task compatibility for embedders."""
+        if event is None:
+            task_id = str(getattr(task_or_id, "id", ""))
+            event = task_or_id
+        else:
+            task_id = str(task_or_id)
+        payload_value = event
+        try:
+            from a2a.utils.proto_utils import to_stream_response
+
+            payload_value = to_stream_response(event)
+        except (ImportError, TypeError, ValueError):
+            pass
+        payload = json.dumps(_model_to_dict(payload_value), separators=(",", ":"))
         if len(payload.encode("utf-8")) > self._max_payload_bytes:
             raise ValueError("A2A notification payload exceeds the configured limit")
-        for config in await self._config_store.get_info(str(task.id)):
+        for config in await self._config_store.get_info(task_id):
             self._validate_url(str(config.url))
             headers = self._headers(config)
             for attempt in range(self._max_attempts):

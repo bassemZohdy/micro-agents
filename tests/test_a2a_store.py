@@ -17,8 +17,14 @@ from micro_agent.interoperability.a2a_store import (
 )
 
 pytest.importorskip("a2a")
-from a2a.server.tasks.push_notification_config_store import PushNotificationConfig
-from a2a.types import PushNotificationAuthenticationInfo, Task, TaskState, TaskStatus
+from a2a.types import (
+    AuthenticationInfo,
+    ListTasksRequest,
+    Task,
+    TaskPushNotificationConfig,
+    TaskState,
+    TaskStatus,
+)
 
 from tests.fake_redis import FakeRedis, FakeRedisBackend
 
@@ -26,8 +32,8 @@ from tests.fake_redis import FakeRedis, FakeRedisBackend
 def _task(task_id: str = "task-1") -> object:
     return Task(
         id=task_id,
-        contextId="context-1",
-        status=TaskStatus(state=TaskState.working),
+        context_id="context-1",
+        status=TaskStatus(state=TaskState.TASK_STATE_WORKING),
         metadata={"tenant_id": "tenant-a"},
     )
 
@@ -41,7 +47,7 @@ async def test_sqlite_task_store_persists_and_isolates_tenants(tmp_path) -> None
 
     await store.save(_task(), tenant_a)
     reopened = SqliteA2ATaskStore(path, ttl_seconds=60)
-    assert (await reopened.get("task-1", tenant_a)).status.state == TaskState.working
+    assert (await reopened.get("task-1", tenant_a)).status.state == TaskState.TASK_STATE_WORKING
     assert await reopened.get("task-1", tenant_b) is None
 
     await reopened.delete("task-1", tenant_a)
@@ -74,12 +80,14 @@ async def test_redis_a2a_stores_share_tenant_scoped_tasks_and_push_configs() -> 
     )
     tenant_a = SimpleNamespace(state={"tenant_id": "tenant-a"})
     tenant_b = SimpleNamespace(state={"tenant_id": "tenant-b"})
-    config = PushNotificationConfig(id="callback-1", url="https://callback.example.test/events")
+    config = TaskPushNotificationConfig(id="callback-1", url="https://callback.example.test/events")
     try:
         await task_a.save(_task(), tenant_a)
         shared = await task_b.get("task-1", tenant_a)
         assert shared is not None
         assert shared.id == "task-1"
+        listed = await task_b.list(ListTasksRequest(), tenant_a)
+        assert [item.id for item in listed.tasks] == ["task-1"]
         assert await task_b.get("task-1", tenant_b) is None
         await push_a.set_info("task-1", config)
         assert (await push_b.get_info("task-1"))[0].id == "callback-1"
@@ -101,13 +109,11 @@ async def test_push_config_store_round_trips_and_sender_authenticates(tmp_path) 
     store = SqlitePushNotificationConfigStore(tmp_path / "push.db")
     await store.set_info(
         "task-1",
-        PushNotificationConfig(
+        TaskPushNotificationConfig(
             id="callback-1",
             url="https://callback.example.test/events",
             token="callback-token",
-            authentication=PushNotificationAuthenticationInfo(
-                schemes=["bearer"], credentials="secret"
-            ),
+            authentication=AuthenticationInfo(scheme="bearer", credentials="secret"),
         ),
     )
     received: list[httpx.Request] = []
@@ -125,7 +131,7 @@ async def test_push_config_store_round_trips_and_sender_authenticates(tmp_path) 
     assert len(received) == 1
     assert received[0].headers["Authorization"] == "Bearer secret"
     assert received[0].headers["X-A2A-Notification-Token"] == "callback-token"
-    assert json.loads(received[0].content)["id"] == "task-1"
+    assert json.loads(received[0].content)["task"]["id"] == "task-1"
     await sender.aclose()
     await store.close()
 
