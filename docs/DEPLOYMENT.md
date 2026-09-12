@@ -197,7 +197,8 @@ filesystem remains an open production-hardening task.
 ## Multi-replica warning
 
 The sample declares two replicas. SQLite remains a single-process development
-reference, while Redis endpoints provide shared memory and session state across
+reference, while Redis endpoints provide shared memory, session, idempotency,
+and A2A task/push state across
 independently scheduled pods. Install the optional Redis extra and configure
 `MICRO_AGENT_MEMORY_ENDPOINT=redis://...` for declared memory plus
 `MICRO_AGENT_SESSION_ENDPOINT=redis://...` (or `rediss://...`) for

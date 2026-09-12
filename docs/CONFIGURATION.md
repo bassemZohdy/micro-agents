@@ -32,7 +32,7 @@ the service becomes ready.
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
 | `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
 | `MICRO_AGENT_KNOWLEDGE_ENDPOINT` | `knowledge_endpoint` | wired for SQLite (`sqlite:///path` or a plain path) or the bounded HTTP semantic retriever (`https://...`); unsupported endpoints fail fast |
-| `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for the tenant-scoped SQLite A2A task and push-configuration stores |
+| `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for tenant-scoped SQLite paths or shared Redis (`redis://`/`rediss://`) A2A task and push-configuration stores |
 | `MICRO_AGENT_POLICY_STORE_ENDPOINT` | `policy_store_endpoint` | wired for declared `security.policy_refs`; HTTPS is required except loopback HTTP |
 | `MICRO_AGENT_POLICY_STORE_TOKEN` | `policy_store_token` | optional bearer token for the policy store; held in bootstrap memory only |
 | `MICRO_AGENT_TOKEN_EXCHANGE_ENDPOINT` | `token_exchange_endpoint` | optional HTTPS token-exchange service for per-request remote MCP credentials; loopback HTTP is permitted for local development |
@@ -155,10 +155,13 @@ instead of pretending knowledge is available.
 ## A2A task state and push notifications
 
 Set `MICRO_AGENT_A2A_STORE_PATH` to a writable SQLite path when the definition
-enables A2A. The executable passes that path to the official SDK adapter,
-which persists bounded tenant-scoped task snapshots and push callback
-configurations. Callback delivery uses HTTPS outside loopback, optional host
-allowlists, configured callback authentication, and bounded transient retry.
+enables A2A. For independently scaled workers, set it to a `redis://` or
+`rediss://` URL and install `micro-agents[redis]`; the executable passes the
+location to the official SDK adapter, which persists bounded tenant-scoped
+task snapshots and push callback configurations. Callback delivery uses HTTPS
+outside loopback, optional host allowlists, configured callback authentication,
+and bounded transient retry. Redis provides shared state, but its availability
+and capacity are deployment responsibilities.
 For a multi-replica deployment, inject store implementations backed by the
 deployment's shared database rather than sharing a local filesystem.
 

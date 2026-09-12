@@ -10,21 +10,26 @@ replace it with a store implementing the same ``save/get/delete`` methods.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import math
 import sqlite3
 import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 import httpx
 
+from micro_agent.session.redis import _import_redis, _validate_endpoint
+
 _DEFAULT_TENANT = "__default__"
 _DEFAULT_TASK_TTL_SECONDS = 24 * 60 * 60
 _DEFAULT_MAX_TASK_BYTES = 2 * 1024 * 1024
+_DEFAULT_MAX_PUSH_CONFIG_BYTES = 64 * 1024
 
 
 def _tenant_from_context(context: Any) -> str:
@@ -339,6 +344,219 @@ class SqlitePushNotificationConfigStore:
             self._memory_connection = None
 
 
+class RedisA2ATaskStore:
+    """Redis-backed A2A task snapshots for independently scaled workers.
+
+    Each task is a bounded SDK JSON document with a Redis key TTL. The key
+    includes the verified tenant extracted from the SDK call context, so two
+    tenants may safely use the same task ID without seeing one another's
+    state. The class intentionally follows the SDK method-shaped SPI without
+    importing the optional A2A package at module import time.
+    """
+
+    def __init__(
+        self,
+        endpoint: str = "redis://localhost:6379/0",
+        *,
+        ttl_seconds: float = _DEFAULT_TASK_TTL_SECONDS,
+        namespace: str = "micro-agent",
+        max_task_bytes: int = _DEFAULT_MAX_TASK_BYTES,
+        client: Any | None = None,
+        connect_timeout_seconds: float = 5.0,
+    ) -> None:
+        _validate_endpoint(endpoint)
+        if ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be greater than zero")
+        if max_task_bytes < 1024:
+            raise ValueError("max_task_bytes must be at least 1024")
+        if not namespace or namespace.strip() != namespace:
+            raise ValueError("namespace must be a non-empty value without surrounding whitespace")
+        self._endpoint = endpoint
+        self._ttl_seconds = float(ttl_seconds)
+        self._prefix = f"{namespace}:a2a:task:"
+        self._max_task_bytes = max_task_bytes
+        self._owns_client = client is None
+        self._closed = False
+        if client is None:
+            redis = _import_redis()
+            self._client = redis.from_url(
+                endpoint,
+                decode_responses=True,
+                socket_connect_timeout=connect_timeout_seconds,
+                socket_timeout=connect_timeout_seconds,
+            )
+        else:
+            self._client = client
+
+    def _key(self, task_id: str, context: Any = None) -> str:
+        tenant = quote(_tenant_from_context(context), safe="")
+        return f"{self._prefix}tenant:{tenant}:{quote(task_id, safe='')}"
+
+    @staticmethod
+    def _text(value: Any) -> str:
+        return value.decode() if isinstance(value, bytes) else str(value)
+
+    async def save(self, task: Any, context: Any = None) -> None:
+        dump = getattr(task, "model_dump", None)
+        if not callable(dump):
+            raise TypeError("A2A task must provide model_dump()")
+        payload = json.dumps(
+            dump(by_alias=True, mode="json", exclude_none=False), separators=(",", ":")
+        )
+        if len(payload.encode("utf-8")) > self._max_task_bytes:
+            raise ValueError("A2A task exceeds the configured persistence limit")
+        task_id = str(getattr(task, "id", ""))
+        context_id = str(getattr(task, "context_id", ""))
+        if not task_id or not context_id:
+            raise ValueError("A2A tasks require non-empty id and context_id")
+        await self._client.set(
+            self._key(task_id, context),
+            payload,
+            ex=max(1, math.ceil(self._ttl_seconds)),
+        )
+
+    async def get(self, task_id: str, context: Any = None) -> Any | None:
+        key = self._key(task_id, context)
+        raw = await self._client.get(key)
+        if raw is None:
+            return None
+        try:
+            from a2a.types import Task
+
+            return Task.model_validate(json.loads(self._text(raw)))
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("RedisA2ATaskStore requires the 'a2a' extra") from exc
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            await self._client.delete(key)
+            return None
+
+    async def delete(self, task_id: str, context: Any = None) -> None:
+        await self._client.delete(self._key(task_id, context))
+
+    async def health_check(self) -> bool:
+        """Return whether Redis answers a ping probe."""
+        try:
+            return bool(await self._client.ping())
+        except Exception:
+            return False
+
+    async def aclose(self) -> None:
+        """Close an owned Redis client; injected clients remain caller-owned."""
+        if self._closed or not self._owns_client:
+            self._closed = True
+            return
+        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        if close is not None:
+            result = close()
+            if inspect.isawaitable(result):
+                await result
+        self._closed = True
+
+
+class RedisPushNotificationConfigStore:
+    """Redis-backed A2A push callback configuration store.
+
+    Configurations are held in a per-task Redis hash and expire with the task
+    lifecycle. Task IDs are globally unique in the A2A protocol, so the SDK's
+    task-only push-store interface remains sufficient here.
+    """
+
+    def __init__(
+        self,
+        endpoint: str = "redis://localhost:6379/0",
+        *,
+        ttl_seconds: float = _DEFAULT_TASK_TTL_SECONDS,
+        namespace: str = "micro-agent",
+        max_config_bytes: int = _DEFAULT_MAX_PUSH_CONFIG_BYTES,
+        client: Any | None = None,
+        connect_timeout_seconds: float = 5.0,
+    ) -> None:
+        _validate_endpoint(endpoint)
+        if ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be greater than zero")
+        if max_config_bytes < 1024:
+            raise ValueError("max_config_bytes must be at least 1024")
+        if not namespace or namespace.strip() != namespace:
+            raise ValueError("namespace must be a non-empty value without surrounding whitespace")
+        self._endpoint = endpoint
+        self._ttl_seconds = float(ttl_seconds)
+        self._prefix = f"{namespace}:a2a:push:"
+        self._max_config_bytes = max_config_bytes
+        self._owns_client = client is None
+        self._closed = False
+        if client is None:
+            redis = _import_redis()
+            self._client = redis.from_url(
+                endpoint,
+                decode_responses=True,
+                socket_connect_timeout=connect_timeout_seconds,
+                socket_timeout=connect_timeout_seconds,
+            )
+        else:
+            self._client = client
+
+    def _key(self, task_id: str) -> str:
+        return f"{self._prefix}{quote(task_id, safe='')}"
+
+    @staticmethod
+    def _text(value: Any) -> str:
+        return value.decode() if isinstance(value, bytes) else str(value)
+
+    async def set_info(self, task_id: str, notification_config: Any) -> None:
+        dump = getattr(notification_config, "model_dump", None)
+        if not callable(dump):
+            raise TypeError("notification_config must provide model_dump()")
+        config_id = str(getattr(notification_config, "id", None) or uuid4())
+        payload = json.dumps(dump(by_alias=True, mode="json", exclude_none=False))
+        if len(payload.encode("utf-8")) > self._max_config_bytes:
+            raise ValueError("A2A push configuration exceeds the configured limit")
+        key = self._key(task_id)
+        await self._client.hset(key, config_id, payload)
+        await self._client.expire(key, max(1, math.ceil(self._ttl_seconds)))
+
+    async def get_info(self, task_id: str) -> list[Any]:
+        rows = await self._client.hgetall(self._key(task_id))
+        try:
+            from a2a.types import PushNotificationConfig
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("Redis push notification storage requires the 'a2a' extra") from exc
+        configs: list[Any] = []
+        for payload in rows.values():
+            try:
+                configs.append(
+                    PushNotificationConfig.model_validate(json.loads(self._text(payload)))
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return configs
+
+    async def delete_info(self, task_id: str, config_id: str | None = None) -> None:
+        key = self._key(task_id)
+        if config_id:
+            await self._client.hdel(key, config_id)
+        else:
+            await self._client.delete(key)
+
+    async def health_check(self) -> bool:
+        """Return whether Redis answers a ping probe."""
+        try:
+            return bool(await self._client.ping())
+        except Exception:
+            return False
+
+    async def aclose(self) -> None:
+        """Close an owned Redis client; injected clients remain caller-owned."""
+        if self._closed or not self._owns_client:
+            self._closed = True
+            return
+        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        if close is not None:
+            result = close()
+            if inspect.isawaitable(result):
+                await result
+        self._closed = True
+
+
 class HttpxPushNotificationSender:
     """Bounded, authenticated HTTPS sender for A2A task notifications."""
 
@@ -428,6 +646,8 @@ class HttpxPushNotificationSender:
 
 __all__ = [
     "HttpxPushNotificationSender",
+    "RedisA2ATaskStore",
+    "RedisPushNotificationConfigStore",
     "SqliteA2ATaskStore",
     "SqlitePushNotificationConfigStore",
 ]

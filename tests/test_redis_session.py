@@ -125,3 +125,48 @@ async def test_redis_operation_registry_claims_once_and_shares_result() -> None:
         await client_a.delete(f"{namespace}:operation:payment-1")
         await client_a.aclose()
         await client_b.aclose()
+
+
+@pytest.mark.asyncio
+async def test_redis_a2a_stores_share_tasks_and_push_configurations() -> None:
+    pytest.importorskip("a2a")
+    from a2a.types import PushNotificationConfig, Task, TaskState, TaskStatus
+
+    from micro_agent.interoperability import (
+        RedisA2ATaskStore,
+        RedisPushNotificationConfigStore,
+    )
+
+    endpoint = os.getenv("MICRO_AGENT_REDIS_URL", "redis://localhost:6379/0")
+    namespace = f"micro-agent-a2a-test-{uuid4().hex}"
+    client_a = redis.from_url(endpoint, decode_responses=True)
+    client_b = redis.from_url(endpoint, decode_responses=True)
+    task_a = RedisA2ATaskStore(endpoint, namespace=namespace, client=client_a, ttl_seconds=30)
+    task_b = RedisA2ATaskStore(endpoint, namespace=namespace, client=client_b, ttl_seconds=30)
+    push_a = RedisPushNotificationConfigStore(endpoint, namespace=namespace, client=client_a)
+    push_b = RedisPushNotificationConfigStore(endpoint, namespace=namespace, client=client_b)
+    tenant_a = type("Context", (), {"state": {"tenant_id": "tenant-a"}})()
+    tenant_b = type("Context", (), {"state": {"tenant_id": "tenant-b"}})()
+    task = Task(
+        id="task-1",
+        contextId="context-1",
+        status=TaskStatus(state=TaskState.working),
+    )
+    try:
+        await task_a.save(task, tenant_a)
+        shared = await task_b.get("task-1", tenant_a)
+        assert shared is not None
+        assert shared.status.state == TaskState.working
+        assert await task_b.get("task-1", tenant_b) is None
+        await push_a.set_info(
+            "task-1",
+            PushNotificationConfig(id="callback-1", url="https://callback.example/events"),
+        )
+        assert (await push_b.get_info("task-1"))[0].id == "callback-1"
+        assert await task_a.health_check()
+        assert await push_a.health_check()
+    finally:
+        await task_a.delete("task-1", tenant_a)
+        await push_a.delete_info("task-1")
+        await client_a.aclose()
+        await client_b.aclose()

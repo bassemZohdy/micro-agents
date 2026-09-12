@@ -39,11 +39,11 @@ database service operations and Cloud C5 edge hardening remain separate work.
 
 ### P1 — A2A and production state
 
-- [x] Add a durable, tenant-scoped A2A task store behind an SPI. The SQLite
-      reference store persists bounded task snapshots (including status,
-      context, artifacts, and cancellation transitions), expiry, and task-ID
-      lookup; a shared multi-replica backend remains open.
-- [x] Implement A2A push notifications on top of the durable store, including
+- [x] Add a durable, tenant-scoped A2A task store behind an SPI. SQLite is the
+      portable reference and Redis provides bounded, TTL-backed task snapshots
+      for independently scaled workers; shared Redis operations and failover
+      still require deployment validation.
+- [x] Implement A2A push notifications on top of the durable stores, including
       callback registration, bounded transient retry, HTTPS/host validation,
       callback authentication, and card capability advertisement. Delivery
       expiry and shared-worker cancellation policy remain conformance work.

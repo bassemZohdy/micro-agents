@@ -10,6 +10,8 @@ import pytest
 
 from micro_agent.interoperability.a2a_store import (
     HttpxPushNotificationSender,
+    RedisA2ATaskStore,
+    RedisPushNotificationConfigStore,
     SqliteA2ATaskStore,
     SqlitePushNotificationConfigStore,
 )
@@ -17,6 +19,8 @@ from micro_agent.interoperability.a2a_store import (
 pytest.importorskip("a2a")
 from a2a.server.tasks.push_notification_config_store import PushNotificationConfig
 from a2a.types import PushNotificationAuthenticationInfo, Task, TaskState, TaskStatus
+
+from tests.fake_redis import FakeRedis, FakeRedisBackend
 
 
 def _task(task_id: str = "task-1") -> object:
@@ -54,6 +58,42 @@ async def test_sqlite_task_store_expires_rows(tmp_path) -> None:
     assert await store.get("task-1") is None
     assert await store.purge_expired() == 0
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_redis_a2a_stores_share_tenant_scoped_tasks_and_push_configs() -> None:
+    backend = FakeRedisBackend()
+    endpoint = "redis://redis.example.test/0"
+    task_a = RedisA2ATaskStore(endpoint, namespace="a2a-test", client=FakeRedis(backend))
+    task_b = RedisA2ATaskStore(endpoint, namespace="a2a-test", client=FakeRedis(backend))
+    push_a = RedisPushNotificationConfigStore(
+        endpoint, namespace="a2a-test", client=FakeRedis(backend)
+    )
+    push_b = RedisPushNotificationConfigStore(
+        endpoint, namespace="a2a-test", client=FakeRedis(backend)
+    )
+    tenant_a = SimpleNamespace(state={"tenant_id": "tenant-a"})
+    tenant_b = SimpleNamespace(state={"tenant_id": "tenant-b"})
+    config = PushNotificationConfig(id="callback-1", url="https://callback.example.test/events")
+    try:
+        await task_a.save(_task(), tenant_a)
+        shared = await task_b.get("task-1", tenant_a)
+        assert shared is not None
+        assert shared.id == "task-1"
+        assert await task_b.get("task-1", tenant_b) is None
+        await push_a.set_info("task-1", config)
+        assert (await push_b.get_info("task-1"))[0].id == "callback-1"
+        await push_b.delete_info("task-1", "callback-1")
+        assert await push_a.get_info("task-1") == []
+        assert await task_a.health_check()
+        assert await push_a.health_check()
+    finally:
+        await task_a.delete("task-1", tenant_a)
+        await push_a.delete_info("task-1")
+        await task_a.aclose()
+        await task_b.aclose()
+        await push_a.aclose()
+        await push_b.aclose()
 
 
 @pytest.mark.asyncio
