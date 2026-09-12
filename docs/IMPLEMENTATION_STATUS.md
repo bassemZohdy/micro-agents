@@ -1,7 +1,7 @@
 # Implementation Status
 
 Last audited: 2026-09-12
-Audited implementation revision: `main` at commit `cdedc00`
+Audited implementation revision: merged `main` on 2026-09-12
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
