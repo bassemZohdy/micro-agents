@@ -235,6 +235,16 @@ secret manager). Startup fails if any declared credential reference — model,
 MCP server, or security — cannot be resolved. Resolved values are never
 included in models, responses, logs, or exception text.
 
+For Vault KV v2, use the built-in `VaultCredentialProvider` and reference a
+field as `vault://<mount>/<path>#<field>` (for example,
+`vault://secret/apps/greeter#api_key`). The provider performs a fresh HTTPS
+lookup for each resolution, accepts HTTP only for loopback development, sends
+the Vault token only as `X-Vault-Token`, and returns `None` for a missing path
+or field. Inject it into `build_runtime(..., credential_provider=provider)`;
+the provider owns its HTTP client when it creates one, so call `close()` during
+host shutdown. AWS Secrets Manager and cloud KMS adapters remain deployment-
+owned integrations behind the same `CredentialProvider` interface.
+
 Policy references (`security.policy_refs`) resolve at bootstrap through an
 injected `AgentPolicy`, a resolver callable, or the configured HTTP policy
 store. The store receives a `POST` request with

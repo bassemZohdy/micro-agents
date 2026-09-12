@@ -41,6 +41,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   response records, and observability ingestion, with boundary validation and
   a documented additive-versus-breaking compatibility policy.
 
+### Credentials
+
+- Added a strict `VaultCredentialProvider` for fresh Vault KV v2 lookups using
+  `vault://mount/path#field` references; tokens stay in memory and HTTP is
+  limited to loopback development.
+
 ### Interoperability, state, and operations
 
 - Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,

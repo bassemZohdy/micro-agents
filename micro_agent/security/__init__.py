@@ -20,6 +20,8 @@ from micro_agent.security.credentials import (
     CredentialProvider,
     EnvironmentCredentialProvider,
     StaticCredentialProvider,
+    VaultCredentialError,
+    VaultCredentialProvider,
 )
 from micro_agent.security.delegation import (
     DelegatedToken,
@@ -97,6 +99,8 @@ __all__ = [
     "TokenExchangeError",
     "TokenExchangeProvider",
     "UserContext",
+    "VaultCredentialError",
+    "VaultCredentialProvider",
     "build_security_context",
     "agent_policy_from_dict",
     "get_invocation_identity",

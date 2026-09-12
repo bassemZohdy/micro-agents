@@ -90,9 +90,11 @@ database service operations and Cloud C5 edge hardening remain separate work.
 - [x] Add a bundled native tool beyond `echo`: the bounded, side-effect-free
       `json_parse` utility is available for portable structured-data flows;
       domain tools still require installed plugins or programmatic injection.
-- [ ] Add credential integrations beyond environment bindings and
-      `StaticCredentialProvider`, such as Vault, AWS Secrets Manager, or a
-      cloud KMS.
+- [x] Add a Vault KV v2 credential integration beyond environment bindings and
+      `StaticCredentialProvider`; `VaultCredentialProvider` resolves
+      `vault://mount/path#field` references with strict HTTPS/loopback and
+      response validation. AWS Secrets Manager and cloud KMS remain optional
+      deployment-owned adapters.
 
 ### P2 — Definition and configuration
 
@@ -168,7 +170,8 @@ deferred until the standalone release gate closes.
 - [x] Add an OIDC-backed gateway authenticator to replace static bearer tokens;
       the gateway now validates issuer/audience/expiry/signature and maps the
       verified tenant claim, while static tokens remain available for local use.
-- [ ] Add Vault and cloud-managed secret-store resolvers.
+- [x] Add the Vault KV v2 resolver; cloud-managed secret-store resolvers remain
+      deployment-owned adapters behind the credential-provider interface.
 - [x] Add explicit authentication middleware to the registry, config, and
       observability plane APIs. Static-token and OIDC gateway authenticators
       can be supplied at app construction; readiness remains public and the

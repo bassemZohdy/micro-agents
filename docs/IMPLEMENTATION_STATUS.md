@@ -442,6 +442,8 @@ Implemented:
   installation in the Dockerfile
 - generated v1alpha1 cloud descriptor, config-record, and observability-batch
   schemas with matching boundary validation and compatibility documentation
+- strict Vault KV v2 credential resolution with fresh lookups and safe
+  endpoint/response handling
 - checked-in Kubernetes baseline with resource requests/limits, replica
   spreading, disruption budget, autoscaling, default-deny network policy,
   Prometheus scrape annotations, and a tested 25-second drain/30-second grace
