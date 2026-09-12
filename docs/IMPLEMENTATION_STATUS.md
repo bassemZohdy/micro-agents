@@ -20,7 +20,7 @@ readiness or protocol compliance.
 | Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both; the external HTTP/MCP harness is operator-invoked |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
-| Overall GitHub CI | Pass | [CI run #245](https://github.com/bassemZohdy/micro-agents/actions/runs/34705655560), all required jobs successful |
+| Overall GitHub CI | Pass | [CI run #249](https://github.com/bassemZohdy/micro-agents/actions/runs/34707849169), all required jobs successful |
 | Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); GitHub Releases/GHCR do not depend on Docker Hub, whose mirror job is opt-in |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
