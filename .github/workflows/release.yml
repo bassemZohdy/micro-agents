@@ -95,6 +95,22 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign and verify image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.image-build.outputs.digest }}
+          COSIGN_EXPERIMENTAL: "1"
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${CERTIFICATE_IDENTITY}" \
+            "${IMAGE}@${DIGEST}"
+
       - name: Attest image build provenance
         uses: actions/attest-build-provenance@v1
         with:
@@ -107,10 +123,28 @@ jobs:
           subject-path: dist/*
 
       - name: Generate SBOM
+        id: sbom
         uses: anchore/sbom-action@v0
         with:
           format: spdx-json
           output-file: micro-agents-sbom.spdx.json
+
+      - name: Attest and verify image SBOM
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.image-build.outputs.digest }}
+          COSIGN_EXPERIMENTAL: "1"
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
+        run: |
+          cosign attest --yes \
+            --type spdxjson \
+            --predicate micro-agents-sbom.spdx.json \
+            "${IMAGE}@${DIGEST}"
+          cosign verify-attestation \
+            --type spdxjson \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${CERTIFICATE_IDENTITY}" \
+            "${IMAGE}@${DIGEST}"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
