@@ -38,7 +38,8 @@ Definitions carry `credential_ref` references and overlays carry endpoints —
 the store keeps exactly what the core validated and nothing else. Existing
 secret-management systems integrate through the one-method `SecretResolver`
 protocol (`cloud.config.EnvironmentSecretResolver` reads references from
-environment variables; Vault or cloud-managed stores implement the same
+environment variables; `micro_agent.security.VaultCredentialProvider`
+supports Vault KV v2, and cloud-managed stores can implement the same
 protocol), so secret values are resolved at use time inside the deployment
 and never pass through, or live in, the config plane.
 
