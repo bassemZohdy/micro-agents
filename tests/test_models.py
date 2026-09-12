@@ -1,5 +1,8 @@
 """Tests for Micro-Agent Model Support."""
 
+import json
+
+import httpx
 import pytest
 
 from micro_agent.models import (
@@ -275,6 +278,156 @@ class TestOpenAICompatProvider:
             import asyncio
 
             asyncio.run(provider.aclose())
+
+
+class TestAnthropicProvider:
+    """Wire-contract behavior of the native Anthropic Messages adapter."""
+
+    @pytest.mark.asyncio
+    async def test_translates_system_tools_and_tool_results(self):
+        captured: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["request"] = request
+            captured["payload"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "msg_1",
+                    "model": "claude-test",
+                    "stop_reason": "end_turn",
+                    "content": [
+                        {"type": "text", "text": "done"},
+                        {"type": "tool_use", "id": "tool-1", "name": "echo", "input": {"x": 1}},
+                    ],
+                    "usage": {"input_tokens": 4, "output_tokens": 3},
+                },
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        from micro_agent.models import AnthropicConfig, AnthropicProvider
+
+        provider = AnthropicProvider(
+            AnthropicConfig(
+                endpoint="https://api.anthropic.test",
+                model_id="claude-test",
+                api_key="anthropic-token",
+                http_client=client,
+            )
+        )
+        response = await provider.generate(
+            ModelConfig(ref="claude", model_id="claude-test", generation={"max_tokens": 42}),
+            [
+                {"role": "system", "content": "Be concise."},
+                {"role": "user", "content": "call echo"},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "tool-1",
+                            "function": {"name": "echo", "arguments": '{"x": 1}'},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "tool-1",
+                    "name": "echo",
+                    "content": '{"x": 1}',
+                },
+            ],
+            tools=[{"name": "echo", "description": "Echo", "input_schema": {"type": "object"}}],
+        )
+        await provider.aclose()
+        request = captured["request"]
+        payload = captured["payload"]
+        assert isinstance(request, httpx.Request)
+        assert request.url.path == "/v1/messages"
+        assert request.headers["x-api-key"] == "anthropic-token"
+        assert isinstance(payload, dict)
+        assert payload["system"] == "Be concise."
+        assert payload["max_tokens"] == 42
+        assert payload["tools"][0]["input_schema"] == {"type": "object"}
+        assert payload["messages"][1]["content"][0]["type"] == "tool_use"
+        assert payload["messages"][2]["content"][0]["type"] == "tool_result"
+        assert response.content == "done"
+        assert response.tool_requests[0]["id"] == "tool-1"
+        assert response.usage == {
+            "prompt_tokens": 4,
+            "completion_tokens": 3,
+            "total_tokens": 7,
+        }
+
+    @pytest.mark.asyncio
+    async def test_streams_text_tool_use_and_usage(self):
+        sse_events = [
+            {"type": "message_start", "message": {"usage": {"input_tokens": 2}}},
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text"},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "hi"},
+            },
+            {
+                "type": "content_block_start",
+                "index": 1,
+                "content_block": {"type": "tool_use", "id": "tool-2", "name": "echo", "input": {}},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "input_json_delta", "partial_json": '{"x":2}'},
+            },
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use"},
+                "usage": {"output_tokens": 1},
+            },
+            {"type": "message_stop"},
+        ]
+        sse = "\n".join(f"data: {json.dumps(event, separators=(',', ':'))}" for event in sse_events)
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, text=sse))
+        )
+        from micro_agent.models import AnthropicConfig, AnthropicProvider
+
+        provider = AnthropicProvider(
+            AnthropicConfig(
+                endpoint="https://api.anthropic.test/v1", model_id="claude-test", http_client=client
+            )
+        )
+        events = [
+            event
+            async for event in provider.stream(
+                ModelConfig(ref="claude", model_id="claude-test"),
+                [{"role": "user", "content": "hi"}],
+            )
+        ]
+        await provider.aclose()
+        assert [event.delta for event in events if event.delta] == ["hi"]
+        final = events[-1].response
+        assert final is not None
+        assert final.tool_requests[0]["arguments"] == {"x": 2}
+        assert final.finish_reason == "tool_use"
+        assert final.usage == {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}
+
+    def test_capabilities_and_model_id_validation(self):
+        from micro_agent.models import AnthropicConfig, AnthropicProvider
+
+        with pytest.raises(ValueError, match="model_id"):
+            AnthropicProvider(AnthropicConfig())
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200))
+        )
+        provider = AnthropicProvider(AnthropicConfig(model_id="claude-test", http_client=client))
+        assert provider.capabilities().tool_use is True
+        assert provider.capabilities().streaming is True
+        assert provider.capabilities().structured_output is False
 
 
 def _model_config():

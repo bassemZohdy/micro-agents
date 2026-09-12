@@ -3,9 +3,10 @@
 The bootstrap translates a portable definition and environment bindings into
 provider objects consumed by the selected runtime. Provider and runtime
 selection are explicit: an endpoint (or an OpenAI-compatible provider name)
-selects :class:`OpenAICompatProvider`; ``fake`` selects the deterministic test
-provider; ``MICRO_AGENT_RUNTIME=google-adk`` selects the optional Google ADK
-adapter; unsupported or incomplete configurations fail before service start.
+selects :class:`OpenAICompatProvider`; ``anthropic`` selects the native
+Messages adapter; ``fake`` selects the deterministic test provider;
+``MICRO_AGENT_RUNTIME=google-adk`` selects the optional Google ADK adapter;
+unsupported or incomplete configurations fail before service start.
 
 Constructed from configuration:
 
@@ -55,6 +56,8 @@ from micro_agent.memory import (
     RedisMemoryProvider,
 )
 from micro_agent.models import (
+    AnthropicConfig,
+    AnthropicProvider,
     FakeModelConfig,
     FakeModelProvider,
     ModelProvider,
@@ -116,6 +119,7 @@ _OPENAI_PROVIDER_NAMES = {
     "openai_compat",
 }
 _FAKE_PROVIDER_NAMES = {"fake", "test", "stub"}
+_ANTHROPIC_PROVIDER_NAMES = {"anthropic", "claude"}
 
 
 def build_runtime(
@@ -686,6 +690,22 @@ def _build_model_provider(
     if provider_name in _FAKE_PROVIDER_NAMES:
         return FakeModelProvider(fake_model_config)
 
+    if provider_name in _ANTHROPIC_PROVIDER_NAMES:
+        if not config.model_id:
+            raise BootstrapError(
+                "Anthropic model provider requires model_id or MICRO_AGENT_MODEL_ID; "
+                "model_ref is a logical alias only"
+            )
+        return AnthropicProvider(
+            AnthropicConfig(
+                endpoint=endpoint or "https://api.anthropic.com",
+                model_id=config.model_id,
+                api_key=config.model_api_key,
+                timeout_seconds=float(config.model_timeout_seconds or 30),
+                telemetry=telemetry,
+            )
+        )
+
     # An endpoint is an unambiguous request for a network provider.  This also
     # makes environment-only configuration useful without requiring a provider
     # discriminator.
@@ -711,7 +731,9 @@ def _build_model_provider(
         )
 
     if provider_name:
-        supported = ", ".join(sorted(_FAKE_PROVIDER_NAMES | _OPENAI_PROVIDER_NAMES))
+        supported = ", ".join(
+            sorted(_ANTHROPIC_PROVIDER_NAMES | _FAKE_PROVIDER_NAMES | _OPENAI_PROVIDER_NAMES)
+        )
         raise BootstrapError(
             f"Unsupported model provider '{config.model_provider}'. "
             f"Supported providers: {supported}"

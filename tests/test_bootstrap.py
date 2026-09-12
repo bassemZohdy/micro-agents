@@ -14,7 +14,7 @@ from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
-from micro_agent.models import FakeModelProvider, OpenAICompatProvider
+from micro_agent.models import AnthropicProvider, FakeModelProvider, OpenAICompatProvider
 from micro_agent.security import (
     AgentPolicy,
     RedisApprovalStore,
@@ -178,6 +178,27 @@ async def test_definition_selects_openai_compatible_provider():
         assert provider._config.endpoint == "https://llm.example.test/v1"
         assert provider._config.model_id == "gpt-4o-mini"
         assert provider._config.timeout_seconds == 12.0
+    finally:
+        await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_definition_selects_anthropic_messages_provider():
+    bootstrap = build_runtime(
+        _definition(
+            ref="reasoning-model",
+            model_id="claude-3-5-sonnet-latest",
+            provider="anthropic",
+            endpoint="https://api.anthropic.example",
+            timeout_seconds=17,
+        )
+    )
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, AnthropicProvider)
+        assert provider._config.endpoint == "https://api.anthropic.example"
+        assert provider._config.model_id == "claude-3-5-sonnet-latest"
+        assert provider._config.timeout_seconds == 17.0
     finally:
         await bootstrap.runtime.close()
 

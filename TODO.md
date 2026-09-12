@@ -81,8 +81,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
 
 ### P2 — Models, tools, and credentials
 
-- [ ] Add model adapters beyond the fake and OpenAI-compatible chat-completion
-      providers, such as Anthropic, native Google Gemini, or Azure OpenAI.
+- [x] Add a model adapter beyond the fake and OpenAI-compatible providers:
+      the native Anthropic Messages adapter supports tool-use translation and
+      streaming; native Google Gemini and Azure OpenAI remain optional future
+      adapters.
 - [ ] Add bundled native tools beyond `echo`; domain tools currently require
       installed plugins or programmatic injection.
 - [ ] Add credential integrations beyond environment bindings and

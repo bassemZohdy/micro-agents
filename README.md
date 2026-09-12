@@ -202,7 +202,7 @@ state, or A2A task interoperability.
 |---|---|---|
 | Definition | Typed loader, v1alpha1/v1beta1 schemas and migration fixture, semantic uniqueness/format checks, runtime contract enforcement, and deployment endpoint overlays | catalog contract for model aliases |
 | Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests and native confirmation continuations | external production state |
-| Models | Explicit fake provider and definition/environment-selected OpenAI-compatible HTTP client with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
+| Models | Explicit fake provider, native Anthropic Messages, and definition/environment-selected OpenAI-compatible HTTP clients with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials and remote production load testing |
 | Tools | `echo` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, and application-visible bounded notifications | remote production load testing |
 | A2A | official SDK card and JSON-RPC non-streaming/streaming task lifecycles, tenant-scoped SQLite task/push stores, authenticated integration tests, and runtime-wired cancellation | full A2A v1.0.1 conformance and production shared-state backend |

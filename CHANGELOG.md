@@ -61,6 +61,10 @@ All notable changes to the Micro-Agents project are documented in this file.
   optional bearer authentication, secret-provider token bindings, HTTPS/
   loopback transport policy, redirect refusal, and fail-closed response
   validation. Bootstrap now auto-wires the store when configured.
+- Added a native Anthropic Messages model adapter with tool-use transcript
+  translation, SSE streaming, usage mapping, capability negotiation, and
+  injectable HTTP transport; `provider: anthropic`/`claude` is now wired by
+  executable bootstrap.
 - Added a durable Redis-backed approval continuation store with expiry-safe
   serialization, malformed-record cleanup, health checks, and executable
   bootstrap configuration via `MICRO_AGENT_APPROVAL_ENDPOINT`.

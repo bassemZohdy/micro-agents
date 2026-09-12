@@ -6,8 +6,8 @@ metadata:
     app: micro-agent
 data:
   agent.yaml: |
-    # Architecture example only: the current executable does not wire the
-    # declared native tools, MCP servers, external state, policies, or model.
+    # Architecture example only: supply the referenced model credentials,
+    # native tools, MCP servers, state providers, and policy store before use.
     apiVersion: microagents.io/v1alpha1
     kind: MicroAgent
 
@@ -55,6 +55,7 @@ data:
         model:
           ref: reasoning-model
           provider: anthropic
+          model_id: claude-3-5-sonnet-latest
           timeout_seconds: 30
           generation:
             temperature: 0.2
