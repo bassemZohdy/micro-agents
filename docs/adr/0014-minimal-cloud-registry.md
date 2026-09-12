@@ -24,9 +24,10 @@ snapshots and serves them marked stale during registry outages.
 
 - the control-plane code is reviewable and testable next to the framework
   it observes, without the core gaining a single cloud import or dependency;
-- the in-memory, unauthenticated registry is explicitly minimal: persistence
-  waits for the C2 config plane and edge authentication for the C3 gateway,
-  and both will replace, not extend, the in-process store;
+- the in-memory, unauthenticated registry is explicitly minimal: durable
+  persistence and plane authentication remain separate C5 hardening work;
+  the adjacent C2 config plane and C3 gateway do not silently replace the
+  registry's storage or API boundary;
 - moving `cloud` to its own repository/deployment later is a packaging step
   because the import boundary already matches the deployment boundary;
 - descriptor evolution starts at `v1alpha1` with strict schema-version

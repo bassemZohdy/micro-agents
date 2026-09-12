@@ -78,6 +78,7 @@ def agent_card_from_definition(
     security_scheme: dict[str, Any] | None = None,
     scheme_name: str = "oidc",
     streaming: bool = False,
+    push_notifications: bool = False,
 ) -> Any:
     """Build the SDK AgentCard from a MicroAgentDefinition.
 
@@ -106,7 +107,7 @@ def agent_card_from_definition(
         skills=skills_mapping(definition),
         capabilities=a2a_types.AgentCapabilities(
             streaming=streaming,
-            push_notifications=False,
+            push_notifications=push_notifications,
         ),
         default_input_modes=["application/json"],
         default_output_modes=["application/json"],

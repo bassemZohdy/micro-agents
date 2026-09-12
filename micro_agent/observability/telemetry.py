@@ -35,6 +35,20 @@ _CONTENT_ATTRIBUTE_KEYS = {
     "response",
     "response.body",
 }
+_DEFAULT_HISTOGRAM_BUCKETS = (
+    1.0,
+    5.0,
+    10.0,
+    25.0,
+    50.0,
+    100.0,
+    250.0,
+    500.0,
+    1000.0,
+    2500.0,
+    5000.0,
+    10000.0,
+)
 
 
 def redact_mapping(value: Any, known_secrets: set[str] | None = None) -> Any:
@@ -141,6 +155,7 @@ class MetricsCollector:
 
     def __init__(self) -> None:
         self._metrics: list[MetricPoint] = []
+        self._histograms: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]] = {}
 
     def record(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         """Record a metric."""
@@ -156,9 +171,56 @@ class MetricsCollector:
             return list(self._metrics)
         return [m for m in self._metrics if m.name == name]
 
+    def observe_histogram(
+        self,
+        name: str,
+        value: float,
+        labels: dict[str, str] | None = None,
+        *,
+        buckets: tuple[float, ...] = _DEFAULT_HISTOGRAM_BUCKETS,
+    ) -> None:
+        """Record a value in a bounded cumulative histogram."""
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("histogram values must be finite and non-negative")
+        normalized_buckets = tuple(sorted(set(float(bucket) for bucket in buckets)))
+        if not normalized_buckets or normalized_buckets[-1] <= 0:
+            raise ValueError("histogram buckets must contain a positive value")
+        label_key = tuple(sorted((str(key), str(val)) for key, val in (labels or {}).items()))
+        key = (name, label_key)
+        histogram = self._histograms.setdefault(
+            key,
+            {
+                "buckets": {bucket: 0 for bucket in normalized_buckets},
+                "count": 0,
+                "sum": 0.0,
+            },
+        )
+        # A metric's bucket layout is fixed after first observation.  Values
+        # from later calls use the existing layout to keep scrapes stable.
+        for bucket in histogram["buckets"]:
+            if value <= bucket:
+                histogram["buckets"][bucket] += 1
+        histogram["count"] += 1
+        histogram["sum"] += value
+
+    def get_histogram(
+        self, name: str, labels: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
+        """Return a copy of one histogram snapshot."""
+        label_key = tuple(sorted((str(key), str(val)) for key, val in (labels or {}).items()))
+        histogram = self._histograms.get((name, label_key))
+        if histogram is None:
+            return None
+        return {
+            "buckets": dict(histogram["buckets"]),
+            "count": histogram["count"],
+            "sum": histogram["sum"],
+        }
+
     def clear(self) -> None:
         """Clear all recorded metrics."""
         self._metrics.clear()
+        self._histograms.clear()
 
     def prometheus_text(self) -> str:
         """Render a bounded snapshot in Prometheus text format.
@@ -186,6 +248,19 @@ class MetricsCollector:
                 series[key] = point.value
                 kinds.setdefault(name, "gauge")
 
+        histogram_series: list[tuple[str, tuple[tuple[str, str], ...], str, float]] = []
+        for (histogram_name, label_key), histogram in self._histograms.items():
+            name = _prometheus_name(histogram_name)
+            labels = tuple(
+                sorted((_prometheus_name(str(key)), str(value)) for key, value in label_key)
+            )
+            kinds[name] = "histogram"
+            for bucket, count in histogram["buckets"].items():
+                histogram_series.append((name, labels, f"bucket:{bucket}", float(count)))
+            histogram_series.append((name, labels, "bucket:+Inf", float(histogram["count"])))
+            histogram_series.append((name, labels, "sum", float(histogram["sum"])))
+            histogram_series.append((name, labels, "count", float(histogram["count"])))
+
         lines: list[str] = []
         emitted_types: set[str] = set()
         for (name, labels), value in sorted(series.items()):
@@ -200,6 +275,24 @@ class MetricsCollector:
                     + "}"
                 )
             lines.append(f"{name}{label_text} {_format_metric_value(value)}")
+        for name, labels, suffix, value in sorted(histogram_series):
+            if name not in emitted_types:
+                lines.append(f"# TYPE {name} histogram")
+                emitted_types.add(name)
+            label_values = list(labels)
+            if suffix.startswith("bucket:"):
+                label_values = [("le", suffix.removeprefix("bucket:")), *label_values]
+            label_text = ""
+            if label_values:
+                label_text = (
+                    "{"
+                    + ",".join(
+                        f'{key}="{_prometheus_escape(value)}"' for key, value in label_values
+                    )
+                    + "}"
+                )
+            metric_name = f"{name}_bucket" if suffix.startswith("bucket:") else f"{name}_{suffix}"
+            lines.append(f"{metric_name}{label_text} {_format_metric_value(value)}")
         return "\n".join(lines) + ("\n" if lines else "")
 
 
@@ -504,6 +597,17 @@ class Telemetry:
                 else:
                     instrument.record(value, attributes=bounded)
 
+    def observe_histogram(
+        self, name: str, value: float, labels: dict[str, str] | None = None
+    ) -> None:
+        """Record a histogram value in the local and optional OTel collectors."""
+        bounded = self._bounded_labels(name, labels)
+        self.metrics.observe_histogram(name, value, bounded)
+        instrument = self._otel_instrument(name, histogram=True)
+        if instrument is not None:
+            with suppress(Exception):
+                instrument.record(value, attributes=bounded)
+
     def record_model_usage(
         self, usage: Mapping[str, Any], labels: dict[str, str] | None = None
     ) -> None:
@@ -579,7 +683,9 @@ class Telemetry:
             bounded[str(key)[: self._max_attribute_length]] = value
         return bounded
 
-    def _otel_instrument(self, name: str, *, counter: bool) -> Any | None:
+    def _otel_instrument(
+        self, name: str, *, counter: bool = False, histogram: bool = False
+    ) -> Any | None:
         if self._otel_meter is None:
             return None
         cache = self._otel_counters if counter else self._otel_histograms
@@ -588,7 +694,7 @@ class Telemetry:
         try:
             instrument = (
                 self._otel_meter.create_counter(name, unit="1")
-                if counter
+                if counter and not histogram
                 else self._otel_meter.create_histogram(name, unit="ms")
             )
         except Exception:  # noqa: BLE001 — telemetry must never break work

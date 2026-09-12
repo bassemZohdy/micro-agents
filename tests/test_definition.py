@@ -25,6 +25,15 @@ class TestMinimalDefinition:
         assert definition.metadata.name == "compatibility-fixture"
         assert definition.spec.behavior.instructions
 
+    def test_v1beta1_compatibility_fixture_migrates(self):
+        fixture = COMPATIBILITY_FIXTURES_DIR / "v1beta1-minimal.yaml"
+        definition = load_definition_from_file(fixture)
+        assert definition.api_version == "microagents.io/v1beta1"
+        assert definition.spec.behavior.input_contract.parameters[0].name == "message"
+        assert definition.spec.dependencies.knowledge[0].source_type == "sqlite"
+        assert definition.spec.dependencies.knowledge[0].max_results == 3
+        assert definition.spec.dependencies.mcp_servers[0].credential_ref == "mcp-token"
+
     def test_minimal_definition_loads(self):
         data = {
             "apiVersion": "microagents.io/v1alpha1",
@@ -378,3 +387,10 @@ class TestSchema:
         assert "$schema" in schema
         assert "$id" in schema
         assert "properties" in schema
+
+    def test_versioned_schema_has_stable_identity(self):
+        from micro_agent.definition.schema import generate_schema
+
+        schema = generate_schema("v1beta1")
+        assert schema["$id"] == "https://microagents.io/schemas/v1beta1/micro-agent.json"
+        assert schema["title"] == "MicroAgentDefinition v1beta1"

@@ -7,8 +7,10 @@ transport-agnostic and exercised with the fake client in tests.
 
 from __future__ import annotations
 
+import inspect
 import json
-from collections.abc import Callable, Mapping
+from collections import deque
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -19,6 +21,7 @@ from micro_agent.mcp.mcp import (
     McpConfig,
     McpConnectionState,
     McpDiscovery,
+    McpNotification,
     McpPrompt,
     McpResource,
     McpTool,
@@ -244,6 +247,8 @@ class McpConnectionManager:
         client_factory: Callable[[McpConfig], McpClient] | None = None,
         credential_resolver: Callable[[str], str | None] | None = None,
         endpoint_overrides: Mapping[str, str] | None = None,
+        notification_handler: Callable[[McpNotification], Awaitable[None] | None] | None = None,
+        max_notifications: int = 1000,
     ) -> None:
         self._security = security_policy or McpSecurityPolicy()
         self._client_factory = client_factory
@@ -252,6 +257,29 @@ class McpConnectionManager:
         self._clients: dict[str, McpClient] = {}
         self._tools: dict[str, McpToolAdapter] = {}
         self._discovery: dict[str, McpDiscovery] = {}
+        if max_notifications < 1:
+            raise ValueError("max_notifications must be greater than zero")
+        self._notification_handler = notification_handler
+        self._notifications: deque[McpNotification] = deque(maxlen=max_notifications)
+
+    async def _on_notification(self, server_ref: str, raw: Any) -> None:
+        """Normalize an SDK notification and expose it at the app boundary."""
+        root = getattr(raw, "root", raw)
+        method = str(getattr(root, "method", type(root).__name__))
+        params = getattr(root, "params", {})
+        if hasattr(params, "model_dump"):
+            params = params.model_dump(by_alias=True, mode="json", exclude_none=True)
+        event = McpNotification(
+            server_ref=server_ref,
+            method=method,
+            params=dict(params) if isinstance(params, Mapping) else {},
+            raw=raw,
+        )
+        self._notifications.append(event)
+        if self._notification_handler is not None:
+            result = self._notification_handler(event)
+            if inspect.isawaitable(result):
+                await result
 
     def _resolve_credential(self, config: McpConfig) -> str | None:
         """Resolve a declared credential reference through the provider."""
@@ -296,6 +324,11 @@ class McpConnectionManager:
         self._security.validate(config)
         credential = self._resolve_credential(config)
         client = self._default_client(config)
+
+        async def handle_notification(message: Any) -> None:
+            await self._on_notification(ref.ref, message)
+
+        client.set_notification_handler(handle_notification)
         await client.connect(config, credential)
         if client.state() != McpConnectionState.CONNECTED:
             raise ConnectionError(f"mcp '{ref.ref}' did not reach connected state")
@@ -334,6 +367,10 @@ class McpConnectionManager:
     def discovery(self, server_ref: str) -> McpDiscovery | None:
         """Preserved discovery metadata (resources and prompts) for a server."""
         return self._discovery.get(server_ref)
+
+    def notifications(self) -> list[McpNotification]:
+        """Return a bounded snapshot of notifications received so far."""
+        return list(self._notifications)
 
     async def health_probe(self) -> bool:
         """Healthy when every connected client is still connected."""

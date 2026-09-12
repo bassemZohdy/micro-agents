@@ -801,6 +801,9 @@ class GoogleAdkRuntime(AgentRuntime):
         self._telemetry.finish_span(span)
         self._telemetry.increment("agent_invocations_total", labels)
         self._telemetry.record("agent_invocation_latency_ms", latency_ms, labels)
+        self._telemetry.observe_histogram(
+            "agent_invocation_latency_histogram_ms", latency_ms, labels
+        )
         return response
 
     async def _auto_store(

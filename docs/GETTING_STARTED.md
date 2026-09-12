@@ -66,6 +66,15 @@ unchanged and pass a typed `EnvironmentOverlay` to `build_runtime()`; see the
 [configuration reference](CONFIGURATION.md#deployment-endpoint-overlays) for
 the validation and precedence rules.
 
+For a durable local knowledge index, set
+`MICRO_AGENT_KNOWLEDGE_ENDPOINT=sqlite:///var/lib/micro-agent/knowledge.db`
+and provision documents through the `SqliteKnowledgeRetriever` SPI. When the
+definition enables A2A, set
+`MICRO_AGENT_A2A_STORE_PATH=/var/lib/micro-agent/a2a.db` to persist bounded
+tenant-scoped task snapshots and push callback configuration. These SQLite
+backends are single-process reference stores; use injected shared providers
+for multiple replicas.
+
 ## Exercise the API
 
 ```bash
@@ -82,7 +91,8 @@ Expected invoke content is the deterministic fake response unless the runtime
 is constructed programmatically with another provider. The default application
 also serves the standard A2A agent card at
 `/.well-known/agent-card.json`; enable `spec.interoperability.a2a.enabled`
-for the official SDK JSON-RPC task endpoint.
+for the official SDK JSON-RPC task endpoint. Push capability is advertised
+when the A2A store path or a push configuration store is configured.
 
 `timeout_seconds` is optional. It sets an end-to-end deadline for the request;
 the runtime cancels any active model, tool/MCP, session, or memory operation
@@ -93,15 +103,15 @@ when that budget expires and the HTTP API returns 504.
 ```bash
 ruff check .
 ruff format --check .
-mypy micro_agent runtimes
-pytest -m "not integration and not e2e"
+mypy micro_agent cloud runtimes
+pytest -m "not integration and not e2e and not otel"
 pytest -m integration
 pytest -m e2e
 ```
 
 The development extra includes the PyYAML typing stubs required by strict
-mypy. CI runs unit-selected tests on Python 3.11 and 3.12 and runs integration
-and E2E suites separately.
+mypy. CI runs unit-selected tests on Python 3.11 and 3.12 and runs integration,
+E2E, ADK, and OTel suites separately.
 
 ## Programmatic real-model injection
 
@@ -142,8 +152,9 @@ policy, knowledge, credential, and telemetry mappings are validated at startup;
 unsupported external session endpoints fail fast, while model credential
 references resolve through the configured provider and native Google models
 use an owned GenAI API-key client. Set the definition's session persistence to
-`memory` to enable process-local ADK checkpointing; resume by sending a request
-with the failed request's `checkpoint_id` and an empty input.
+`memory`, `sqlite`, or `external` with a matching provider to select the ADK
+session/state backing; resume by sending a request with the failed request's
+`checkpoint_id` and an empty input.
 
 ## Container
 

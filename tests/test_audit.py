@@ -14,6 +14,7 @@ from micro_agent.observability import (
     FileAuditSink,
     JsonlAuditSink,
     NullAuditSink,
+    SqliteAuditSink,
 )
 from micro_agent.security import AgentPolicy
 from runtimes.adk import AdkRuntime, AdkRuntimeConfig
@@ -54,6 +55,11 @@ def test_build_audit_sink_selection(tmp_path):
         build_audit_sink(ResolvedConfig(audit_sink="file", audit_file=str(tmp_path / "a.jsonl"))),
         FileAuditSink,
     )
+    sink = build_audit_sink(
+        ResolvedConfig(audit_sink="sqlite", audit_database=str(tmp_path / "audit.db"))
+    )
+    assert isinstance(sink, SqliteAuditSink)
+    sink.close()
 
 
 def test_file_sink_requires_path():
@@ -64,6 +70,16 @@ def test_file_sink_requires_path():
 def test_unknown_audit_sink_fails():
     with pytest.raises(BootstrapError, match="Unsupported audit sink"):
         build_audit_sink(ResolvedConfig(audit_sink="syslog"))
+
+
+def test_sqlite_sink_redacts_and_filters_tenant(tmp_path):
+    sink = SqliteAuditSink(tmp_path / "audit.db", retention_seconds=60)
+    sink.record("auth.failure", tenant_id="tenant-a", token="secret")
+    sink.record("auth.failure", tenant_id="tenant-b")
+    events = sink.events(tenant_id="tenant-a")
+    assert len(events) == 1
+    assert events[0]["token"] == "[REDACTED]"
+    sink.close()
 
 
 @pytest.mark.asyncio

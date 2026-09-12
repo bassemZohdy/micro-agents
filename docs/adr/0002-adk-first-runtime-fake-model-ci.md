@@ -1,6 +1,6 @@
 # ADR 0002 — One Runtime First, with a Fake Model for CI
 
-Date: 2026-08-30 · Status: Accepted in principle; implementation incomplete
+Date: 2026-08-30 · Status: Accepted
 
 ## Context
 
@@ -25,5 +25,5 @@ work.
 
 - CI needs no network or API keys; behavioral tests cover the full invoke loop.
 - The custom loop and genuine adapter have separate package boundaries.
-- Credential providers beyond environment bindings and a genuine ADK adapter
-  remain release-blocking work.
+- Broader provider and external-service integrations remain follow-up work;
+  the current release gate is the owner-side PyPI trusted-publisher setup.

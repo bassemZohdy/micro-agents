@@ -20,7 +20,7 @@ pip install -e ".[dev,docs]"
 
 ruff check .
 ruff format --check .
-mypy micro_agent runtimes
+mypy micro_agent cloud runtimes
 pytest -q
 
 # Definition/schema drift
@@ -38,7 +38,7 @@ not hide or waive them locally.
 Use the existing pytest markers for targeted runs:
 
 ```bash
-pytest -m "not integration and not e2e"
+pytest -m "not integration and not e2e and not otel"
 pytest -m integration
 pytest -m e2e
 ```

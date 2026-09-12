@@ -6,6 +6,7 @@ from micro_agent.definition.contracts import (
     validate_output,
 )
 from micro_agent.definition.loader import (
+    SUPPORTED_API_VERSIONS,
     DefinitionError,
     load_definition_from_dict,
     load_definition_from_file,
@@ -52,6 +53,7 @@ __all__ = [
     "OutputContract",
     "RuntimeSemantics",
     "Security",
+    "SUPPORTED_API_VERSIONS",
     "SessionConfig",
     "SkillDefinition",
     "ToolDefinition",

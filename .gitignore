@@ -12,6 +12,7 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+site/
 .tox/
 .nox/
 .venv/

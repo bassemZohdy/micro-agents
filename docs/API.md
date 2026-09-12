@@ -40,10 +40,11 @@ enforced when parameters are declared: required fields, JSON-compatible types,
 and unknown fields are rejected. `caller_metadata` is untrusted application
 data and must not be used as authenticated caller identity.
 
-Requests are limited to 1 MiB by default when `create_app()` is used. A
-deployment gateway should apply the same limit and reject chunked requests
-that exceed it; applications can choose a smaller limit with the
-`max_request_bytes` factory argument.
+Requests are limited to 1 MiB by default when `create_app()` is used. The
+application checks both `Content-Length` and streamed/chunked request bodies;
+applications can choose a smaller limit with the `max_request_bytes` factory
+argument. A deployment gateway should enforce a matching limit before the
+request reaches the service.
 
 ### CORS
 
@@ -60,10 +61,16 @@ retry headers are exposed to browser clients.
 
 ### Rate limiting
 
-The framework does not choose a rate-limit algorithm or local counter. Pass a
-deployment-owned `RateLimiter` implementation to
-`create_app(rate_limiter=...)`. Its `check(request)` method may be synchronous
-or asynchronous and returns either a boolean or `RateLimitDecision`:
+The executable can install the built-in, process-local token-bucket limiter by
+setting `MICRO_AGENT_RATE_LIMIT_PER_MINUTE` and optionally
+`MICRO_AGENT_RATE_LIMIT_BURST`. Embedders can pass a shared
+`InMemoryRateLimitStore` or their own `RateLimiter` implementation to
+`create_app(rate_limiter=...)`. The built-in store is bounded and evicts idle
+keys; it is not a cross-replica coordination mechanism.
+
+For gateway- or datastore-owned policies, pass a `RateLimiter` whose
+`check(request)` method may be synchronous or asynchronous and returns either
+a boolean or `RateLimitDecision`:
 
 ```python
 from micro_agent.interoperability import RateLimitDecision, create_app
@@ -89,6 +96,22 @@ Rejected requests return HTTP 429 with `detail.code: rate_limited`, a
 `rate_limiter_unavailable` HTTP 503 contract. Health and discovery routes are
 not rate-limited by this hook. Use a shared gateway or datastore for limits
 across replicas.
+
+## A2A task persistence and push notifications
+
+When the official `a2a` extra is installed and A2A is enabled in the
+definition, `create_app(a2a_store_path=...)` enables the SQLite reference
+backend. Tasks are stored as bounded JSON snapshots with expiry and a tenant
+namespace derived from verified identity. The same database stores push
+callback configurations. A2A push delivery validates callback URLs, requires
+HTTPS outside loopback, applies optional host allowlists, forwards configured
+notification credentials, and retries transient failures with bounded
+backoff. Supply custom `a2a_task_store`, `a2a_push_config_store`, or
+`a2a_push_sender` implementations for a shared production backend.
+
+The standard card advertises push support only when a push configuration store
+is mounted. The SQLite backend is a portable reference and single-process
+deployment baseline; it does not replace a multi-replica database service.
 
 ## OpenAI-compatible model calls
 
@@ -228,9 +251,10 @@ whether the instance can serve traffic. The readiness endpoint returns HTTP
 ## Operational metrics
 
 `GET /metrics` is a public scrape endpoint that returns Prometheus text format.
-Counter points are accumulated per label set and other points expose their
-latest value. The lightweight collector is intended for local/single-process
-scraping; configure an OpenTelemetry metrics provider/exporter for durable
+Counter points are accumulated per label set, non-histogram points expose
+their latest value, and histogram observations export cumulative buckets,
+`_sum`, and `_count` series. The lightweight collector is intended for
+local/single-process scraping; configure an OpenTelemetry metrics provider/exporter for durable
 aggregation across replicas. Model usage follows the `model_tokens_total`
 `token_type` convention (`prompt`, `completion`, `total`), and optional pricing
 produces `model_cost_usd_total`.
@@ -246,6 +270,17 @@ GET /.well-known/agent-card.json
 When enabled in the definition, the official SDK also mounts JSON-RPC at `/`
 and handles `message/send` with submitted → working → completed/failed task
 states. In-flight `message/send` work is canceled when the SDK calls the
-executor cancellation hook. Streaming, push notifications, and durable task
-state are not yet implemented. Requests may declare `x-a2a-version`;
-unsupported versions receive a stable 400 response.
+executor cancellation hook. `message/stream` emits artifacts when the bound
+runtime advertises streaming. Push callbacks and task snapshots are enabled
+with the `a2a_store_path` or store injection described above; full conformance
+and a shared multi-replica backend remain open. Requests may declare
+`x-a2a-version`; unsupported versions receive a stable 400 response.
+
+## MCP notifications
+
+The connection manager exposes server notifications as bounded
+`McpNotification` events. Pass `notification_handler` when constructing
+`McpConnectionManager` to receive each event asynchronously, or inspect the
+recent bounded snapshot with `manager.notifications()`. The official SDK
+client forwards `ServerNotification` messages without exposing SDK types in
+the runtime SPI.

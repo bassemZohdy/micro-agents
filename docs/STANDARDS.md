@@ -29,9 +29,10 @@ Current status: **tested subset implemented**. The official `a2a-sdk` serves
 `/.well-known/agent-card.json` and mounts JSON-RPC `message/send` and
 `message/stream` when enabled; the integration suite resolves the card with
 the official client and completes both non-streaming and streaming tasks when
-the bound runtime supports streaming. Push notifications, durable task state,
-and full v1 conformance remain open, so this is not a claim of full production
-conformance.
+the bound runtime supports streaming. The framework also provides a bounded
+SQLite task/push reference backend and authenticated callback delivery. A
+shared multi-replica backend, extended card coverage, and full v1 conformance
+remain open, so this is not a claim of full production conformance.
 
 ## MCP
 
@@ -58,9 +59,9 @@ Stable transport expectations:
 Current status: **tested subset implemented**. The official MCP Python SDK is
 wired behind the `McpClient` SPI for stdio and Streamable HTTP (with legacy SSE
 compatibility), including initialization negotiation, discovery, bounded
-calls, security controls, graceful close, bounded automatic reconnect, and
-real FastMCP interop tests. Notifications are consumed but not surfaced, and
-remote production load testing remains open.
+calls, security controls, graceful close, bounded automatic reconnect, real
+FastMCP interop tests, and application-visible bounded notifications. Remote
+production load testing remains open.
 
 ## Google ADK
 

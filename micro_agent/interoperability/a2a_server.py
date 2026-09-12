@@ -22,11 +22,13 @@ from micro_agent.interoperability.a2a import (
     A2aSdkUnavailableError,
     agent_card_from_definition,
 )
+from micro_agent.interoperability.a2a_store import HttpxPushNotificationSender
 
 
 def _import_sdk() -> Any:  # noqa in sync with mypy: dynamic namespace below
     try:
         from a2a.server.apps.jsonrpc import A2AFastAPIApplication
+        from a2a.server.apps.jsonrpc.jsonrpc_app import DefaultCallContextBuilder
         from a2a.server.request_handlers import DefaultRequestHandler
         from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
         from a2a.types import Part, TextPart
@@ -37,6 +39,7 @@ def _import_sdk() -> Any:  # noqa in sync with mypy: dynamic namespace below
         sdk = _Sdk()
         # Dynamic namespace; mypy attr-defined is silenced at module level.
         sdk.A2AFastAPIApplication = A2AFastAPIApplication
+        sdk.DefaultCallContextBuilder = DefaultCallContextBuilder
         sdk.DefaultRequestHandler = DefaultRequestHandler
         sdk.InMemoryTaskStore = InMemoryTaskStore
         sdk.TaskUpdater = TaskUpdater
@@ -48,6 +51,20 @@ def _import_sdk() -> Any:  # noqa in sync with mypy: dynamic namespace below
         sdk.AgentExecutor = AgentExecutor
         sdk.RequestContext = RequestContext
         sdk.EventQueue = EventQueue
+
+        class _MicroAgentCallContextBuilder(DefaultCallContextBuilder):
+            """Copy verified HTTP identity into the SDK task-store context."""
+
+            def build(self, request: Any) -> Any:
+                context = super().build(request)
+                identity = getattr(request.state, "identity", None)
+                user = getattr(identity, "user", None)
+                tenant_id = getattr(user, "tenant_id", None)
+                if tenant_id:
+                    context.state["tenant_id"] = str(tenant_id)
+                return context
+
+        sdk.MicroAgentCallContextBuilder = _MicroAgentCallContextBuilder
         return sdk
     except ImportError as exc:
         raise A2aSdkUnavailableError() from exc
@@ -192,6 +209,9 @@ def attach_a2a(
     base_url: str | None = None,
     security_scheme: dict[str, Any] | None = None,
     enable_rpc: bool = False,
+    task_store: Any | None = None,
+    push_config_store: Any | None = None,
+    push_sender: Any | None = None,
 ) -> dict[str, str]:
     """Mount the standard A2A routes onto the FastAPI app.
 
@@ -206,6 +226,7 @@ def attach_a2a(
         agent.definition,
         base_url=base_url,
         streaming=_streaming_enabled(agent),
+        push_notifications=push_config_store is not None,
     )
     paths = {
         "card": "/.well-known/agent-card.json",
@@ -213,11 +234,25 @@ def attach_a2a(
     }
 
     if enable_rpc:
+        # A caller that supplies a durable store owns its lifecycle.  The
+        # default remains the SDK's process-local store for compatibility.
+        if task_store is None:
+            from a2a.server.tasks import InMemoryTaskStore
+
+            task_store = InMemoryTaskStore()
+        if push_config_store is not None and push_sender is None:
+            push_sender = HttpxPushNotificationSender(push_config_store)
         handler = sdk.DefaultRequestHandler(
             agent_executor=build_micro_agent_executor(agent),
-            task_store=sdk.InMemoryTaskStore(),
+            task_store=task_store,
+            push_config_store=push_config_store,
+            push_sender=push_sender,
         )
-        a2a_app = sdk.A2AFastAPIApplication(agent_card=card, http_handler=handler)
+        a2a_app = sdk.A2AFastAPIApplication(
+            agent_card=card,
+            http_handler=handler,
+            context_builder=sdk.MicroAgentCallContextBuilder(),
+        )
         a2a_app.add_routes_to_app(app, agent_card_url=paths["card"], rpc_url="/")
         paths["rpc"] = "/"
     else:

@@ -4,6 +4,26 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+### Interoperability, state, and operations
+
+- Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,
+  expiry, persistence across process restarts, and an SQLite push-configuration
+  store. The A2A adapter can enable these stores through `a2a_store_path` and
+  exposes bounded HTTPS push delivery with callback authentication, host
+  allowlists, and transient retry.
+- Added application-visible MCP server notifications with bounded buffering
+  and asynchronous callbacks while keeping official SDK types behind the MCP
+  SPI.
+- Added a durable, tenant-scoped SQLite knowledge retriever with versioned
+  documents and deterministic keyword retrieval, plus a SQLite audit sink with
+  redaction, tenant filtering, and retention.
+- Added cumulative Prometheus histogram support and a bounded process-local
+  token-bucket HTTP rate limiter. Request-size enforcement now covers both
+  `Content-Length` and streamed/chunked bodies.
+- Added `microagents.io/v1beta1` compatibility loading with camelCase field
+  migration, a compatibility fixture, and a generated versioned schema. The
+  existing v1alpha1 contract remains supported.
+
 ### Verification and test coverage
 
 - Added direct unit coverage for the SQLite session provider, executable CLI,
@@ -12,8 +32,8 @@ All notable changes to the Micro-Agents project are documented in this file.
   80% coverage floor in `pyproject.toml`.
 - Re-exported the implemented C1-C4 cloud control-plane surfaces from the
   top-level `cloud` package and verified the public API contract. The current
-  verification baseline is 716 collected tests, 615 passing in the default
-  selection, 101 deselected integration/E2E/OTel tests, and 83.83% coverage.
+  verification baseline is 700 collected tests, 597 passing in the default
+  selection, 101 deselected integration/E2E/OTel tests, and 83.34% coverage.
 - Wired A2A executor cancellation to cancel the in-flight Micro-Agent task,
   with a regression test for the canceled task transition.
 - Expanded Google ADK adapter coverage for identifier/message/tool mapping,
@@ -91,6 +111,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Documentation
 
+- Reconciled the documentation and backlog with the current `main` behavior,
+  moved completed work out of `TODO.md`, and corrected A2A streaming and cloud
+  status claims.
 - Started the Micro-Agent Cloud workstream at C0 (architecture definition,
   owner-directed): cloud services are specified as external control-plane
   deployables that call agents as ordinary A2A/HTTP clients, discovery is
@@ -666,16 +689,14 @@ this section was assembled.
 The 0.1.0 framework is functionally complete for a standalone agent with
 real providers, but the following production boundaries remain:
 
-- MCP notifications are consumed by the SDK session but not surfaced as
-  events; tests exercise loopback and local stdio servers, not remote
-  production deployments
-- A2A push notifications and durable task state are not implemented;
-  streaming is available when the bound runtime advertises it, and
-  cancellation of in-flight runtime work is wired through to the task
-  transition
+- A2A full v1.0.1 conformance and shared multi-replica task/push state remain
+  open; the checked-in SQLite backend is a bounded single-process reference
+  implementation
+- tests exercise loopback and local stdio servers, not remote production
+  MCP deployments
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; caller identity is observable to operations but not
   forwarded through per-protocol delegation
-- the default approval store and operation registry remain process-local, with
-  optional Redis-backed approval and idempotency stores; database-backed audit
-  and broader production state integrations remain open
+- the default approval store remains process-local, with optional Redis-backed
+  approval and idempotency stores; downstream delegation, external policy
+  stores, and broader production state integrations remain open

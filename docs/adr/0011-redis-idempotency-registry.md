@@ -47,11 +47,12 @@ Trade-offs and remaining work:
 
 - operation keys are namespaced by verified tenant when present; local or
   unverified calls retain a legacy provider-wide namespace, and session/memory
-  session/memory snapshots now carry the same tenant boundary and optimistic
-  version checks;
+  snapshots carry the same tenant boundary and optimistic version checks;
 - completion uses an ownership check before persistence, so callers must still
   choose a TTL long enough for the expected operation duration;
-- durable knowledge and production approval state remain open work.
+- the durable knowledge slice now includes a tenant-scoped, versioned SQLite
+  reference retriever; a distributed semantic provider and durable Google ADK
+  approval state remain open work.
 
 ## Alternatives considered
 

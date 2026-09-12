@@ -1,6 +1,6 @@
 # ADR 0005 — Deterministic Policy Enforcement in the Runtime
 
-Date: 2026-08-30 · Status: Accepted in principle; implementation incomplete
+Date: 2026-08-30 · Status: Accepted
 
 ## Context
 
@@ -15,14 +15,18 @@ error), denied MCP servers fail agent startup, and denials are logged and
 counted. Idempotency keys on tool arguments are recognized through an
 `OperationRegistry` seam.
 
-The current executable does not resolve definition `policy_refs` or
-`credential_refs`, authenticate HTTP callers, enforce skills or model
-restrictions, or provide an approval continuation. The operation registry is
-in-memory and non-atomic.
+The executable resolves definition `policy_refs` and `credential_refs` through
+configured providers, authenticates HTTP callers when enabled, enforces skill
+and model restrictions, and supports approval continuations. The default
+operation registry is in-memory; optional Redis and PostgreSQL registries add
+atomic cross-process claims and result replay.
 
 ## Consequences
 
 - Enforcement survives prompt injection by construction.
 - Programmatically injected policy is enforced at selected tool/MCP call sites.
-- Platform policy resolution, verified identity propagation, durable audit,
-  approval, and distributed idempotency remain release-blocking work.
+- External policy stores and downstream token delegation remain open
+  production-hardening work. The reference runtime now also offers a retained,
+  tenant-scoped SQLite audit sink; shared audit delivery and SIEM export remain
+  deployment decisions. All implemented controls stay outside the prompt and
+  are covered by contract tests.
