@@ -133,13 +133,22 @@ class SdkMcpClient(McpClient):
         self._state = McpConnectionState.DISCONNECTED
         self._config: McpConfig | None = None
         self._credential: str | None = None
+        self._credential_resolver: Callable[[], Awaitable[str | None]] | None = None
         self._connected_once = False
         self._telemetry = telemetry
         self._trace_contexts: dict[int, dict[str, str]] = {}
+        self._request_credentials: dict[int, str | None] = {}
         self._notification_handler: Callable[[Any], Any] | None = None
 
     def set_notification_handler(self, handler: Callable[[Any], Any] | None) -> None:
         self._notification_handler = handler
+
+    def set_credential_resolver(
+        self,
+        resolver: Callable[[], Awaitable[str | None]] | None,
+    ) -> None:
+        """Refresh delegated credentials for each JSON-RPC request."""
+        self._credential_resolver = resolver
 
     async def _handle_message(self, message: Any) -> None:
         """Forward server notifications while retaining SDK request handling."""
@@ -246,6 +255,7 @@ class SdkMcpClient(McpClient):
             finally:
                 self._session = None
                 self._trace_contexts.clear()
+                self._request_credentials.clear()
 
     async def _enter_transport(
         self,
@@ -297,6 +307,9 @@ class SdkMcpClient(McpClient):
         """
 
         async def inject_context(request: httpx.Request) -> None:
+            credential = self._credential_for_request(request)
+            if credential:
+                request.headers["Authorization"] = f"Bearer {credential}"
             carrier = self._trace_context_for_request(request)
             if carrier:
                 request.headers.update(carrier)
@@ -417,13 +430,18 @@ class SdkMcpClient(McpClient):
         """
         request_id = self._reserve_trace_context()
         try:
+            if request_id is not None and self._credential_resolver is not None:
+                self._request_credentials[request_id] = await self._credential_resolver()
             return await self._bounded(operation)
         finally:
             if request_id is not None:
                 self._trace_contexts.pop(request_id, None)
+                self._request_credentials.pop(request_id, None)
 
     def _reserve_trace_context(self) -> int | None:
-        if self._telemetry is None or self._session is None:
+        if self._session is None:
+            return None
+        if self._telemetry is None and self._credential_resolver is None:
             return None
         raw_request_id = getattr(self._session, "_request_id", None)
         if not isinstance(raw_request_id, int):
@@ -432,10 +450,20 @@ class SdkMcpClient(McpClient):
         while request_id in self._trace_contexts:
             request_id += 1
         carrier: dict[str, str] = {}
-        self._telemetry.inject_context(carrier)
-        if carrier:
+        if self._telemetry is not None:
+            self._telemetry.inject_context(carrier)
+        if carrier or self._credential_resolver is not None:
             self._trace_contexts[request_id] = carrier
         return request_id
+
+    def _credential_for_request(self, request: httpx.Request) -> str | None:
+        """Find the delegated credential captured for a JSON-RPC request."""
+        try:
+            payload = json.loads(request.content)
+            request_id = payload.get("id")
+        except (TypeError, ValueError):
+            return None
+        return self._request_credentials.get(request_id)
 
     def _trace_context_for_request(self, request: httpx.Request) -> dict[str, str] | None:
         """Find a caller carrier from an MCP JSON-RPC request body."""

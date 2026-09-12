@@ -2,6 +2,7 @@
 
 from micro_agent.tools.tool import (
     EchoTool,
+    JsonParseTool,
     Tool,
     ToolError,
     ToolInputSchema,
@@ -15,6 +16,7 @@ from micro_agent.tools.tool import (
 
 __all__ = [
     "EchoTool",
+    "JsonParseTool",
     "Tool",
     "ToolError",
     "ToolInputSchema",

@@ -32,11 +32,16 @@ from __future__ import annotations
 import asyncio
 import hmac
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from starlette.responses import StreamingResponse
+
+_ASYMMETRIC_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "PS256"]
+_REQUIRED_CLAIMS = ["exp", "iss", "sub", "aud"]
 
 _IDEMPOTENCY_HEADER = "idempotency-key"
 _HOP_BY_HOP = {
@@ -100,6 +105,66 @@ class StaticTokenAuthenticator:
                 tenant, subject = grant
                 return Caller(tenant=tenant, subject=subject)
         return None
+
+
+class OidcGatewayAuthenticator:
+    """Synchronous OIDC/JWT gateway authenticator.
+
+    Gateway routing authenticates before forwarding and is intentionally a
+    synchronous SPI. This adapter uses the same issuer, audience, required
+    claims, and asymmetric-algorithm policy as the core OIDC authenticator;
+    deployments may inject a cached JWKS client to avoid key-discovery I/O in
+    the request path.
+    """
+
+    def __init__(
+        self,
+        issuer: str,
+        audience: str,
+        *,
+        jwks_client: Any = None,
+        leeway_seconds: int = 30,
+    ) -> None:
+        try:
+            import jwt
+        except ImportError as exc:  # pragma: no cover - optional cloud extra
+            raise RuntimeError("OIDC gateway authentication requires PyJWT[crypto]") from exc
+        self._jwt = jwt
+        self._issuer = issuer.rstrip("/")
+        self._audience = audience
+        self._leeway_seconds = leeway_seconds
+        self._jwks_client = jwks_client or jwt.PyJWKClient(f"{self._issuer}/.well-known/jwks.json")
+
+    def authenticate(self, headers: Any) -> Caller | None:
+        authorization = ""
+        for name, value in headers.items():
+            if name.lower() == "authorization":
+                authorization = value
+                break
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            return None
+        try:
+            signing_key = self._jwks_client.get_signing_key_from_jwt(token.strip())
+            claims = self._jwt.decode(
+                token.strip(),
+                signing_key.key,
+                algorithms=_ASYMMETRIC_ALGORITHMS,
+                audience=self._audience,
+                issuer=self._issuer,
+                leeway=self._leeway_seconds,
+                options={"require": _REQUIRED_CLAIMS},
+            )
+        except self._jwt.PyJWTError:
+            return None
+        except Exception:  # noqa: BLE001 — key discovery is an auth failure
+            return None
+        subject = str(claims.get("sub", ""))
+        tenant = claims.get("tid") or claims.get("tenant_id")
+        return Caller(
+            tenant=str(tenant) if tenant is not None else None,
+            subject=subject,
+        )
 
 
 @dataclass
@@ -293,12 +358,40 @@ class Gateway:
         }
         retryable = request.method in {"GET", "HEAD"} or _IDEMPOTENCY_HEADER in headers
         attempts = targets if retryable else targets[:1]
+        wants_stream = "text/event-stream" in request.headers.get("accept", "").lower()
         query = str(request.url.query) or None
         last_status = 503
         last_content: bytes = b"no upstream accepted the call"
         for target in attempts:
             if not await target.try_acquire():
                 continue  # bulkhead saturated: skip like an open circuit
+            if wants_stream:
+                try:
+                    stream_context = self._client.stream(
+                        request.method,
+                        f"{target.base_url}/{rest}",
+                        params=query,
+                        headers=headers,
+                        content=body,
+                    )
+                    upstream = await stream_context.__aenter__()
+                except httpx.HTTPError:
+                    target.record_failure()
+                    target.release_slot()
+                    continue
+                if upstream.status_code >= 500:
+                    content = b""
+                    try:
+                        content = await upstream.aread()
+                    finally:
+                        try:
+                            await stream_context.__aexit__(None, None, None)
+                        finally:
+                            target.release_slot()
+                    target.record_failure()
+                    last_status, last_content = upstream.status_code, content
+                    continue
+                return _streaming_proxy_response(upstream, stream_context, target)
             try:
                 upstream = await self._client.request(
                     request.method,
@@ -337,6 +430,40 @@ def _proxy_response(upstream: httpx.Response) -> Response:
     )
 
 
+def _streaming_proxy_response(
+    upstream: httpx.Response,
+    stream_context: Any,
+    target: Target,
+) -> StreamingResponse:
+    """Forward an upstream event stream without buffering its body."""
+    forwarded = {
+        name: value
+        for name, value in upstream.headers.items()
+        if name.lower() not in _RESPONSE_STRIP
+    }
+
+    async def body() -> AsyncIterator[bytes]:
+        try:
+            async for chunk in upstream.aiter_raw():
+                yield chunk
+        except httpx.HTTPError:
+            target.record_failure()
+            raise
+        else:
+            target.record_success()
+        finally:
+            try:
+                await stream_context.__aexit__(None, None, None)
+            finally:
+                target.release_slot()
+
+    return StreamingResponse(
+        body(),
+        status_code=upstream.status_code,
+        headers=forwarded,
+    )
+
+
 def create_gateway_app(gateway: Gateway) -> FastAPI:
     """FastAPI surface: a policy-checked reverse proxy in front of agents."""
     app = FastAPI(title="Micro-Agent Cloud Gateway", version="0.1.0")
@@ -369,6 +496,7 @@ __all__ = [
     "GatewayAuthenticationError",
     "GatewayAuthenticator",
     "GatewayRoute",
+    "OidcGatewayAuthenticator",
     "StaticTokenAuthenticator",
     "Target",
     "create_gateway_app",

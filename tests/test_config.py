@@ -72,6 +72,15 @@ class TestResolveConfig:
         assert config.model_catalog_endpoint == "https://catalog.example.test/resolve"
         assert config.model_catalog_token == "secret-catalog-token"
 
+    def test_token_exchange_environment_override(self, monkeypatch):
+        monkeypatch.setenv(
+            "MICRO_AGENT_TOKEN_EXCHANGE_ENDPOINT", "https://tokens.example.test/exchange"
+        )
+        monkeypatch.setenv("MICRO_AGENT_TOKEN_EXCHANGE_TOKEN", "secret-actor-token")
+        config = resolve_config()
+        assert config.token_exchange_endpoint == "https://tokens.example.test/exchange"
+        assert config.token_exchange_token == "secret-actor-token"
+
     def test_cors_origins_environment_override(self, monkeypatch):
         monkeypatch.setenv(
             "MICRO_AGENT_CORS_ORIGINS",
@@ -163,6 +172,12 @@ class TestValidateConfig:
         )
         assert any(d.level == "error" and d.path == "model_catalog_endpoint" for d in diagnostics)
 
+    def test_invalid_token_exchange_endpoint_error(self):
+        diagnostics = validate_config(
+            ResolvedConfig(token_exchange_endpoint="https://tokens.test/?x=1")
+        )
+        assert any(d.level == "error" and d.path == "token_exchange_endpoint" for d in diagnostics)
+
     def test_environment_auth_overrides(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_AUTH", "oidc")
         monkeypatch.setenv("MICRO_AGENT_AUTH_ISSUER", "https://idp.example.test")
@@ -216,6 +231,7 @@ class TestEnvironmentOverlay:
             session_endpoint="sqlite:///tmp/staging.db",
             idempotency_endpoint="redis://staging-redis.example.com/0",
             policy_store_endpoint="https://policy.example.com/v1/resolve",
+            token_exchange_endpoint="https://tokens.example.com/exchange",
         )
         config = overlay.to_environment_config()
         assert config.model_endpoint == "https://staging-model.example.com/v1"
@@ -224,6 +240,7 @@ class TestEnvironmentOverlay:
         assert config.session_endpoint == "sqlite:///tmp/staging.db"
         assert config.idempotency_endpoint == "redis://staging-redis.example.com/0"
         assert config.policy_store_endpoint == "https://policy.example.com/v1/resolve"
+        assert config.token_exchange_endpoint == "https://tokens.example.com/exchange"
 
     def test_overlay_rejects_non_http_endpoints(self):
         with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):

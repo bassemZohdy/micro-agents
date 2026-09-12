@@ -84,10 +84,12 @@ from micro_agent.security import (
     CredentialProvider,
     EnvironmentCredentialProvider,
     HttpPolicyResolver,
+    HttpTokenExchangeProvider,
     OperationRegistryProtocol,
     PolicyStoreError,
     RedisApprovalStore,
     RedisOperationRegistry,
+    TokenExchangeProvider,
 )
 from micro_agent.security.auth import Authenticator, OidcJwtAuthenticator
 from micro_agent.session import (
@@ -138,6 +140,7 @@ def build_runtime(
     credential_provider: CredentialProvider | None = None,
     knowledge_retriever: KnowledgeRetriever | None = None,
     model_catalog: ModelCatalog | None = None,
+    token_exchange_provider: TokenExchangeProvider | None = None,
     environment: EnvironmentConfig | EnvironmentOverlay | None = None,
     approval_store: ApprovalStore | None = None,
 ) -> RuntimeBootstrap:
@@ -166,12 +169,17 @@ def build_runtime(
     telemetry.logger.set_level(resolved.log_level)
 
     _validate_credential_bindings(definition, credential_provider)
+    effective_token_exchange = token_exchange_provider or _build_token_exchange_provider(
+        definition, resolved
+    )
     mcp = _build_mcp_manager(
         definition,
         mcp_manager,
         credential_provider,
         endpoint_overrides=resolved.mcp_endpoints,
         telemetry=telemetry,
+        token_exchange_provider=effective_token_exchange,
+        token_exchange_actor_token=resolved.token_exchange_token,
     )
     tool_registry = _build_tool_registry(definition)
     _validate_tool_bindings(definition, tool_registry, mcp)
@@ -346,6 +354,13 @@ def _resolve_definition_config(
     if catalog_token_ref is not None and resolved.model_catalog_token is None:
         raise BootstrapError(
             f"Required model-catalog credential '{catalog_token_ref.name}' is not available"
+        )
+    exchange_token_ref = environment_config.token_exchange_token_ref if environment_config else None
+    if exchange_token_ref is not None and resolved.token_exchange_token is None:
+        resolved.token_exchange_token = credential_provider.resolve(exchange_token_ref.name)
+    if exchange_token_ref is not None and resolved.token_exchange_token is None:
+        raise BootstrapError(
+            f"Required token-exchange credential '{exchange_token_ref.name}' is not available"
         )
 
     catalog = model_catalog
@@ -633,6 +648,8 @@ def _build_mcp_manager(
     credential_provider: CredentialProvider,
     endpoint_overrides: dict[str, str] | None = None,
     telemetry: Telemetry | None = None,
+    token_exchange_provider: TokenExchangeProvider | None = None,
+    token_exchange_actor_token: str | None = None,
 ) -> McpConnectionManager | None:
     """Construct the MCP client for declared servers; an injected manager wins.
 
@@ -661,6 +678,11 @@ def _build_mcp_manager(
     if injected is not None:
         if endpoint_overrides:
             injected.set_endpoint_overrides(endpoint_overrides)
+        if token_exchange_provider is not None:
+            injected.set_token_exchange_provider(
+                token_exchange_provider,
+                actor_token=token_exchange_actor_token,
+            )
         return injected
     from micro_agent.mcp.sdk_client import sdk_available, sdk_client_factory
 
@@ -669,7 +691,22 @@ def _build_mcp_manager(
         client_factory=factory,
         credential_resolver=credential_provider.resolve,
         endpoint_overrides=endpoint_overrides,
+        token_exchange_provider=token_exchange_provider,
+        token_exchange_actor_token=token_exchange_actor_token,
     )
+
+
+def _build_token_exchange_provider(
+    definition: MicroAgentDefinition,
+    config: ResolvedConfig,
+) -> TokenExchangeProvider | None:
+    """Build the configured downstream delegation provider when MCP is used."""
+    if not definition.spec.dependencies.mcp_servers or not config.token_exchange_endpoint:
+        return None
+    try:
+        return HttpTokenExchangeProvider(config.token_exchange_endpoint)
+    except (ValueError, RuntimeError) as exc:
+        raise BootstrapError(f"Invalid token-exchange configuration: {exc}") from exc
 
 
 def _build_knowledge_provider(
