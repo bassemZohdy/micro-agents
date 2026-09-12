@@ -138,7 +138,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
       provider-specific selectors remain a cluster review item.
 - [x] Add Service scrape metadata and define latency, error, readiness, token,
       and cost dashboards and alerts in the observability documentation.
-- [ ] Perform rollback and compatibility-tested release validation.
+- [x] Perform compatibility-tested release validation: the tag gate loads both
+      supported definition fixtures and verifies append-only config rollback,
+      alongside package/schema/image/changelog alignment. Live promotion and
+      production rollback execution remain deployment-environment work.
 - [ ] Validate immutable image references, SBOM, signatures, and SLSA
       provenance in production deployment policy.
 

@@ -123,6 +123,13 @@ default-deny ingress/egress policy with DNS and HTTPS egress.
   optional extras intentionally remain managed from `pyproject.toml`; they are
   not part of the runtime image contract.
 
+- **Release validation**: the tag workflow runs
+  `python tools/validate_release.py <version>` before building distributions
+  or the image. It checks package/schema/image alignment, loads both supported
+  definition compatibility fixtures, and verifies that config rollback creates
+  a new version without rewriting history. Live canary, promotion, and
+  production rollback execution still belong to the deployment environment.
+
 Before using this outside a disposable namespace:
 
 - use an executable definition whose dependencies are actually wired

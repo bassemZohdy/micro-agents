@@ -5,6 +5,7 @@ workflow runs at tag time:
 
 - the JSON Schema `$id` matches the definition API version,
 - the committed Kubernetes deployment pins the package version,
+- compatibility fixtures load and config rollback remains append-only,
 - at tag time: the tag equals the package version, and CHANGELOG.md
   references the released version (maintainers move `[Unreleased]` into a
   versioned section before tagging).
@@ -12,6 +13,8 @@ workflow runs at tag time:
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import json
 import re
 import sys
@@ -51,8 +54,40 @@ def changelog_mentions(version: str) -> bool:
     return bool(re.search(rf"^##\s+\[?{re.escape(version)}\]?]", text, re.MULTILINE))
 
 
+def validate_compatibility_and_rollback() -> None:
+    """Validate supported definition versions and cloud rollback semantics."""
+    import yaml
+
+    from cloud.config import InMemoryConfigStore
+    from micro_agent.definition import load_definition_from_file
+
+    fixture_root = ROOT / "tests" / "fixtures" / "compatibility"
+    alpha_path = fixture_root / "v1alpha1-minimal.yaml"
+    beta_path = fixture_root / "v1beta1-minimal.yaml"
+    alpha_payload = yaml.safe_load(alpha_path.read_text(encoding="utf-8"))
+    beta_payload = yaml.safe_load(beta_path.read_text(encoding="utf-8"))
+    assert load_definition_from_file(alpha_path).api_version == "microagents.io/v1alpha1"
+    assert load_definition_from_file(beta_path).api_version == "microagents.io/v1beta1"
+    assert alpha_payload["apiVersion"] == "microagents.io/v1alpha1"
+    assert beta_payload["apiVersion"] == "microagents.io/v1beta1"
+
+    async def check_rollback() -> None:
+        store = InMemoryConfigStore()
+        first = await store.store_definition("compatibility", alpha_payload)
+        changed = copy.deepcopy(alpha_payload)
+        changed["metadata"]["version"] = "1.1.0"
+        await store.store_definition("compatibility", changed)
+        rolled_back = await store.rollback("compatibility", "definition", to_version=1)
+        assert rolled_back.version == 3
+        assert rolled_back.payload == first.payload
+
+    asyncio.run(check_rollback())
+
+
 def validate(*, release: bool = False, tag_version: str | None = None) -> None:
     version = package_version()
+
+    validate_compatibility_and_rollback()
 
     assert schema_version() in ("v1alpha1",), (
         f"schema version {schema_version()!r} does not match the definition API"
