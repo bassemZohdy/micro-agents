@@ -4,7 +4,7 @@ This file contains open work only. Completed work belongs in
 [CHANGELOG.md](CHANGELOG.md); implementation evidence and limitations belong
 in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Backlog audited against `main` at commit `cdedc00` on 2026-09-12.
+Backlog audited against merged `main` on 2026-09-12.
 
 ## Release gate
 
