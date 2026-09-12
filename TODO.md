@@ -62,9 +62,10 @@ database service operations and Cloud C5 edge hardening remain separate work.
 - [ ] Implement downstream token delegation/token exchange for protocol
       clients such as MCP servers. Verified identity propagation exists, but
       per-protocol delegated credentials do not.
-- [ ] Implement external policy-store integration so declared policy
-      references can resolve from a configured service rather than only an
-      injected policy or resolver callable.
+- [x] Implement external policy-store integration so declared policy
+      references resolve from a configured HTTPS service through a strict,
+      bearer-authenticated response contract; injected policies and resolver
+      callables remain supported.
 - [x] Add a database-backed SQLite audit sink with retention and tenant
       scoping. Shared-database delivery, failure policy, and SIEM export remain
       deployment decisions.

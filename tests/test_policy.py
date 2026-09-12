@@ -1,5 +1,10 @@
 """Tests for Micro-Agent Bounded Autonomy and Policy."""
 
+import json
+
+import httpx
+import pytest
+
 from micro_agent.observability import (
     AgentPolicy,
     PolicyEffect,
@@ -8,8 +13,12 @@ from micro_agent.observability import (
 )
 from micro_agent.security import (
     CallerIdentity,
+    HttpPolicyResolver,
     InvocationIdentity,
+    PolicySchemaError,
+    PolicyStoreError,
     UserContext,
+    agent_policy_from_dict,
     invocation_identity,
 )
 
@@ -70,6 +79,90 @@ class TestAgentPolicy:
     def test_side_effect_policy(self):
         policy = AgentPolicy(side_effect_policy="deny")
         assert policy.side_effect_policy == "deny"
+
+
+class TestHttpPolicyResolver:
+    """The external policy contract fails closed and never uses ambient proxies."""
+
+    def test_resolves_direct_policy_and_sends_refs_and_token(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "denied_tools": ["charge-card"],
+                    "rules": [
+                        {
+                            "effect": "deny",
+                            "resource": "side_effect:*",
+                            "actions": ["execute"],
+                            "conditions": {"tenant_id": "restricted"},
+                        }
+                    ],
+                },
+            )
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        try:
+            policy = HttpPolicyResolver(
+                "https://policy.example.test/v1/resolve",
+                token="policy-token",
+                client=client,
+            )(["access-policy"])
+        finally:
+            client.close()
+        assert policy.denied_tools == ["charge-card"]
+        assert policy.rules[0].effect == PolicyEffect.DENY
+        assert seen[0].method == "POST"
+        assert seen[0].headers["authorization"] == "Bearer policy-token"
+        assert json.loads(seen[0].content) == {"policy_refs": ["access-policy"]}
+
+    def test_resolves_wrapped_policy(self):
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"policy": {"approval_required": True}})
+            )
+        )
+        try:
+            policy = HttpPolicyResolver("https://policy.example.test/resolve", client=client)(
+                ["access-policy"]
+            )
+        finally:
+            client.close()
+        assert policy.approval_required is True
+
+    def test_rejects_http_except_loopback_and_redirects_are_not_followed(self):
+        with pytest.raises(ValueError, match="HTTPS"):
+            HttpPolicyResolver("http://policy.example.test/resolve")
+
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(302, headers={"location": "https://other.test"})
+            )
+        )
+        try:
+            with pytest.raises(PolicyStoreError, match="HTTP 302"):
+                HttpPolicyResolver("http://127.0.0.1:8000/resolve", client=client)(["policy"])
+        finally:
+            client.close()
+
+    def test_rejects_invalid_response_without_exposing_body(self):
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"policy": {"unknown": "value"}})
+            )
+        )
+        try:
+            with pytest.raises(PolicyStoreError, match="invalid policy"):
+                HttpPolicyResolver("https://policy.example.test/resolve", client=client)(["policy"])
+        finally:
+            client.close()
+
+    def test_parser_rejects_unknown_fields(self):
+        with pytest.raises(PolicySchemaError, match="unknown policy fields"):
+            agent_policy_from_dict({"policy_version": "1", "denied_tools": ["echo"]})
 
 
 class TestPolicyEvaluator:

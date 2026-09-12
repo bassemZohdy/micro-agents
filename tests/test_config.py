@@ -54,6 +54,15 @@ class TestResolveConfig:
         config = resolve_config()
         assert config.approval_endpoint == "redis://redis.example.test/0"
 
+    def test_policy_store_environment_override(self, monkeypatch):
+        monkeypatch.setenv(
+            "MICRO_AGENT_POLICY_STORE_ENDPOINT", "https://policy.example.test/v1/resolve"
+        )
+        monkeypatch.setenv("MICRO_AGENT_POLICY_STORE_TOKEN", "secret-policy-token")
+        config = resolve_config()
+        assert config.policy_store_endpoint == "https://policy.example.test/v1/resolve"
+        assert config.policy_store_token == "secret-policy-token"
+
     def test_cors_origins_environment_override(self, monkeypatch):
         monkeypatch.setenv(
             "MICRO_AGENT_CORS_ORIGINS",
@@ -133,6 +142,12 @@ class TestValidateConfig:
         )
         assert any(d.level == "error" and d.path == "cors_origins" for d in mixed_wildcard)
 
+    def test_invalid_policy_store_endpoint_error(self):
+        diagnostics = validate_config(
+            ResolvedConfig(policy_store_endpoint="https://policy.test/?x=1")
+        )
+        assert any(d.level == "error" and d.path == "policy_store_endpoint" for d in diagnostics)
+
     def test_environment_auth_overrides(self, monkeypatch):
         monkeypatch.setenv("MICRO_AGENT_AUTH", "oidc")
         monkeypatch.setenv("MICRO_AGENT_AUTH_ISSUER", "https://idp.example.test")
@@ -185,6 +200,7 @@ class TestEnvironmentOverlay:
             memory_endpoint="memory://",
             session_endpoint="sqlite:///tmp/staging.db",
             idempotency_endpoint="redis://staging-redis.example.com/0",
+            policy_store_endpoint="https://policy.example.com/v1/resolve",
         )
         config = overlay.to_environment_config()
         assert config.model_endpoint == "https://staging-model.example.com/v1"
@@ -192,6 +208,7 @@ class TestEnvironmentOverlay:
         assert config.memory_endpoint == "memory://"
         assert config.session_endpoint == "sqlite:///tmp/staging.db"
         assert config.idempotency_endpoint == "redis://staging-redis.example.com/0"
+        assert config.policy_store_endpoint == "https://policy.example.com/v1/resolve"
 
     def test_overlay_rejects_non_http_endpoints(self):
         with pytest.raises(ValueError, match=r"absolute http\(s\) URL"):

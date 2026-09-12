@@ -3,13 +3,24 @@
 import pytest
 
 from micro_agent.checkpoint import SessionCheckpointStore
-from micro_agent.config import BootstrapError, EnvironmentOverlay, build_runtime
+from micro_agent.config import (
+    BootstrapError,
+    EnvironmentConfig,
+    EnvironmentOverlay,
+    SecretRef,
+    build_runtime,
+)
 from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider, RedisMemoryProvider
 from micro_agent.memory.postgres import PostgresIdempotencyStore, PostgresMemoryProvider
 from micro_agent.models import FakeModelProvider, OpenAICompatProvider
-from micro_agent.security import AgentPolicy, RedisApprovalStore, RedisOperationRegistry
+from micro_agent.security import (
+    AgentPolicy,
+    RedisApprovalStore,
+    RedisOperationRegistry,
+    StaticCredentialProvider,
+)
 from micro_agent.session import InMemorySessionProvider, RedisSessionProvider, SqliteSessionProvider
 from micro_agent.session.postgres import PostgresSessionProvider
 from runtimes.adk import AdkRuntime
@@ -851,6 +862,39 @@ def test_policy_refs_resolve_through_configured_resolver():
     bootstrap = build_runtime(_policy_definition(), policy_resolver=resolver)
     try:
         assert seen_refs == [["access-policy"]]
+        assert bootstrap.runtime._config.policy is not None
+        assert bootstrap.runtime._config.policy.denied_tools == ["echo"]
+    finally:
+        import asyncio
+
+        asyncio.run(bootstrap.runtime.close())
+
+
+def test_policy_refs_auto_resolve_from_configured_policy_store(monkeypatch):
+    calls: list[tuple[str, str | None, list[str]]] = []
+
+    class FakePolicyResolver:
+        def __init__(self, endpoint: str, *, token: str | None = None):
+            calls.append((endpoint, token, []))
+
+        def __call__(self, refs: list[str]):
+            calls[-1][2].extend(refs)
+            return AgentPolicy(denied_tools=["echo"])
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("micro_agent.config.bootstrap.HttpPolicyResolver", FakePolicyResolver)
+    bootstrap = build_runtime(
+        _policy_definition(),
+        environment=EnvironmentConfig(
+            policy_store_endpoint="https://policy.example.test/v1/resolve",
+            policy_store_token_ref=SecretRef(name="POLICY_TOKEN", source="vault"),
+        ),
+        credential_provider=StaticCredentialProvider({"POLICY_TOKEN": "secret"}),
+    )
+    try:
+        assert calls == [("https://policy.example.test/v1/resolve", "secret", ["access-policy"])]
         assert bootstrap.runtime._config.policy is not None
         assert bootstrap.runtime._config.policy.denied_tools == ["echo"]
     finally:

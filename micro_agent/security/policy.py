@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from fnmatch import fnmatchcase
 from typing import Any
+from urllib.parse import urlsplit
+
+import httpx
 
 # ---------------------------------------------------------------------------
 # Policy Model
@@ -66,6 +69,201 @@ class AgentPolicy:
         if mcp_ref in self.denied_mcps:
             return False
         return not (self.allowed_mcps and mcp_ref not in self.allowed_mcps)
+
+
+class PolicyStoreError(RuntimeError):
+    """Raised when a configured policy store cannot return a valid policy."""
+
+
+class HttpPolicyResolver:
+    """Resolve policy references from a small, authenticated HTTP contract.
+
+    The resolver is synchronous because policy resolution happens during the
+    synchronous bootstrap phase, before an :class:`AgentRuntime` is created.
+    An injected ``httpx.Client`` keeps transport ownership with the embedding
+    application and provides a deterministic test seam. Owned clients never
+    trust ambient proxy variables and do not follow redirects, preventing a
+    policy request (and its bearer token) from being silently redirected.
+
+    The service accepts ``POST <endpoint>`` with
+    ``{"policy_refs": ["..."]}``. It may return the policy object directly
+    or wrap it as ``{"policy": {...}}``. The response parser is deliberately
+    strict so a malformed or partially understood policy cannot widen agent
+    autonomy.
+    """
+
+    def __init__(
+        self,
+        endpoint: str,
+        *,
+        token: str | None = None,
+        timeout_seconds: float = 10.0,
+        client: httpx.Client | None = None,
+    ) -> None:
+        _validate_policy_store_endpoint(endpoint)
+        if timeout_seconds <= 0:
+            raise ValueError("policy store timeout must be greater than zero")
+        self._endpoint = endpoint
+        self._owns_client = client is None
+        self._headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if token:
+            self._headers["Authorization"] = f"Bearer {token}"
+        self._client = client or httpx.Client(
+            timeout=timeout_seconds,
+            trust_env=False,
+            verify=True,
+            follow_redirects=False,
+            headers=self._headers,
+        )
+
+    def __call__(self, policy_refs: list[str]) -> AgentPolicy:
+        """Fetch and validate a policy for the declared references."""
+        if not policy_refs or any(
+            not isinstance(ref, str) or not ref.strip() for ref in policy_refs
+        ):
+            raise PolicyStoreError("policy references must be non-empty strings")
+        try:
+            response = self._client.post(
+                self._endpoint,
+                json={"policy_refs": list(policy_refs)},
+                headers=self._headers,
+            )
+        except httpx.HTTPError as exc:
+            raise PolicyStoreError("policy store request failed") from exc
+        if response.status_code < 200 or response.status_code >= 300:
+            raise PolicyStoreError(f"policy store returned HTTP {response.status_code}")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise PolicyStoreError("policy store returned invalid JSON") from exc
+        try:
+            return agent_policy_from_dict(payload)
+        except (TypeError, ValueError, PolicySchemaError) as exc:
+            raise PolicyStoreError("policy store returned an invalid policy") from exc
+
+    def close(self) -> None:
+        """Close an owned HTTP client; injected clients remain caller-owned."""
+        if self._owns_client:
+            self._client.close()
+
+
+class PolicySchemaError(ValueError):
+    """Raised when a policy-store response violates the policy contract."""
+
+
+def agent_policy_from_dict(payload: Any) -> AgentPolicy:
+    """Parse a strict policy-store JSON object into :class:`AgentPolicy`."""
+    if not isinstance(payload, Mapping):
+        raise PolicySchemaError("policy must be a JSON object")
+    if "policy" in payload:
+        if len(payload) != 1:
+            raise PolicySchemaError("policy wrapper cannot contain unknown fields")
+        payload = payload["policy"]
+        if not isinstance(payload, Mapping):
+            raise PolicySchemaError("policy wrapper value must be a JSON object")
+
+    fields = {
+        "allowed_skills",
+        "denied_skills",
+        "allowed_tools",
+        "denied_tools",
+        "allowed_mcps",
+        "denied_mcps",
+        "model_restrictions",
+        "side_effect_policy",
+        "approval_required",
+        "rules",
+    }
+    unknown = set(payload) - fields
+    if unknown:
+        raise PolicySchemaError(f"unknown policy fields: {', '.join(sorted(map(str, unknown)))}")
+
+    list_values = {
+        name: _policy_string_list(payload.get(name, []), name)
+        for name in (
+            "allowed_skills",
+            "denied_skills",
+            "allowed_tools",
+            "denied_tools",
+            "allowed_mcps",
+            "denied_mcps",
+        )
+    }
+    restrictions = payload.get("model_restrictions", {})
+    if not isinstance(restrictions, Mapping):
+        raise PolicySchemaError("model_restrictions must be an object")
+    side_effect_policy = payload.get("side_effect_policy", "allow")
+    if side_effect_policy not in {"allow", "deny"}:
+        raise PolicySchemaError("side_effect_policy must be 'allow' or 'deny'")
+    approval_required = payload.get("approval_required", False)
+    if not isinstance(approval_required, bool):
+        raise PolicySchemaError("approval_required must be a boolean")
+    rules = _policy_rules(payload.get("rules", []))
+    return AgentPolicy(
+        **list_values,
+        model_restrictions=dict(restrictions),
+        side_effect_policy=side_effect_policy,
+        approval_required=approval_required,
+        rules=rules,
+    )
+
+
+def _policy_string_list(value: Any, field_name: str) -> list[str]:
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise PolicySchemaError(f"{field_name} must be a list of non-empty strings")
+    return list(value)
+
+
+def _policy_rules(value: Any) -> list[PolicyRule]:
+    if not isinstance(value, list):
+        raise PolicySchemaError("rules must be a list")
+    rules: list[PolicyRule] = []
+    fields = {"effect", "resource", "actions", "conditions"}
+    for item in value:
+        if not isinstance(item, Mapping) or set(item) - fields:
+            raise PolicySchemaError("each rule must contain only the policy rule fields")
+        effect = item.get("effect")
+        resource = item.get("resource")
+        if not isinstance(effect, str) or effect not in {PolicyEffect.ALLOW, PolicyEffect.DENY}:
+            raise PolicySchemaError("rule effect must be 'allow' or 'deny'")
+        if not isinstance(resource, str) or not resource.strip():
+            raise PolicySchemaError("rule resource must be a non-empty string")
+        actions = _policy_string_list(item.get("actions", []), "rule actions")
+        conditions = item.get("conditions", {})
+        if not isinstance(conditions, Mapping):
+            raise PolicySchemaError("rule conditions must be an object")
+        rules.append(
+            PolicyRule(
+                effect=PolicyEffect(effect),
+                resource=resource,
+                actions=actions,
+                conditions=dict(conditions),
+            )
+        )
+    return rules
+
+
+def _validate_policy_store_endpoint(endpoint: str) -> None:
+    parsed = urlsplit(endpoint)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "policy store endpoint must be an absolute http(s) URL without credentials, "
+            "query, or fragment"
+        )
+    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError("policy store endpoint must use HTTPS unless it targets loopback")
 
 
 # ---------------------------------------------------------------------------

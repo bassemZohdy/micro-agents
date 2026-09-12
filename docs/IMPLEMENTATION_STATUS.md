@@ -103,9 +103,9 @@ Implemented:
 - declared knowledge sources are health-checked at startup in both runtimes
   against the configured knowledge provider and exposed as a `knowledge`
   health probe
-- declared policy references resolve through an injected policy or a
-  configured policy resolver; unresolvable references fail before runtime
-  creation
+- declared policy references resolve through an injected policy, resolver,
+  or configured strict HTTP policy store; unresolvable references fail before
+  runtime creation
 - policy enforcement covers skills and model restrictions (allow/deny model
   and provider sets) in addition to tools and MCP servers; denied declared
   skills, models, or MCP servers fail startup
@@ -159,9 +159,6 @@ Current runtime capability matrix:
 
 Gaps:
 
-- policy references cannot yet resolve from external policy *stores*; the
-  bootstrap accepts an injected policy or a policy resolver callable, and
-  fails fast when neither can satisfy a declared reference
 - the Google ADK adapter still uses native approval continuations, so the
   durable `MICRO_AGENT_APPROVAL_ENDPOINT` remains a custom-runtime binding
 
@@ -315,22 +312,25 @@ Implemented:
 - programmatically injected allow/deny evaluator
 - in-memory operation registry
 - recursive log-key/known-value redaction
-- declared policy references resolve through an injected policy or policy
-  resolver, and declared credential references (model, MCP, security) resolve
-  through the configured credential provider before runtime creation
+- declared policy references resolve through an injected policy, resolver, or
+  strict configured HTTP policy store, and declared credential references
+  (model, MCP, security) resolve through the configured credential provider
+  before runtime creation
 - skill and model-restriction enforcement alongside tool and MCP policy;
   denied declared skills, models, or MCP servers fail startup
 - conditional `PolicyRule` evaluation by resource, action, and verified
   invocation identity context, including deterministic operator matching and
   deny-over-allow precedence
+- strict HTTP policy-store resolution for declared references, including
+  optional bearer authentication, secret-provider token bindings, HTTPS/
+  loopback enforcement, no ambient proxies or redirects, and fail-closed
+  response parsing
 
 Gaps:
 
 - downstream delegation (for example token exchange toward MCP servers) is
   not implemented; propagation currently makes the verified principal
   observable to operations, but per-protocol delegated credentials remain open
-- external policy-store integration remains open; policy references resolve
-  through an injected policy or resolver callable
 
 ### State and knowledge
 
