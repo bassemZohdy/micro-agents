@@ -14,8 +14,8 @@ The image:
 - starts `python -m micro_agent` with an externally mounted definition
 - probes `/health/live`
 
-The executable resolves an explicit fake or OpenAI-compatible model provider
-from the mounted definition and environment. It constructs local memory/session
+The executable resolves an explicit fake, OpenAI-compatible, or Anthropic model
+provider from the mounted definition and environment. It constructs local memory/session
 providers, optional Redis/PostgreSQL-backed external memory/session/idempotency
 providers, the official
 MCP SDK client for declared servers, knowledge and credential providers,
@@ -79,6 +79,14 @@ Manifest rules enforced by the test suite and CI (`kubeconform`):
   the expected keys and is excluded from `kubectl apply -f deploy/kubernetes`
   by its `.template.yaml` suffix.
 
+The sample Deployment requests 100m CPU/128Mi memory and limits each pod to
+500m CPU/512Mi memory. It spreads replicas across zones on a best-effort basis
+and requires hostname spreading. The Service carries standard Prometheus
+scrape annotations for `/metrics`; the dashboard panels and alert expressions
+are defined in [OBSERVABILITY.md](OBSERVABILITY.md). The production overlay
+adds a one-replica disruption budget, 2–10 replica CPU autoscaling, and a
+default-deny ingress/egress policy with DNS and HTTPS egress.
+
 ## Supply chain
 
 - **Image provenance**: every release tag publishes SLSA build provenance
@@ -104,8 +112,9 @@ Before using this outside a disposable namespace:
 - validate network egress to model/MCP endpoints (see
   `deploy/kubernetes/production/networkpolicy.yaml`)
 - add external shared state for multiple replicas
-- define a shutdown deadline and cancellation policy for requests that do not
-  drain in time
+- keep the mounted definition's 25-second shutdown drain budget below the
+  Deployment's 30-second `terminationGracePeriodSeconds`; the runtime cancels
+  remaining invocations after the drain deadline
 - enforce the same request body limit and deadline budget at the ingress or
   gateway; this is required for chunked requests and protects work before it
   reaches the application
@@ -186,10 +195,11 @@ Google ADK wraps non-read-only ADK tools with the same operation registry.
       optimistic versioning
 - [ ] immutable image, SBOM, signature, and provenance
 - [ ] arbitrary-UID and read-only-filesystem validation
-- [ ] resource, disruption, autoscaling, topology, and NetworkPolicy decisions
+- [x] resource, disruption, autoscaling, topology, and NetworkPolicy baseline
+      decisions (provider-specific selectors still require cluster review)
 - [x] optional OpenTelemetry instrumentation with content capture disabled and
       bounded metric labels; configure SDK exporters before enabling in
       production
-- [ ] scrape `/metrics` and define deployment-owned latency, error, readiness,
-      token, and cost dashboards/alerts
+- [x] scrape `/metrics` through Service annotations and define latency, error,
+      readiness, token, and cost dashboard/alert guidance
 - [ ] rollback and compatibility-tested release

@@ -428,10 +428,18 @@ Implemented:
   audits, SBOM, and strict docs
 - tag-triggered, quality-gated PyPI/GHCR/GitHub release workflow
 - package metadata and `micro-agent` console entrypoint
+- checked-in Kubernetes baseline with resource requests/limits, replica
+  spreading, disruption budget, autoscaling, default-deny network policy,
+  Prometheus scrape annotations, and a tested 25-second drain/30-second grace
+  shutdown policy
 
 Gaps:
 
 - PyPI trusted publishing must be configured before the first tag
+- provider-specific NetworkPolicy selectors and OpenShift arbitrary-UID /
+  read-only-filesystem validation still require the target cluster
+- hermetic dependency locking, immutable digest/signature policy, and
+  rollback-tested release promotion remain deployment-owner work
 
 ## Cloud workstream (C0–C5 reference durability)
 

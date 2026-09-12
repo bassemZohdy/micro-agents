@@ -51,3 +51,27 @@ class TestDeploymentHardening:
         manifests = {p.name: m for p, m in _manifests().items() if "production" in str(p)}
         kinds = {m["kind"] for m in manifests.values()}
         assert {"NetworkPolicy", "PodDisruptionBudget", "HorizontalPodAutoscaler"} <= kinds
+
+    def test_deployment_spreads_replicas_and_leaves_shutdown_cushion(self):
+        deployment = yaml.safe_load((DEPLOY_DIR / "deployment.yaml").read_text(encoding="utf-8"))
+        pod_spec = deployment["spec"]["template"]["spec"]
+        constraints = pod_spec["topologySpreadConstraints"]
+        assert {constraint["topologyKey"] for constraint in constraints} == {
+            "topology.kubernetes.io/zone",
+            "kubernetes.io/hostname",
+        }
+        assert pod_spec["terminationGracePeriodSeconds"] == 30
+
+        definition_config = yaml.safe_load(
+            (DEPLOY_DIR / "definition-configmap.yaml").read_text(encoding="utf-8")
+        )
+        definition = yaml.safe_load(definition_config["data"]["agent.yaml"])
+        assert definition["spec"]["runtime"]["shutdown_timeout_seconds"] == 25
+
+    def test_service_advertises_prometheus_scrape_contract(self):
+        service = yaml.safe_load((DEPLOY_DIR / "service.yaml").read_text(encoding="utf-8"))
+        assert service["metadata"]["annotations"] == {
+            "prometheus.io/scrape": "true",
+            "prometheus.io/path": "/metrics",
+            "prometheus.io/port": "8080",
+        }
