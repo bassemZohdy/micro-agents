@@ -452,8 +452,8 @@ Implemented:
 Gaps:
 
 - PyPI trusted publishing must be configured before the first tag
-- provider-specific NetworkPolicy selectors and OpenShift arbitrary-UID /
-  read-only-filesystem validation still require the target cluster
+- provider-specific NetworkPolicy selectors and target-cluster OpenShift
+  SecurityContextConstraints validation still require the target cluster
 - immutable digest/signature policy and rollback-tested release promotion
   remain deployment-owner work
 

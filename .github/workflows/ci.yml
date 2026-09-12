@@ -187,6 +187,27 @@ jobs:
           done
           docker logs micro-agent-smoke
           exit 1
+      - name: Restricted UID and read-only filesystem smoke test
+        run: |
+          cleanup() { docker rm -f micro-agent-restricted > /dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run --rm -d --name micro-agent-restricted \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --user 12345:0 \
+            -p 8081:8080 \
+            -e MICRO_AGENT_MODEL_PROVIDER=fake \
+            -v "$PWD/examples/notification-agent.yaml:/etc/micro-agent/agent.yaml:ro" \
+            micro-agent:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8081/health/live > /dev/null; then
+              curl -sf http://localhost:8081/health/ready
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs micro-agent-restricted
+          exit 1
 
   manifests:
     runs-on: ubuntu-latest

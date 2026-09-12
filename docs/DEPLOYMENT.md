@@ -14,6 +14,12 @@ The image:
 - starts `python -m micro_agent` with an externally mounted definition
 - probes `/health/live`
 
+The CI container job also starts the same image as UID `12345` in group `0`
+with a read-only root filesystem and a bounded writable `/tmp` tmpfs. This
+exercises the image's arbitrary-UID and read-only-filesystem assumptions before
+deployment. OpenShift SecurityContextConstraints, namespace policy, storage
+classes, and admission configuration remain target-cluster checks.
+
 The executable resolves an explicit fake, OpenAI-compatible, or Anthropic model
 provider from the mounted definition and environment. It constructs local memory/session
 providers, optional Redis/PostgreSQL-backed external memory/session/idempotency

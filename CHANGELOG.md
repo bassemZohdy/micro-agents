@@ -47,6 +47,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   `vault://mount/path#field` references; tokens stay in memory and HTTP is
   limited to loopback development.
 
+### Deployment validation
+
+- Added a restricted-container CI smoke test that runs the image as an
+  arbitrary UID with a read-only root filesystem and writable `/tmp`, plus
+  manifest/image guard coverage.
+
 ### Interoperability, state, and operations
 
 - Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,
