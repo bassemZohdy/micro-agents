@@ -39,9 +39,11 @@ Routes map an agent name to ordered upstream targets:
   never-replay-a-side-effect rule applied at the edge; a failed
   non-idempotent POST is returned as-is from its single execution target.
 
-All state is in-memory and per-process — the minimal credible C3 form.
-Production deployments add a shared store for breaker/rate state behind the
-same interfaces. Requests remain bounded at 10 MB before forwarding; accepted
+The default state is in-memory and per-process — the minimal local C3 form.
+For independently scaled gateways, inject `RedisGatewayStateStore` from the
+optional `redis` extra. Its atomic, TTL-bounded scripts coordinate per-route
+rate-limit buckets, per-target breaker failures/half-open probes, and
+expiring bulkhead leases across workers. Requests remain bounded at 10 MB before forwarding; accepted
 `text/event-stream` responses use a streaming response path so the gateway
 does not buffer the upstream event body, and the target bulkhead slot remains
 held until the stream completes or disconnects.
@@ -50,10 +52,11 @@ content-length, and content-encoding headers are stripped before forwarding.
 
 ## Verification
 
-18 tests in `tests/test_cloud_gateway.py`: 401/403/429 edges, tenant
+18 unit tests in `tests/test_cloud_gateway.py` plus the shared-state integration
+case in `tests/test_cloud_gateway_state.py`: 401/403/429 edges, tenant
 authorization, health routing, query forwarding, unknown routes, fallback on
 5xx, the no-retry rule for non-idempotent calls, idempotency-key replay to the
 fallback, safe response-header propagation, bounded rate-limit state,
 constant-time token comparison, breaker open/half-open with a controlled
-clock, success-reset, saturated-bulkhead skip, OIDC claim validation, and
-event-stream pass-through.
+clock, success-reset, saturated-bulkhead skip, OIDC claim validation,
+event-stream pass-through, and two-client Redis coordination.

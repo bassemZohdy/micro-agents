@@ -22,8 +22,9 @@ untouched:
   or calls carrying an ``idempotency-key`` header — the same
   never-replay-a-side-effect rule the core enforces, applied at the edge.
 
-Everything is in-memory and per-process: the minimal credible C3 form.
-The gateway never executes agent logic; it forwards bytes and policy
+The default resilience state is in-memory and per-process; an injected
+``GatewayStateStore`` can coordinate rate, circuit, and bulkhead state across
+workers. The gateway never executes agent logic; it forwards bytes and policy
 decisions stay with the agent (C0).
 """
 
@@ -32,13 +33,16 @@ from __future__ import annotations
 import asyncio
 import hmac
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
 from fastapi import FastAPI, Request, Response
 from starlette.responses import StreamingResponse
+
+from cloud.gateway_state import GatewayStateStore
 
 _ASYMMETRIC_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "PS256"]
 _REQUIRED_CLAIMS = ["exp", "iss", "sub", "aud"]
@@ -256,6 +260,7 @@ class Gateway:
         *,
         authenticator: GatewayAuthenticator | None = None,
         client: httpx.AsyncClient | None = None,
+        state_store: GatewayStateStore | None = None,
         timeout_seconds: float = 30.0,
         rate_limit_max_buckets: int = 10_000,
         rate_limit_idle_seconds: float = 300.0,
@@ -264,6 +269,7 @@ class Gateway:
         self._authenticator = authenticator
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
+        self._state_store = state_store
         # (bucket, last_used monotonic); bounded so distinct-token spraying
         # cannot grow memory without limit.
         self._buckets: dict[tuple[str, str], tuple[_TokenBucket, float]] = {}
@@ -311,6 +317,68 @@ class Gateway:
             self._buckets[key] = (entry[0], now)
         return entry[0].try_take()
 
+    async def _rate_limit_async(self, route: GatewayRoute, caller: Caller) -> bool:
+        if self._state_store is None:
+            return self._rate_limit(route, caller)
+        key = f"{route.agent}:{caller.tenant or caller.subject}"
+        return await self._state_store.allow_rate_limit(key, route.rate_limit_per_minute)
+
+    @staticmethod
+    def _target_key(route: GatewayRoute, target: Target) -> str:
+        return f"{route.agent}:{target.base_url}"
+
+    async def _target_available(self, route: GatewayRoute, target: Target) -> bool:
+        if not target.available():
+            return False
+        if self._state_store is None:
+            return True
+        return await self._state_store.circuit_available(
+            self._target_key(route, target),
+            target.failure_threshold,
+            target.cooldown_seconds,
+        )
+
+    async def _try_acquire(self, route: GatewayRoute, target: Target) -> tuple[bool, str | None]:
+        if not await target.try_acquire():
+            return False, None
+        if self._state_store is None:
+            return True, None
+        try:
+            lease = await self._state_store.try_acquire_bulkhead(
+                self._target_key(route, target), target.max_concurrency
+            )
+        except Exception:
+            target.release_slot()
+            raise
+        if lease is None:
+            target.release_slot()
+            return False, None
+        return True, lease
+
+    async def _release(self, route: GatewayRoute, target: Target, lease: str | None) -> None:
+        target.release_slot()
+        if self._state_store is not None and lease is not None:
+            with suppress(Exception):
+                await self._state_store.release_bulkhead(self._target_key(route, target), lease)
+                # The lease has a TTL and will be reclaimed if Redis is briefly
+                # unavailable while a worker is releasing its local slot.
+
+    async def _record_success(self, route: GatewayRoute, target: Target) -> None:
+        target.record_success()
+        if self._state_store is not None:
+            with suppress(Exception):
+                await self._state_store.record_success(self._target_key(route, target))
+
+    async def _record_failure(self, route: GatewayRoute, target: Target) -> None:
+        target.record_failure()
+        if self._state_store is not None:
+            with suppress(Exception):
+                await self._state_store.record_failure(
+                    self._target_key(route, target),
+                    target.failure_threshold,
+                    target.cooldown_seconds,
+                )
+
     def _evict_buckets(self, now: float) -> None:
         """Make room for a new bucket: idle entries first, then LRU."""
         if len(self._buckets) < self._rate_limit_max_buckets:
@@ -341,7 +409,11 @@ class Gateway:
             self._authorize(route, caller)
         except PermissionError as exc:
             return Response(status_code=403, content=str(exc))
-        if not self._rate_limit(route, caller):
+        try:
+            rate_allowed = await self._rate_limit_async(route, caller)
+        except Exception:
+            return Response(status_code=503, content="gateway state unavailable")
+        if not rate_allowed:
             return Response(status_code=429, content="rate limit exceeded")
 
         targets = self._select_targets(route)
@@ -363,7 +435,13 @@ class Gateway:
         last_status = 503
         last_content: bytes = b"no upstream accepted the call"
         for target in attempts:
-            if not await target.try_acquire():
+            try:
+                if not await self._target_available(route, target):
+                    continue
+                acquired, lease = await self._try_acquire(route, target)
+            except Exception:
+                return Response(status_code=503, content="gateway state unavailable")
+            if not acquired:
                 continue  # bulkhead saturated: skip like an open circuit
             if wants_stream:
                 try:
@@ -376,8 +454,8 @@ class Gateway:
                     )
                     upstream = await stream_context.__aenter__()
                 except httpx.HTTPError:
-                    target.record_failure()
-                    target.release_slot()
+                    await self._record_failure(route, target)
+                    await self._release(route, target, lease)
                     continue
                 if upstream.status_code >= 500:
                     content = b""
@@ -387,11 +465,29 @@ class Gateway:
                         try:
                             await stream_context.__aexit__(None, None, None)
                         finally:
-                            target.release_slot()
-                    target.record_failure()
+                            await self._release(route, target, lease)
+                    await self._record_failure(route, target)
                     last_status, last_content = upstream.status_code, content
                     continue
-                return _streaming_proxy_response(upstream, stream_context, target)
+
+                async def stream_success(target: Target = target) -> None:
+                    await self._record_success(route, target)
+
+                async def stream_failure(target: Target = target) -> None:
+                    await self._record_failure(route, target)
+
+                async def stream_release(
+                    target: Target = target, lease: str | None = lease
+                ) -> None:
+                    await self._release(route, target, lease)
+
+                return _streaming_proxy_response(
+                    upstream,
+                    stream_context,
+                    on_success=stream_success,
+                    on_failure=stream_failure,
+                    on_release=stream_release,
+                )
             try:
                 upstream = await self._client.request(
                     request.method,
@@ -401,15 +497,15 @@ class Gateway:
                     content=body,
                 )
             except httpx.HTTPError:
-                target.record_failure()
+                await self._record_failure(route, target)
                 continue
             finally:
-                target.release_slot()
+                await self._release(route, target, lease)
             if upstream.status_code >= 500:
-                target.record_failure()
+                await self._record_failure(route, target)
                 last_status, last_content = upstream.status_code, upstream.content
                 continue
-            target.record_success()
+            await self._record_success(route, target)
             return _proxy_response(upstream)
         # Non-retryable failures report exactly what the executed target
         # answered, the same as retryable exhaustion — no generic stand-in.
@@ -433,7 +529,10 @@ def _proxy_response(upstream: httpx.Response) -> Response:
 def _streaming_proxy_response(
     upstream: httpx.Response,
     stream_context: Any,
-    target: Target,
+    *,
+    on_success: Callable[[], Awaitable[None]],
+    on_failure: Callable[[], Awaitable[None]],
+    on_release: Callable[[], Awaitable[None]],
 ) -> StreamingResponse:
     """Forward an upstream event stream without buffering its body."""
     forwarded = {
@@ -447,15 +546,15 @@ def _streaming_proxy_response(
             async for chunk in upstream.aiter_raw():
                 yield chunk
         except httpx.HTTPError:
-            target.record_failure()
+            await on_failure()
             raise
         else:
-            target.record_success()
+            await on_success()
         finally:
             try:
                 await stream_context.__aexit__(None, None, None)
             finally:
-                target.release_slot()
+                await on_release()
 
     return StreamingResponse(
         body(),

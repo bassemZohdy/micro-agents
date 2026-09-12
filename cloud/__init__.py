@@ -41,6 +41,7 @@ from cloud.gateway import (
     Target,
     create_gateway_app,
 )
+from cloud.gateway_state import GatewayStateStore, RedisGatewayStateStore
 from cloud.observability import (
     InMemoryObservabilityStore,
     SqliteObservabilityStore,
@@ -83,7 +84,9 @@ __all__ = [
     "GatewayAuthenticationError",
     "GatewayAuthenticator",
     "GatewayRoute",
+    "GatewayStateStore",
     "OidcGatewayAuthenticator",
+    "RedisGatewayStateStore",
     "InMemoryAgentRegistry",
     "InMemoryConfigStore",
     "InMemoryObservabilityStore",
