@@ -169,8 +169,11 @@ deferred until the standalone release gate closes.
 - [x] Add durable persistence for cloud observability with retention and
       bounded eviction in `SqliteObservabilityStore`. Shared ingestion and
       plane authentication remain deployment work. See [ADR 0017](docs/adr/0017-observability-aggregation.md).
-- [ ] Add shared-state backends for gateway circuit-breaker, rate-limit, and
-      bulkhead state across replicas. See [CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
+- [x] Add a shared Redis backend for gateway circuit-breaker, rate-limit, and
+      bulkhead state across replicas. Atomic scripts provide tenant/route rate
+      buckets, per-target breaker probes, and TTL-backed bulkhead leases; Redis
+      availability, sizing, and failover remain deployment validation. See
+      [CLOUD_GATEWAY.md](docs/CLOUD_GATEWAY.md).
 - [x] Implement gateway event-stream response pass-through. Requests remain
       bounded before forwarding (10 MB); accepted `text/event-stream` responses
       are streamed from the upstream and release the target bulkhead slot when

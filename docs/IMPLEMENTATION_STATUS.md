@@ -417,6 +417,9 @@ Implemented:
 - bounded process-local token-bucket limiter plus injectable
   synchronous/asynchronous `RateLimiter` hook with stable 429/503 contracts
   and retry/rate-limit headers
+- the Cloud gateway supports an injectable shared-state SPI; the optional
+  `RedisGatewayStateStore` atomically coordinates per-route rate limits,
+  per-target circuit transitions, and expiring bulkhead leases across workers
 - event-stream response pass-through for gateway calls requesting
   `text/event-stream`, with bulkhead ownership held through stream completion
 - streaming negotiation rejects `text/event-stream` when the selected runtime
@@ -477,8 +480,9 @@ CLOUD_ARCHITECTURE.md). C1 implemented the minimal registry/discovery slice
 (ADR 0016 + CLOUD_GATEWAY.md); and C4 added cross-agent observability
 (ADR 0017 + CLOUD_OBSERVABILITY.md). C5 now adds restart-safe SQLite reference
 stores for the registry, config plane, and observability aggregation, with
-retention/lease handling; gateway state remains per-process while event-stream
-responses pass through without buffering; plane APIs now support explicit
+retention/lease handling; gateway state defaults to per-process but supports
+shared Redis rate/circuit/bulkhead coordination while event-stream responses
+pass through without buffering; plane APIs now support explicit
 static/OIDC authentication while retaining an unauthenticated local default.
 The `cloud`
 package is not part of the published `micro-agents` distribution. The core

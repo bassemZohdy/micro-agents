@@ -458,3 +458,62 @@ class TestGatewayHardening:
             is None
         )
         assert authenticator.authenticate(httpx.Headers({"Authorization": "Bearer "})) is None
+
+
+class _FakeSharedGatewayState:
+    def __init__(self) -> None:
+        self.rate_calls = 0
+        self.leases: set[str] = set()
+
+    async def allow_rate_limit(self, key: str, rate_per_minute: int) -> bool:
+        del key, rate_per_minute
+        self.rate_calls += 1
+        return self.rate_calls == 1
+
+    async def circuit_available(
+        self, key: str, failure_threshold: int, cooldown_seconds: float
+    ) -> bool:
+        del key, failure_threshold, cooldown_seconds
+        return True
+
+    async def record_success(self, key: str) -> None:
+        del key
+
+    async def record_failure(
+        self, key: str, failure_threshold: int, cooldown_seconds: float
+    ) -> None:
+        del key, failure_threshold, cooldown_seconds
+
+    async def try_acquire_bulkhead(self, key: str, max_concurrency: int) -> str | None:
+        del key, max_concurrency
+        if self.leases:
+            return None
+        lease = "lease-1"
+        self.leases.add(lease)
+        return lease
+
+    async def release_bulkhead(self, key: str, lease: str) -> None:
+        del key
+        self.leases.discard(lease)
+
+    async def health_check(self) -> bool:
+        return True
+
+
+def test_gateway_uses_shared_state_for_rate_limits_and_bulkheads():
+    state = _FakeSharedGatewayState()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"ok": True})
+
+    gateway = Gateway(
+        [GatewayRoute(agent="greeter", targets=[Target(base_url="http://target.test")])],
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        state_store=state,
+    )
+    with TestClient(create_gateway_app(gateway)) as http:
+        headers = {"Authorization": "Bearer acme-token"}
+        assert http.get("/greeter/hello", headers=headers).status_code == 200
+        assert http.get("/greeter/hello", headers=headers).status_code == 429
+    assert state.leases == set()
