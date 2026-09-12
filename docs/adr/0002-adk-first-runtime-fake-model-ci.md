@@ -25,5 +25,6 @@ work.
 
 - CI needs no network or API keys; behavioral tests cover the full invoke loop.
 - The custom loop and genuine adapter have separate package boundaries.
-- Broader provider and external-service integrations remain follow-up work;
-  the current release gate is the owner-side PyPI trusted-publisher setup.
+- Broader provider and external-service integrations remain follow-up work.
+  GitHub Releases and GHCR are the default distribution paths; PyPI publishing
+  is an optional owner-enabled release job.

@@ -67,9 +67,6 @@ jobs:
           name: python-distributions
           path: dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -153,3 +150,20 @@ jobs:
           files: |
             dist/*
             micro-agents-sbom.spdx.json
+
+  publish-pypi:
+    name: Publish Python distributions to PyPI (opt-in)
+    if: vars.ENABLE_PYPI_PUBLISH == 'true'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

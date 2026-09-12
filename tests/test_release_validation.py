@@ -33,3 +33,14 @@ class TestReleaseValidation:
         assert "cosign attest --yes" in workflow
         assert "cosign verify-attestation" in workflow
         assert "steps.image-build.outputs.digest" in workflow
+
+    def test_pypi_publication_is_opt_in(self):
+        workflow = (validate_release.ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+        publish_job, pypi_job = workflow.split("  publish:\n", 1)[1].split("  publish-pypi:\n", 1)
+
+        assert "gh-action-pypi-publish" not in publish_job
+        assert "if: vars.ENABLE_PYPI_PUBLISH == 'true'" in pypi_job
+        assert "id-token: write" in pypi_job
+        assert "gh-action-pypi-publish@release/v1" in pypi_job

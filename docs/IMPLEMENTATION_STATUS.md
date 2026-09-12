@@ -12,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 776 collected | 669 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
+| Tests | 777 collected | 670 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -20,8 +20,8 @@ readiness or protocol compliance.
 | Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both; the external HTTP/MCP harness is operator-invoked |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
-| Overall GitHub CI | Pass | [CI run #241](https://github.com/bassemZohdy/micro-agents/actions/runs/34699513860), all required jobs successful |
-| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); the only open release-gate item is the pypi.org-side trusted-publisher entry (an owner action on pypi.org) |
+| Overall GitHub CI | Pass | [CI run #243](https://github.com/bassemZohdy/micro-agents/actions/runs/34699684421), all required jobs successful |
+| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); GitHub Releases/GHCR do not depend on PyPI, whose publication job is opt-in |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
 so ambient proxy variables cannot unexpectedly route model traffic or loopback
@@ -453,7 +453,8 @@ Implemented:
 - build metadata, Dockerfile, sample manifests
 - CI jobs for tests, schema, package/container smoke, separate dependency
   audits, SBOM, and strict docs
-- tag-triggered, quality-gated PyPI/GHCR/GitHub release workflow
+- tag-triggered, quality-gated GitHub Release/GHCR workflow with an opt-in
+  PyPI publication job
 - package metadata and `micro-agent` console entrypoint
 - hash-pinned Linux/Python 3.11 runtime requirements with `pip --require-hashes`
   installation in the Dockerfile
@@ -472,20 +473,22 @@ Implemented:
   `redis://`/`rediss://` A2A store location, with tenant-scoped task keys,
   bounded snapshots, TTLs, and shared-worker integration coverage
 
-Gaps:
+Gaps and operator-owned checks:
 
-- PyPI trusted publishing must be configured before the first tag
-- provider-specific NetworkPolicy selectors and target-cluster OpenShift
-  SecurityContextConstraints validation still require the target cluster
-- production-cluster immutable digest/signature admission and live rollback
-  promotion remain deployment-owner work; the release gate now signs and
-  verifies the exact image digest, SBOM attestation, SLSA provenance, and
-  compatibility fixtures before publication
+- PyPI is an optional distribution channel. Its pending trusted publisher must
+  be configured only when the owner chooses to publish there; it is not needed
+  for GitHub Releases, GHCR, source installs, or self-hosting.
+- provider-specific NetworkPolicy selectors and self-hosting-cluster OpenShift
+  SecurityContextConstraints validation require the self-hosting cluster
+- immutable digest/signature admission and live promotion/rollback require an
+  operator's admission engine and deployment environment; the repository
+  publishes and verifies the exact image digest, SBOM attestation, SLSA
+  provenance, and compatibility fixtures before release
 
 ## Cloud workstream (C0–C5 reference durability)
 
-Started 2026-09-03 as an explicitly scoped reference effort ahead of the PyPI
-release-gate item. C0 defined the control-plane boundary (ADR 0013 +
+Started 2026-09-03 as an explicitly scoped reference effort alongside the
+distribution and deployment boundaries. C0 defined the control-plane boundary (ADR 0013 +
 CLOUD_ARCHITECTURE.md). C1 implemented the minimal registry/discovery slice
 (ADR 0014 + CLOUD_REGISTRY.md); C2 added the versioned configuration plane
 (ADR 0015 + CLOUD_CONFIG.md); C3 added the gateway and resilience set
@@ -512,9 +515,9 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The immediate release-gate action is the PyPI trusted-publisher configuration
-(an owner action on pypi.org). Remaining implementation and deployment
-priorities are production execution of the capacity matrix, distributed
-knowledge-service operations, target-cluster supply-chain admission, and live
-promotion/rollback; the complete prioritized backlog is in
+The default release path is complete through GitHub Releases and GHCR; PyPI is
+an optional owner-enabled distribution channel. Remaining deployment checks—
+provider wiring, self-host supply-chain admission, OpenShift policy,
+capacity/SLO review, and live promotion/rollback—belong to each self-hosting
+operator. The complete implementation record is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).
