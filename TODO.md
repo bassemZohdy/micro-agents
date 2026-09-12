@@ -162,7 +162,10 @@ separate work.
 - [x] Add an external benchmark harness for live-model, network, and tool
       latency through deployed HTTP/MCP endpoints. Existing CI remains fake and
       deterministic; production baselines remain deployment-owned.
-- [ ] Add distributed contention and production capacity-planning scenarios.
+- [x] Add an operator-invoked rising-concurrency capacity matrix for deployed
+      HTTP/MCP front doors. Each stage reports errors, p95 latency, and
+      throughput and can record replica/shared-state metadata; live Redis/
+      Postgres execution and SLO sign-off remain deployment-owned.
 
 ## Micro-Agent Cloud — C5 production hardening
 
@@ -202,8 +205,10 @@ deferred until the standalone release gate closes.
       config-record payloads, and observability events. Generated v1alpha1
       artifacts are checked in under `docs/schemas/` and the registry/config/
       observability boundaries validate the same contracts.
-- [ ] Evaluate splitting `cloud` into its own repository and deployment
-      package after the standalone contracts stabilize.
+- [x] Evaluate splitting `cloud` into its own repository and deployment
+      package. [ADR 0018](docs/adr/0018-cloud-repository-boundary.md) defers the
+      split until contracts, ownership, independent release automation, and
+      CI boundaries stabilize.
 
 ## Deferred / non-goals
 

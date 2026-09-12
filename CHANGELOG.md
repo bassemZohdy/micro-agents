@@ -43,6 +43,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Added an opt-in external benchmark harness for deployed Micro-Agent HTTP and
   Streamable HTTP MCP endpoints, with bounded concurrency, safe token handling,
   and latency/error/throughput reports.
+- Added a sequential rising-concurrency capacity matrix for deployed HTTP/MCP
+  front doors, preserving per-stage latency, error, throughput, replica, and
+  shared-state metadata for operator review.
 - Added a checked-in Linux/Python 3.11 runtime requirements lock with hashes;
   the Dockerfile now installs runtime dependencies with `pip --require-hashes`
   and installs the local package without reopening dependency resolution.
