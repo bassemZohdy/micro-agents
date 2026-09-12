@@ -9,8 +9,8 @@ age instead of hiding agents that stopped heartbeating.
 The registry keeps only control-plane state: semantic descriptors and health
 rollups. It is never on an agent's serving path. The HTTP app is a plain
 FastAPI surface; deploy it with any ASGI server (``python -m cloud.registry``
-runs uvicorn). Authentication for the registry API itself is C2+ work and is
-deliberately out of scope here. In-memory and SQLite stores share the same
+runs uvicorn). Authentication is supplied explicitly at app construction with
+the shared cloud-plane middleware. In-memory and SQLite stores share the same
 async API; SQLite persists lease state across process restarts.
 """
 
@@ -28,6 +28,7 @@ from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException
 
+from cloud.auth import PlaneAuthenticator, install_plane_auth
 from cloud.descriptors import AgentDescriptor, DescriptorError
 
 DEFAULT_LEASE_SECONDS = 300.0
@@ -408,6 +409,7 @@ def create_registry_app(
     registry: InMemoryAgentRegistry | SqliteAgentRegistry | None = None,
     *,
     database_path: str | Path | None = None,
+    authenticator: PlaneAuthenticator | None = None,
 ) -> FastAPI:
     """Create the registry API with an in-memory or durable store."""
     if registry is not None and database_path is not None:
@@ -424,6 +426,7 @@ def create_registry_app(
         )
     )
     app.state.registry = reg
+    install_plane_auth(app, authenticator)
 
     @app.put("/registry/agents/{name}/{version}")
     async def register_agent(

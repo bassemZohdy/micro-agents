@@ -28,6 +28,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 
+from cloud.auth import PlaneAuthenticator, install_plane_auth
+
 _MAX_EVENTS_PER_BATCH = 1000
 _MAX_AUDIT_LIMIT = 1000
 _EVENT_KINDS = {"span", "usage", "audit"}
@@ -474,6 +476,7 @@ def create_observability_app(
     store: InMemoryObservabilityStore | SqliteObservabilityStore | None = None,
     *,
     database_path: str | Path | None = None,
+    authenticator: PlaneAuthenticator | None = None,
 ) -> FastAPI:
     """Create the observability API with an in-memory or durable store."""
     if store is not None and database_path is not None:
@@ -490,6 +493,7 @@ def create_observability_app(
         )
     )
     app.state.observability_store = obs
+    install_plane_auth(app, authenticator)
 
     @app.post("/observability/events")
     async def ingest_events(payload: dict[str, Any]) -> dict[str, Any]:

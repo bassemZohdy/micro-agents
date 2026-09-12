@@ -63,9 +63,11 @@ store and the HTTP surface — pinned by tests.
 | `GET /health/ready` | registry readiness |
 
 The registry keeps control-plane state only and is never on an agent's
-serving path. Its API is deliberately unauthenticated in this reference slice
-— edge authentication remains gateway work (C3). The in-memory store is the
-lightweight default; the SQLite store is the restart-safe reference option.
+serving path. Pass `authenticator=` to `create_registry_app` to protect the
+API with the static or OIDC gateway authenticator; readiness remains public for
+probes. Omitting it keeps the local reference app unauthenticated. The
+in-memory store is the lightweight default; the SQLite store is the restart-
+safe reference option.
 
 ## Discovery client
 

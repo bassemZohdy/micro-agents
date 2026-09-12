@@ -5,6 +5,7 @@ it may import the core framework, but the core framework never imports it,
 and nothing here is needed to run a single Micro-Agent.
 """
 
+from cloud.auth import PlaneAuthenticator, install_plane_auth
 from cloud.config import (
     ConfigRecord,
     ConfigValidationError,
@@ -81,6 +82,7 @@ __all__ = [
     "RegistryDiscoveryClient",
     "RegistryEntry",
     "RegistryUnreachableError",
+    "PlaneAuthenticator",
     "SecretResolver",
     "SkillDescriptor",
     "StaticTokenAuthenticator",
@@ -94,4 +96,5 @@ __all__ = [
     "create_observability_app",
     "create_registry_app",
     "descriptor_from_definition",
+    "install_plane_auth",
 ]

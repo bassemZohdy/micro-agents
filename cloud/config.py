@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from cloud.auth import PlaneAuthenticator, install_plane_auth
 from micro_agent.config import EnvironmentOverlay
 from micro_agent.definition import load_definition_from_dict
 
@@ -339,6 +340,7 @@ def create_config_app(
     store: InMemoryConfigStore | SqliteConfigStore | None = None,
     *,
     database_path: str | Path | None = None,
+    authenticator: PlaneAuthenticator | None = None,
 ) -> Any:
     """Create the config-plane API with an in-memory or durable store."""
     if store is not None and database_path is not None:
@@ -355,6 +357,7 @@ def create_config_app(
         )
     )
     app.state.config_store = cfg
+    install_plane_auth(app, authenticator)
 
     def _not_found(exc: KeyError) -> HTTPException:
         return HTTPException(status_code=404, detail=str(exc.args[0] if exc.args else exc))
