@@ -130,7 +130,7 @@ async def test_redis_operation_registry_claims_once_and_shares_result() -> None:
 @pytest.mark.asyncio
 async def test_redis_a2a_stores_share_tasks_and_push_configurations() -> None:
     pytest.importorskip("a2a")
-    from a2a.types import PushNotificationConfig, Task, TaskState, TaskStatus
+    from a2a.types import Task, TaskPushNotificationConfig, TaskState, TaskStatus
 
     from micro_agent.interoperability import (
         RedisA2ATaskStore,
@@ -149,18 +149,18 @@ async def test_redis_a2a_stores_share_tasks_and_push_configurations() -> None:
     tenant_b = type("Context", (), {"state": {"tenant_id": "tenant-b"}})()
     task = Task(
         id="task-1",
-        contextId="context-1",
-        status=TaskStatus(state=TaskState.working),
+        context_id="context-1",
+        status=TaskStatus(state=TaskState.TASK_STATE_WORKING),
     )
     try:
         await task_a.save(task, tenant_a)
         shared = await task_b.get("task-1", tenant_a)
         assert shared is not None
-        assert shared.status.state == TaskState.working
+        assert shared.status.state == TaskState.TASK_STATE_WORKING
         assert await task_b.get("task-1", tenant_b) is None
         await push_a.set_info(
             "task-1",
-            PushNotificationConfig(id="callback-1", url="https://callback.example/events"),
+            TaskPushNotificationConfig(id="callback-1", url="https://callback.example/events"),
         )
         assert (await push_b.get_info("task-1"))[0].id == "callback-1"
         assert await task_a.health_check()

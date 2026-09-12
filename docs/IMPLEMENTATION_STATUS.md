@@ -255,8 +255,8 @@ Implemented:
   route with the SDK card model: protocol binding/version, security schemes
   advertised from the configured authenticator, input/output modalities, and
   complete skill metadata
-- the JSON-RPC transport with complete non-streaming and streaming task
-  lifecycles (submitted → working → completed/failed) bridged onto
+- the official `a2a-sdk==1.0.1` JSON-RPC transport with complete non-streaming
+  and streaming task lifecycles (submitted → working → completed/failed) bridged onto
   Micro-Agent invocations through an AgentExecutor; streaming artifact chunks
   are emitted only when the bound runtime advertises streaming
 - cancellation of in-flight executor tasks is wired through to the runtime
@@ -278,8 +278,10 @@ Gaps:
 
 - the SQLite stores are a single-process reference backend; a shared
   multi-replica implementation remains deployment work
-- extended authenticated cards and full A2A v1.0.1 conformance remain open
-  beyond the tested SDK subset
+- the supported A2A v1.0.1 surface is covered by the official SDK matrix:
+  discovery, non-streaming/streaming, cancellation, task get/list,
+  push-configuration CRUD, not-found errors, and version rejection; optional
+  extended-card features remain unadvertised
 
 
 ### Security and policy

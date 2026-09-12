@@ -19,7 +19,7 @@ read-only compatibility alias; new clients should use the versioned URL.
 | `GET /v1/docs` | Swagger UI | interactive documentation for the versioned API |
 | `GET /v1/redoc` | ReDoc | alternative documentation for the versioned API |
 | `GET /.well-known/agent-card.json` | standard A2A agent card | served from the official SDK card model |
-| `POST /` | A2A JSON-RPC `message/send` and `message/stream` | available when `spec.interoperability.a2a.enabled` is true; streaming is advertised only when the bound runtime supports it |
+| `POST /` | A2A v1.0.1 JSON-RPC `SendMessage` and `SendStreamingMessage` | available when `spec.interoperability.a2a.enabled` is true; streaming is advertised only when the bound runtime supports it |
 
 ## Invoke request
 
@@ -271,12 +271,12 @@ GET /.well-known/agent-card.json
 ```
 
 When enabled in the definition, the official SDK also mounts JSON-RPC at `/`
-and handles `message/send` with submitted → working → completed/failed task
-states. In-flight `message/send` work is canceled when the SDK calls the
-executor cancellation hook. `message/stream` emits artifacts when the bound
-runtime advertises streaming. Push callbacks and task snapshots are enabled
-with the `a2a_store_path` or store injection described above. Full protocol
-conformance remains open. Requests may declare
+and handles the v1.0.1 `SendMessage` binding with submitted → working →
+completed/failed task states. In-flight work is canceled when the SDK calls the
+executor cancellation hook. `SendStreamingMessage` emits artifacts when the
+bound runtime advertises streaming. `GetTask`, `ListTasks`, `CancelTask`, and
+push-configuration CRUD are backed by the configured task/push stores. Optional
+extended-card features are not advertised. Requests may declare
 `x-a2a-version`; unsupported versions receive a stable 400 response.
 
 ## MCP notifications

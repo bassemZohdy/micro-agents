@@ -1,7 +1,7 @@
 """A2A server transport: JSON-RPC binding bridged onto Micro-Agent invocations.
 
-The official a2a-sdk server stack serves the agent card and JSON-RPC
-``message/send``/``message/stream`` methods; :class:`MicroAgentExecutor` maps
+The official a2a-sdk v1 server stack serves the agent card and JSON-RPC
+``SendMessage``/``SendStreamingMessage`` methods; :class:`MicroAgentExecutor` maps
 a received message onto a Micro-Agent invocation and drives the standard task
 lifecycle (submitted → working → completed, or failed). Authentication stays
 at the HTTP transport layer — the same middleware that guards the native API
@@ -27,32 +27,36 @@ from micro_agent.interoperability.a2a_store import HttpxPushNotificationSender
 
 def _import_sdk() -> Any:  # noqa in sync with mypy: dynamic namespace below
     try:
-        from a2a.server.apps.jsonrpc import A2AFastAPIApplication
-        from a2a.server.apps.jsonrpc.jsonrpc_app import DefaultCallContextBuilder
+        from a2a.server.agent_execution import AgentExecutor, RequestContext
+        from a2a.server.events import EventQueue
         from a2a.server.request_handlers import DefaultRequestHandler
+        from a2a.server.routes.agent_card_routes import create_agent_card_routes
+        from a2a.server.routes.common import DefaultServerCallContextBuilder
+        from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
         from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-        from a2a.types import Part, TextPart
+        from a2a.types import Part, Task, TaskState, TaskStatus
 
         class _Sdk:
             pass
 
         sdk = _Sdk()
         # Dynamic namespace; mypy attr-defined is silenced at module level.
-        sdk.A2AFastAPIApplication = A2AFastAPIApplication
-        sdk.DefaultCallContextBuilder = DefaultCallContextBuilder
         sdk.DefaultRequestHandler = DefaultRequestHandler
+        sdk.create_agent_card_routes = create_agent_card_routes
+        sdk.create_jsonrpc_routes = create_jsonrpc_routes
+        sdk.DefaultServerCallContextBuilder = DefaultServerCallContextBuilder
         sdk.InMemoryTaskStore = InMemoryTaskStore
         sdk.TaskUpdater = TaskUpdater
         sdk.Part = Part
-        sdk.TextPart = TextPart
-        from a2a.server.agent_execution import AgentExecutor, RequestContext
-        from a2a.server.events import EventQueue
+        sdk.Task = Task
+        sdk.TaskState = TaskState
+        sdk.TaskStatus = TaskStatus
 
         sdk.AgentExecutor = AgentExecutor
         sdk.RequestContext = RequestContext
         sdk.EventQueue = EventQueue
 
-        class _MicroAgentCallContextBuilder(DefaultCallContextBuilder):
+        class _MicroAgentCallContextBuilder(DefaultServerCallContextBuilder):
             """Copy verified HTTP identity into the SDK task-store context."""
 
             def build(self, request: Any) -> Any:
@@ -97,6 +101,29 @@ def _response_text(response: Any) -> str:
     return str(content) if content else json.dumps(output, default=str)
 
 
+def _text_part(sdk: Any, text: str) -> Any:
+    """Build a v1 A2A text part."""
+    try:
+        return sdk.Part(text=text)
+    except TypeError:  # pragma: no cover - compatibility with the old SDK seam
+        return sdk.Part(root=sdk.TextPart(text=text))
+
+
+async def _enqueue_initial_task(sdk: Any, event_queue: Any, task_id: str, context_id: str) -> bool:
+    """Seed the v1 event stream before status updates are emitted."""
+    enqueue = getattr(event_queue, "enqueue_event", None)
+    if not callable(enqueue):
+        return False
+    await enqueue(
+        sdk.Task(
+            id=task_id,
+            context_id=context_id,
+            status=sdk.TaskStatus(state=sdk.TaskState.TASK_STATE_SUBMITTED),
+        )
+    )
+    return True
+
+
 def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
     """Build the A2A AgentExecutor bridge for a Micro-Agent."""
     sdk = _import_sdk()
@@ -119,7 +146,7 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
                 if delta:
                     if pending_delta:
                         await updater.add_artifact(
-                            [sdk.Part(root=sdk.TextPart(text=pending_delta))],
+                            [_text_part(sdk, pending_delta)],
                             artifact_id=artifact_id,
                             name="result",
                             append=emitted_artifact,
@@ -145,7 +172,7 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
                 final_delta = final_text if not emitted_artifact else pending_delta
             if final_delta or not emitted_artifact:
                 await updater.add_artifact(
-                    [sdk.Part(root=sdk.TextPart(text=final_delta))],
+                    [_text_part(sdk, final_delta)],
                     artifact_id=artifact_id,
                     name="result",
                     append=emitted_artifact,
@@ -161,7 +188,9 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
             if current_task is not None:
                 self._in_flight[task_id] = current_task
             try:
-                await updater.submit()
+                seeded_task = await _enqueue_initial_task(sdk, event_queue, task_id, context_id)
+                if not seeded_task:
+                    await updater.submit()
                 await updater.start_work()
                 request = AgentRequest(input=_payload_from(context), session_id=context_id)
                 if _streaming_enabled(self._agent):
@@ -173,15 +202,13 @@ def build_micro_agent_executor(agent: DefaultMicroAgent) -> Any:
                 raise
             except Exception:  # noqa: BLE001 — failures become task failures
                 await updater.failed(
-                    updater.new_agent_message(
-                        [sdk.Part(root=sdk.TextPart(text="agent invocation failed"))]
-                    )
+                    updater.new_agent_message([_text_part(sdk, "agent invocation failed")])
                 )
                 return
             else:
                 if not _streaming_enabled(self._agent):
                     await updater.add_artifact(
-                        [sdk.Part(root=sdk.TextPart(text=_response_text(response)))],
+                        [_text_part(sdk, _response_text(response))],
                         name="result",
                     )
                 await updater.complete()
@@ -230,7 +257,7 @@ def attach_a2a(
     )
     paths = {
         "card": "/.well-known/agent-card.json",
-        "protocol_version": card.protocol_version,
+        "protocol_version": card.supported_interfaces[0].protocol_version,
     }
 
     if enable_rpc:
@@ -245,22 +272,25 @@ def attach_a2a(
         handler = sdk.DefaultRequestHandler(
             agent_executor=build_micro_agent_executor(agent),
             task_store=task_store,
+            agent_card=card,
             push_config_store=push_config_store,
             push_sender=push_sender,
         )
-        a2a_app = sdk.A2AFastAPIApplication(
-            agent_card=card,
-            http_handler=handler,
-            context_builder=sdk.MicroAgentCallContextBuilder(),
-        )
-        a2a_app.add_routes_to_app(app, agent_card_url=paths["card"], rpc_url="/")
+        context_builder = sdk.MicroAgentCallContextBuilder()
+        for route in sdk.create_agent_card_routes(card, card_url=paths["card"]):
+            app.router.routes.append(route)
+        for route in sdk.create_jsonrpc_routes(
+            handler, rpc_url="/", context_builder=context_builder
+        ):
+            app.router.routes.append(route)
         paths["rpc"] = "/"
     else:
+        from a2a.server.request_handlers.response_helpers import agent_card_to_dict
         from fastapi.responses import JSONResponse
 
         @app.get(paths["card"], response_model=None)
         async def get_agent_card() -> JSONResponse:
-            return JSONResponse(card.model_dump(by_alias=True, exclude_none=True, mode="json"))
+            return JSONResponse(agent_card_to_dict(card))
 
     return paths
 

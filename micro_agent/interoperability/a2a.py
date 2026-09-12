@@ -3,9 +3,9 @@
 The agent card is the SDK's model served at the standard
 ``/.well-known/agent-card.json`` route, and the JSON-RPC transport bridges
 A2A tasks onto Micro-Agent invocations with non-streaming and streaming task
-lifecycles when the bound runtime supports streaming. Declared protocol
-versions must be supported by the installed SDK; requests declaring an
-unsupported version are rejected.
+lifecycles when the bound runtime supports streaming. The adapter targets the
+official A2A v1.0.1 protobuf contract; requests declaring another version are
+rejected.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from typing import Any
 from micro_agent.definition import A2AConfig
 
 _A2A_WELL_KNOWN_PATH = "/.well-known/agent-card.json"
-_DEFAULT_PROTOCOL_VERSION = "0.3.0"
+_DEFAULT_PROTOCOL_VERSION = "1.0.1"
 
-SUPPORTED_PROTOCOL_VERSIONS = frozenset({"0.3.0"})
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({"1.0.1"})
 
 
 class A2aSdkUnavailableError(RuntimeError):
@@ -90,20 +90,27 @@ def agent_card_from_definition(
     a2a_config = definition.spec.interoperability.a2a if definition.spec.interoperability else None
     declared = a2a_config.protocol_version if a2a_config else None
     url = base_url or (a2a_config.endpoint if a2a_config else "") or ""
-    security: list[dict[str, list[str]]] | None = None
+    protocol_version = normalize_protocol_version(declared)
+    security_requirements: list[Any] | None = None
     security_schemes: dict[str, Any] | None = None
     if security_scheme:
         security_schemes = {
-            scheme_name: a2a_types.SecurityScheme(root=security_scheme),
+            scheme_name: _security_scheme_from_dict(a2a_types, security_scheme),
         }
-        security = [{scheme_name: []}]
+        security_requirements = [
+            a2a_types.SecurityRequirement(schemes={scheme_name: a2a_types.StringList(list=[])})
+        ]
     return a2a_types.AgentCard(
         name=definition.metadata.name,
         description=definition.metadata.description or "",
         version=definition.metadata.version,
-        url=url,
-        preferred_transport="JSONRPC",
-        protocol_version=normalize_protocol_version(declared),
+        supported_interfaces=[
+            a2a_types.AgentInterface(
+                url=url,
+                protocol_binding="JSONRPC",
+                protocol_version=protocol_version,
+            )
+        ],
         skills=skills_mapping(definition),
         capabilities=a2a_types.AgentCapabilities(
             streaming=streaming,
@@ -111,9 +118,20 @@ def agent_card_from_definition(
         ),
         default_input_modes=["application/json"],
         default_output_modes=["application/json"],
-        security=security,
         security_schemes=security_schemes,
+        security_requirements=security_requirements,
     )
+
+
+def _security_scheme_from_dict(a2a_types: Any, payload: dict[str, Any]) -> Any:
+    """Build the v1 protobuf security wrapper from a JSON-like scheme payload."""
+    scheme_type = payload.get("type")
+    if scheme_type == "openIdConnect":
+        scheme = a2a_types.OpenIdConnectSecurityScheme(
+            open_id_connect_url=str(payload["open_id_connect_url"])
+        )
+        return a2a_types.SecurityScheme(open_id_connect_security_scheme=scheme)
+    raise ValueError(f"unsupported A2A security scheme type: {scheme_type!r}")
 
 
 __all__ = [

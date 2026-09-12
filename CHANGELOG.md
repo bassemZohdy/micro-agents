@@ -6,6 +6,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Security and downstream protocols
 
+- Upgraded the optional A2A integration to the official `a2a-sdk==1.0.1`
+  contract, including protobuf cards, JSON-RPC task methods, cancellation,
+  push-configuration methods, and durable task-store compatibility.
 - Added optional Redis-backed A2A task and push-configuration stores for
   cross-replica persistence. `MICRO_AGENT_A2A_STORE_PATH` now accepts a
   `redis://`/`rediss://` URL in addition to the SQLite reference path.

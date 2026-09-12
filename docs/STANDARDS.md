@@ -25,14 +25,15 @@ Relevant v1 requirements for this project:
 - complete AgentSkill metadata
 - at least one real standard message/task binding
 
-Current status: **tested subset implemented**. The official `a2a-sdk` serves
-`/.well-known/agent-card.json` and mounts JSON-RPC `message/send` and
-`message/stream` when enabled; the integration suite resolves the card with
-the official client and completes both non-streaming and streaming tasks when
-the bound runtime supports streaming. The framework also provides a bounded
-SQLite task/push reference backend and authenticated callback delivery. A
-shared multi-replica backend, extended card coverage, and full v1 conformance
-remain open, so this is not a claim of full production conformance.
+Current status: **supported v1.0.1 surface implemented and tested**. The
+official `a2a-sdk==1.0.1` serves `/.well-known/agent-card.json`, mounts the
+JSON-RPC task binding, and is exercised by the official client for
+non-streaming/streaming tasks, cancellation, task get/list, push-configuration
+CRUD, not-found errors, and protocol-version rejection. The framework also
+provides bounded SQLite/Redis task and push reference backends plus
+authenticated callback delivery. Optional extended-card features and shared
+backend production operations remain deployment work; they are not advertised
+as supported capabilities.
 
 ## MCP
 
