@@ -29,6 +29,12 @@ All notable changes to the Micro-Agents project are documented in this file.
   observability APIs, protecting plane routes while keeping readiness probes
   public.
 
+### Packaging and deployment
+
+- Added a checked-in Linux/Python 3.11 runtime requirements lock with hashes;
+  the Dockerfile now installs runtime dependencies with `pip --require-hashes`
+  and installs the local package without reopening dependency resolution.
+
 ### Interoperability, state, and operations
 
 - Added a tenant-scoped SQLite A2A task store with bounded JSON snapshots,
