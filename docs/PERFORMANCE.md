@@ -40,9 +40,41 @@ Python version, operating system, and shared-runner load. Keep thresholds
 generous enough to catch material regressions without pretending to be
 production SLOs.
 
+## External deployment harness
+
+Use [`benchmarks/run_external_benchmark.py`](https://github.com/bassemZohdy/micro-agents/blob/main/benchmarks/run_external_benchmark.py)
+when a deployed endpoint is available. It supports bounded concurrent calls to
+the Micro-Agent HTTPS API and to an MCP Streamable HTTP server through the
+official MCP SDK:
+
+```bash
+python benchmarks/run_external_benchmark.py \
+  --protocol http \
+  --endpoint https://agent.example.com/v1/invoke \
+  --iterations 100 --concurrency 10
+
+python benchmarks/run_external_benchmark.py \
+  --protocol mcp \
+  --endpoint https://mcp.example.com/mcp \
+  --tool search \
+  --arguments '{"query":"benchmark"}' \
+  --bearer-token-env MCP_BENCHMARK_TOKEN \
+  --iterations 50 --concurrency 5
+```
+
+Remote endpoints must use HTTPS. Put bearer tokens in an environment
+variable; tokens are not accepted as command-line arguments and are not
+included in the JSON report. Live model, network, tool, replica, and datastore
+measurements depend on the deployment. Record the endpoint version, replica
+count, datastore topology, load, and report when establishing production SLOs.
+
 ## CI policy
 
 CI runs both fake scenarios with budget enforcement after the unit tests. A
 budget failure blocks the workflow and should be investigated alongside the
-benchmark report. Changes to thresholds must be reviewed with the benchmark
-methodology and documented in the changelog.
+benchmark report. The external harness is operator-invoked and is not run
+against deployment endpoints by CI. Distributed capacity work should repeat
+the harness at rising concurrency against shared Redis/Postgres services and
+review p95 latency, saturation, and telemetry together. Changes to thresholds
+must be reviewed with the benchmark methodology and documented in the
+changelog.
