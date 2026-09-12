@@ -46,6 +46,7 @@ from micro_agent.config.config import (
 )
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.knowledge import (
+    HttpKnowledgeRetriever,
     InMemoryKnowledgeRetriever,
     KnowledgeRetriever,
     SqliteKnowledgeRetriever,
@@ -727,6 +728,8 @@ def _build_knowledge_provider(
     endpoint = config.knowledge_endpoint if config is not None else None
     if endpoint:
         try:
+            if endpoint.startswith(("http://", "https://")):
+                return HttpKnowledgeRetriever(endpoint)
             return SqliteKnowledgeRetriever(_sqlite_path(endpoint))
         except (OSError, ValueError) as exc:
             raise BootstrapError(f"Invalid knowledge provider endpoint: {exc}") from exc

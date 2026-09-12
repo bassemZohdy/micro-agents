@@ -8,14 +8,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import sqlite3
 import threading
 import time
 from abc import ABC, abstractmethod
+from contextlib import suppress
 from dataclasses import dataclass, field
 from hashlib import sha256
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+
+import httpx
 
 # ---------------------------------------------------------------------------
 # Knowledge Model
@@ -205,6 +211,161 @@ class InMemoryKnowledgeRetriever(KnowledgeRetriever):
 
     async def health_check(self, source: KnowledgeSource) -> bool:
         return source.ref in self._documents
+
+
+class KnowledgeProviderError(RuntimeError):
+    """Raised when a remote semantic knowledge backend violates its contract."""
+
+
+class HttpKnowledgeRetriever(KnowledgeRetriever):
+    """Query a bounded HTTP semantic-search backend.
+
+    The backend receives ``POST /search`` with the query, source reference,
+    tenant, version, and result limit. It returns ``{"results": [...]}``,
+    where each result has string ``content`` and numeric ``relevance`` or
+    ``score`` plus optional metadata. The provider is transport-neutral so a
+    deployment can front a vector database, hybrid search service, or managed
+    retrieval API without changing the runtime SPI.
+    """
+
+    def __init__(
+        self,
+        endpoint: str,
+        *,
+        bearer_token: str | None = None,
+        timeout: float = 5.0,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._endpoint = self._validate_endpoint(endpoint).rstrip("/") + "/"
+        if timeout <= 0:
+            raise ValueError("knowledge backend timeout must be positive")
+        self._bearer_token = bearer_token
+        self._timeout = timeout
+        self._client = client or httpx.AsyncClient(
+            base_url=self._endpoint,
+            follow_redirects=False,
+            timeout=timeout,
+            trust_env=False,
+        )
+        self._owns_client = client is None
+
+    async def retrieve(
+        self, query: str, source: KnowledgeSource, limit: int = 5
+    ) -> list[KnowledgeEntry]:
+        if limit < 1 or source.max_results < 1:
+            return []
+        bounded_limit = min(limit, source.max_results, 100)
+        payload: dict[str, Any] = {
+            "query": query,
+            "source_ref": source.ref,
+            "limit": bounded_limit,
+        }
+        if source.version is not None:
+            payload["version"] = source.version
+        tenant_id = source.metadata.get("tenant_id")
+        if tenant_id is not None:
+            payload["tenant_id"] = str(tenant_id)
+        try:
+            response = await self._client.post(
+                "search",
+                json=payload,
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise KnowledgeProviderError("semantic knowledge backend request failed") from exc
+        if response.status_code != 200:
+            raise KnowledgeProviderError(
+                f"semantic knowledge backend returned HTTP {response.status_code}"
+            )
+        body = self._json_object(response)
+        results = body.get("results")
+        if not isinstance(results, list) or len(results) > 100:
+            raise KnowledgeProviderError("semantic knowledge response has an invalid results list")
+        entries: list[KnowledgeEntry] = []
+        for item in results[:bounded_limit]:
+            if not isinstance(item, dict) or not isinstance(item.get("content"), str):
+                raise KnowledgeProviderError("semantic knowledge result content must be a string")
+            content = item["content"].strip()
+            if not content or len(content) > 1_048_576:
+                raise KnowledgeProviderError("semantic knowledge result content is invalid")
+            relevance_value: object = item.get("relevance", item.get("score", 0.0))
+            if relevance_value is None:
+                relevance_value = 0.0
+            if not isinstance(relevance_value, (int, float, str)):
+                raise KnowledgeProviderError("semantic knowledge relevance must be numeric")
+            try:
+                relevance = float(relevance_value)
+            except (TypeError, ValueError) as exc:
+                raise KnowledgeProviderError(
+                    "semantic knowledge relevance must be numeric"
+                ) from exc
+            if not math.isfinite(relevance):
+                raise KnowledgeProviderError("semantic knowledge relevance must be finite")
+            metadata = item.get("metadata", {})
+            if not isinstance(metadata, dict):
+                raise KnowledgeProviderError("semantic knowledge metadata must be an object")
+            metadata = {str(key): value for key, value in metadata.items()}
+            metadata.setdefault("content_hash", compute_content_hash(content))
+            metadata.setdefault("version", item.get("version") or source.version)
+            entries.append(
+                KnowledgeEntry(
+                    content=content,
+                    source_ref=source.ref,
+                    relevance=relevance,
+                    metadata=metadata,
+                )
+            )
+        return entries
+
+    async def health_check(self, source: KnowledgeSource) -> bool:
+        del source
+        try:
+            response = await self._client.get(
+                "health/ready", headers=self._headers(), timeout=self._timeout
+            )
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+    def __repr__(self) -> str:
+        return f"HttpKnowledgeRetriever(endpoint={self._endpoint!r})"
+
+    def _headers(self) -> dict[str, str]:
+        if self._bearer_token:
+            return {"Authorization": f"Bearer {self._bearer_token}"}
+        return {}
+
+    @staticmethod
+    def _json_object(response: httpx.Response) -> dict[str, Any]:
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise KnowledgeProviderError("semantic knowledge response was not valid JSON") from exc
+        if not isinstance(body, dict):
+            raise KnowledgeProviderError("semantic knowledge response must be an object")
+        return body
+
+    @staticmethod
+    def _validate_endpoint(endpoint: str) -> str:
+        parsed = urlsplit(endpoint)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("knowledge backend endpoint must be an absolute http(s) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError(
+                "knowledge backend endpoint must not contain credentials, query, or fragment"
+            )
+        host = parsed.hostname or ""
+        loopback = host.lower() == "localhost"
+        with suppress(ValueError):
+            loopback = loopback or ip_address(host).is_loopback
+        if parsed.scheme == "http" and not loopback:
+            raise ValueError("knowledge backend endpoint must use HTTPS outside loopback")
+        return endpoint
 
 
 class SqliteKnowledgeRetriever(KnowledgeRetriever):

@@ -68,7 +68,11 @@ the validation and precedence rules.
 
 For a durable local knowledge index, set
 `MICRO_AGENT_KNOWLEDGE_ENDPOINT=sqlite:///var/lib/micro-agent/knowledge.db`
-and provision documents through the `SqliteKnowledgeRetriever` SPI. When the
+and provision documents through the `SqliteKnowledgeRetriever` SPI. For a
+remote semantic backend, set `MICRO_AGENT_KNOWLEDGE_ENDPOINT` to its HTTPS
+base URL; the runtime calls bounded `/search` and `/health/ready` routes. A
+protected remote service should be bound through an injected
+`HttpKnowledgeRetriever` with a bearer token. When the
 definition enables A2A, set
 `MICRO_AGENT_A2A_STORE_PATH=/var/lib/micro-agent/a2a.db` to persist bounded
 tenant-scoped task snapshots and push callback configuration. These SQLite

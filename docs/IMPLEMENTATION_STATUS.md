@@ -365,6 +365,10 @@ Implemented:
 - in-memory and durable tenant-scoped SQLite keyword knowledge retrievers,
   with versioned documents, deterministic retrieval, and startup health checks
   in both runtimes
+- bounded `HttpKnowledgeRetriever` adapter for semantic/vector or hybrid
+  search services, with HTTPS/loopback endpoint validation, no ambient proxy or
+  redirects, optional bearer auth, tenant/version propagation, strict result
+  parsing, content hashes, and readiness probing
 
 Gaps:
 
@@ -372,7 +376,9 @@ Gaps:
   external store; PostgreSQL providers require the optional extra and a
   provisioned database (not embedded with the framework)
 - SQLite knowledge, task, and audit stores are portable single-process
-  reference backends, not Kubernetes multi-replica shared services;
+  reference backends, not Kubernetes multi-replica shared services; the HTTP
+  knowledge adapter does not include or operate the distributed vector/index
+  service itself;
   PostgreSQL providers require the optional extra and a provisioned database
 - state providers scope records by verified tenant when available and reject
   stale non-zero-version updates; unscoped zero-version writes remain a
@@ -486,6 +492,7 @@ production capabilities.
 
 The immediate release-gate action is the PyPI trusted-publisher configuration
 (an owner action on pypi.org). Remaining implementation priorities are shared
-multi-replica state, full A2A conformance, and plane authentication; the
+multi-replica state, full A2A conformance, distributed knowledge-service
+operations, and plane authentication; the
 complete prioritized backlog is in
 [`TODO.md`](https://github.com/bassemZohdy/micro-agents/blob/main/TODO.md).

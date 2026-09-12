@@ -1,8 +1,10 @@
 """Micro-Agent Knowledge — externally supplied domain information."""
 
 from micro_agent.knowledge.knowledge import (
+    HttpKnowledgeRetriever,
     InMemoryKnowledgeRetriever,
     KnowledgeEntry,
+    KnowledgeProviderError,
     KnowledgeRetriever,
     KnowledgeSource,
     SqliteKnowledgeRetriever,
@@ -12,8 +14,10 @@ from micro_agent.knowledge.knowledge import (
 )
 
 __all__ = [
+    "HttpKnowledgeRetriever",
     "InMemoryKnowledgeRetriever",
     "KnowledgeEntry",
+    "KnowledgeProviderError",
     "KnowledgeRetriever",
     "KnowledgeSource",
     "SqliteKnowledgeRetriever",
