@@ -1,5 +1,6 @@
 """Micro-Agent Models — model configuration and provider abstraction."""
 
+from micro_agent.models.anthropic import AnthropicConfig, AnthropicProvider
 from micro_agent.models.fake import FakeModelConfig, FakeModelProvider
 from micro_agent.models.model import (
     ModelConfig,
@@ -12,6 +13,8 @@ from micro_agent.models.openai_compat import OpenAICompatConfig, OpenAICompatPro
 from micro_agent.models.structured import output_contract_json_schema, structured_output_generation
 
 __all__ = [
+    "AnthropicConfig",
+    "AnthropicProvider",
     "FakeModelConfig",
     "FakeModelProvider",
     "ModelConfig",

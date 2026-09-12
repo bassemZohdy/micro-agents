@@ -24,7 +24,7 @@ the service becomes ready.
 | `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
-| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake` or OpenAI-compatible aliases |
+| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake`, OpenAI-compatible aliases, or `anthropic`/`claude` |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
 | `MICRO_AGENT_SESSION_ENDPOINT` | `session_endpoint` | wired for SQLite, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) bindings; unsupported external endpoints fail fast |
 | `MICRO_AGENT_IDEMPOTENCY_ENDPOINT` | `idempotency_endpoint` | wired for both runtimes' distributed operation registry (Redis or PostgreSQL); unsupported endpoints fail fast |
@@ -499,7 +499,7 @@ export MICRO_AGENT_RUNTIME=google-adk
 
 The selector accepts `custom` (also `adk` or `reference`) and `google-adk`
 (also `google_adk`). The adapter supports the native Google model path and
-injected fake/OpenAI-compatible model providers. Declared services map onto
+injected fake/OpenAI-compatible/Anthropic model providers. Declared services map onto
 ADK-native constructs: memory bridges into an ADK memory service (auto-store
 and search included), injected policy is enforced around every tool execution
 and declared MCP server, declared MCP servers surface discovered tools as ADK
@@ -518,7 +518,12 @@ event/state snapshot and continue the original invocation.
 OpenAI-compatible model endpoints preserve any path prefix in the configured
 URL. For example, `https://llm.example.com/v1` is probed at
 `/v1/models` and invoked at `/v1/chat/completions`; the provider also sends the
-resolved `model_id` while the logical `ref` remains unchanged.
+resolved `model_id` while the logical `ref` remains unchanged. The native
+Anthropic adapter uses `POST /v1/messages` and `GET /v1/models` against
+`https://api.anthropic.com` by default (or the configured endpoint), translates
+the runtime tool transcript to `tool_use`/`tool_result` blocks, and supports
+Anthropic SSE streaming. It reports structured output as unsupported so an
+output contract cannot be silently downgraded.
 
 ## Definition versus deployment configuration
 

@@ -150,7 +150,7 @@ Current runtime capability matrix:
 
 | Capability | Availability | Notes |
 |---|---|---|
-| `streaming` | provider-dependent | true for OpenAI-compatible providers, a fake provider configured with stream chunks, and the Google ADK adapter when its injected provider advertises streaming; native ADK model selection remains conservative |
+| `streaming` | provider-dependent | true for OpenAI-compatible and native Anthropic providers, a fake provider configured with stream chunks, and the Google ADK adapter when its injected provider advertises streaming; native ADK model selection remains conservative |
 | `structured_output` | provider-dependent | true for the OpenAI-compatible provider and the Google ADK adapter when its injected provider advertises structured output; native ADK model selection remains conservative |
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
@@ -184,6 +184,8 @@ Implemented:
 
 - deterministic fake provider
 - injectable OpenAI-compatible chat-completions provider
+- native Anthropic Messages provider with `tool_use`/`tool_result` translation
+  and SSE streaming
 - built-in `echo` tool, installed-package extensions through
   `micro_agent.tools` entry points, programmatic tool injection, and injected
   MCP tool adapters
@@ -195,7 +197,7 @@ Implemented (additions):
 - tool requests are validated against declared JSON Schema inputs before
   execution
 - explicit proxy/TLS configuration and injectable HTTP clients for the
-  OpenAI-compatible provider
+  OpenAI-compatible and Anthropic providers
 - provider capability reporting with tool-use negotiation enforced at startup
 - endpoint path prefixes (for example `/v1`) are preserved when constructing
   `/models` and `/chat/completions` requests, and the declared provider model ID
@@ -205,8 +207,8 @@ Implemented (additions):
 
 Gaps:
 
-- the built-in provider set is intentionally limited to fake and
-  OpenAI-compatible chat completions; other model families require additional
+- the built-in provider set currently covers fake, OpenAI-compatible chat
+  completions, and Anthropic Messages; other model families require additional
   provider adapters
 - `echo` is the only bundled native tool; conceptual examples that declare
   domain tools require installed plugins or programmatic injection
