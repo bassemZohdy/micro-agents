@@ -21,8 +21,8 @@ Constructed from configuration:
   deployment supplies documents),
 - a credential provider (injected non-environment provider, or the built-in
   environment provider); every declared credential reference must resolve,
-- the platform policy, from an injected policy or a policy resolver for the
-  declared policy references; unresolved policy references fail fast.
+- the platform policy, from an injected policy, an injected resolver, or the
+  configured external policy store; unresolved policy references fail fast.
 """
 
 from __future__ import annotations
@@ -75,7 +75,9 @@ from micro_agent.security import (
     ApprovalStore,
     CredentialProvider,
     EnvironmentCredentialProvider,
+    HttpPolicyResolver,
     OperationRegistryProtocol,
+    PolicyStoreError,
     RedisApprovalStore,
     RedisOperationRegistry,
 )
@@ -158,7 +160,7 @@ def build_runtime(
     )
     tool_registry = _build_tool_registry(definition)
     _validate_tool_bindings(definition, tool_registry, mcp)
-    effective_policy = _resolve_policy(definition, policy, policy_resolver)
+    effective_policy = _resolve_policy(definition, policy, policy_resolver, resolved)
     knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever, resolved)
     audit_sink = build_audit_sink(resolved)
 
@@ -314,6 +316,13 @@ def _resolve_definition_config(
         resolved.model_api_key = credential_provider.resolve(credential_ref.name)
     if credential_ref is not None and resolved.model_api_key is None:
         raise BootstrapError(f"Required model credential '{credential_ref.name}' is not available")
+    policy_token_ref = environment_config.policy_store_token_ref if environment_config else None
+    if policy_token_ref is not None and resolved.policy_store_token is None:
+        resolved.policy_store_token = credential_provider.resolve(policy_token_ref.name)
+    if policy_token_ref is not None and resolved.policy_store_token is None:
+        raise BootstrapError(
+            f"Required policy-store credential '{policy_token_ref.name}' is not available"
+        )
     return resolved
 
 
@@ -341,6 +350,7 @@ def _resolve_policy(
     definition: MicroAgentDefinition,
     injected: AgentPolicy | None,
     resolver: Callable[[list[str]], AgentPolicy | None] | None,
+    config: ResolvedConfig,
 ) -> AgentPolicy | None:
     """Resolve the effective platform policy from injection or policy refs.
 
@@ -353,13 +363,30 @@ def _resolve_policy(
         return injected
     if injected is not None:
         return injected
-    if resolver is not None:
-        resolved = resolver(policy_refs)
+    effective_resolver = resolver
+    owned_resolver: HttpPolicyResolver | None = None
+    if effective_resolver is None and config.policy_store_endpoint:
+        try:
+            owned_resolver = HttpPolicyResolver(
+                config.policy_store_endpoint,
+                token=config.policy_store_token,
+            )
+        except (ValueError, PolicyStoreError) as exc:
+            raise BootstrapError(f"Invalid policy-store configuration: {exc}") from exc
+        effective_resolver = owned_resolver
+    if effective_resolver is not None:
+        try:
+            resolved = effective_resolver(policy_refs)
+        except PolicyStoreError as exc:
+            raise BootstrapError(f"Policy store resolution failed: {exc}") from exc
+        finally:
+            if owned_resolver is not None:
+                owned_resolver.close()
         if resolved is not None:
             return resolved
     raise BootstrapError(
         f"Policy references cannot be resolved: {', '.join(policy_refs)}; "
-        "inject a policy or a policy resolver through the bootstrap"
+        "inject a policy/resolver or configure MICRO_AGENT_POLICY_STORE_ENDPOINT"
     )
 
 

@@ -38,6 +38,8 @@ class EnvironmentConfig(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    policy_store_endpoint: str | None = None
+    policy_store_token_ref: SecretRef | None = None
     log_level: str | None = None
     auth: str | None = None
     auth_issuer: str | None = None
@@ -70,6 +72,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    policy_store_endpoint: str | None = None
 
     @classmethod
     def _validate_http_endpoint(cls, value: str, field_name: str) -> str:
@@ -83,6 +86,13 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
     def validate_model_endpoint(cls, value: str | None) -> str | None:
         if value is not None:
             return cls._validate_http_endpoint(value, "model_endpoint")
+        return value
+
+    @field_validator("policy_store_endpoint")
+    @classmethod
+    def validate_policy_store_endpoint(cls, value: str | None) -> str | None:
+        if value is not None:
+            return cls._validate_http_endpoint(value, "policy_store_endpoint")
         return value
 
     @field_validator("mcp_endpoints")
@@ -105,6 +115,7 @@ class EnvironmentOverlay(BaseModel, extra="forbid"):
             approval_endpoint=self.approval_endpoint,
             knowledge_endpoint=self.knowledge_endpoint,
             a2a_store_path=self.a2a_store_path,
+            policy_store_endpoint=self.policy_store_endpoint,
         )
 
 
@@ -127,6 +138,8 @@ class ResolvedConfig:
     approval_endpoint: str | None = None
     knowledge_endpoint: str | None = None
     a2a_store_path: str | None = None
+    policy_store_endpoint: str | None = None
+    policy_store_token: str | None = None
     log_level: str = "INFO"
     auth: str | None = None
     auth_issuer: str | None = None
@@ -217,6 +230,8 @@ def resolve_config(
             config.knowledge_endpoint = env_config.knowledge_endpoint
         if env_config.a2a_store_path:
             config.a2a_store_path = env_config.a2a_store_path
+        if env_config.policy_store_endpoint:
+            config.policy_store_endpoint = env_config.policy_store_endpoint
         if env_config.log_level is not None:
             config.log_level = env_config.log_level
         if env_config.auth:
@@ -292,6 +307,14 @@ def resolve_config(
     if env_a2a_store_path:
         config.a2a_store_path = env_a2a_store_path
 
+    env_policy_store_endpoint = _read_env("policy_store_endpoint")
+    if env_policy_store_endpoint:
+        config.policy_store_endpoint = env_policy_store_endpoint
+
+    env_policy_store_token = _read_env("policy_store_token")
+    if env_policy_store_token:
+        config.policy_store_token = env_policy_store_token
+
     env_auth = _read_env("auth")
     if env_auth:
         config.auth = env_auth
@@ -338,6 +361,8 @@ def resolve_config(
     # Layer 4: Secret bindings
     if env_config and env_config.model_api_key_ref:
         config.model_api_key = _resolve_secret(env_config.model_api_key_ref)
+    if env_config and env_config.policy_store_token_ref:
+        config.policy_store_token = _resolve_secret(env_config.policy_store_token_ref)
 
     return config
 
@@ -423,6 +448,27 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
             )
         )
 
+    if config.policy_store_endpoint:
+        parsed = urlsplit(config.policy_store_endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            diagnostics.append(
+                ConfigDiagnostic(
+                    level="error",
+                    message=(
+                        "policy_store_endpoint must be an absolute http(s) URL without "
+                        "credentials, query, or fragment"
+                    ),
+                    path="policy_store_endpoint",
+                )
+            )
+
     if any(not origin.strip() for origin in config.cors_origins):
         diagnostics.append(
             ConfigDiagnostic(
@@ -440,8 +486,6 @@ def validate_config(config: ResolvedConfig) -> list[ConfigDiagnostic]:
             )
         )
     else:
-        from urllib.parse import urlsplit
-
         for origin in config.cors_origins:
             parsed = urlsplit(origin.strip())
             if origin == "*":

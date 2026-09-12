@@ -57,6 +57,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Implemented conditional `PolicyRule` evaluation with resource/action
   matching, identity-backed conditions, supported comparison operators, and
   deny-over-allow precedence.
+- Added strict HTTP policy-store resolution for declared `policy_refs`, with
+  optional bearer authentication, secret-provider token bindings, HTTPS/
+  loopback transport policy, redirect refusal, and fail-closed response
+  validation. Bootstrap now auto-wires the store when configured.
 - Added a durable Redis-backed approval continuation store with expiry-safe
   serialization, malformed-record cleanup, health checks, and executable
   bootstrap configuration via `MICRO_AGENT_APPROVAL_ENDPOINT`.
@@ -708,5 +712,5 @@ real providers, but the following production boundaries remain:
   not implemented; caller identity is observable to operations but not
   forwarded through per-protocol delegation
 - the default approval store remains process-local, with optional Redis-backed
-  approval and idempotency stores; downstream delegation, external policy
-  stores, and broader production state integrations remain open
+  approval and idempotency stores; downstream delegation and broader
+  production state integrations remain open

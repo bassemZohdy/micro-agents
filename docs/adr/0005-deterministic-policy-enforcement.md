@@ -17,16 +17,19 @@ counted. Idempotency keys on tool arguments are recognized through an
 
 The executable resolves definition `policy_refs` and `credential_refs` through
 configured providers, authenticates HTTP callers when enabled, enforces skill
-and model restrictions, and supports approval continuations. The default
-operation registry is in-memory; optional Redis and PostgreSQL registries add
-atomic cross-process claims and result replay.
+and model restrictions, and supports approval continuations. Policy references
+can use an injected policy/resolver or a strict HTTPS policy-store contract;
+the default external client refuses ambient proxies and redirects and accepts
+loopback HTTP only for local development. The default operation registry is
+in-memory; optional Redis and PostgreSQL registries add atomic cross-process
+claims and result replay.
 
 ## Consequences
 
 - Enforcement survives prompt injection by construction.
 - Programmatically injected policy is enforced at selected tool/MCP call sites.
-- External policy stores and downstream token delegation remain open
-  production-hardening work. The reference runtime now also offers a retained,
-  tenant-scoped SQLite audit sink; shared audit delivery and SIEM export remain
-  deployment decisions. All implemented controls stay outside the prompt and
-  are covered by contract tests.
+- Downstream token delegation remains open production-hardening work. The
+  reference runtime now also offers a retained, tenant-scoped SQLite audit
+  sink; shared audit delivery and SIEM export remain deployment decisions. All
+  implemented controls stay outside the prompt and are covered by contract
+  tests.

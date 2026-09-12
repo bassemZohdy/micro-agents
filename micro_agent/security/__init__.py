@@ -30,10 +30,14 @@ from micro_agent.security.identity import (
 )
 from micro_agent.security.policy import (
     AgentPolicy,
+    HttpPolicyResolver,
     PolicyDecision,
     PolicyEffect,
     PolicyEvaluator,
     PolicyRule,
+    PolicySchemaError,
+    PolicyStoreError,
+    agent_policy_from_dict,
 )
 from micro_agent.security.propagation import (
     InvocationIdentity,
@@ -58,6 +62,7 @@ __all__ = [
     "Authenticator",
     "AgentIdentity",
     "AgentPolicy",
+    "HttpPolicyResolver",
     "CallerIdentity",
     "CredentialProvider",
     "EnvironmentCredentialProvider",
@@ -73,6 +78,8 @@ __all__ = [
     "PolicyEvaluator",
     "PendingApproval",
     "PolicyRule",
+    "PolicySchemaError",
+    "PolicyStoreError",
     "RedisApprovalStore",
     "RetryClassification",
     "RedisOperationRegistry",
@@ -81,6 +88,7 @@ __all__ = [
     "StaticCredentialProvider",
     "UserContext",
     "build_security_context",
+    "agent_policy_from_dict",
     "get_invocation_identity",
     "invocation_identity",
     "reset_invocation_identity",

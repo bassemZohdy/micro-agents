@@ -31,6 +31,8 @@ the service becomes ready.
 | `MICRO_AGENT_APPROVAL_ENDPOINT` | `approval_endpoint` | wired for the custom runtime's durable approval store (Redis); unsupported endpoints fail fast |
 | `MICRO_AGENT_KNOWLEDGE_ENDPOINT` | `knowledge_endpoint` | wired for the durable SQLite knowledge retriever (`sqlite:///path` or a plain path); unsupported endpoints fail fast |
 | `MICRO_AGENT_A2A_STORE_PATH` | `a2a_store_path` | wired for the tenant-scoped SQLite A2A task and push-configuration stores |
+| `MICRO_AGENT_POLICY_STORE_ENDPOINT` | `policy_store_endpoint` | wired for declared `security.policy_refs`; HTTPS is required except loopback HTTP |
+| `MICRO_AGENT_POLICY_STORE_TOKEN` | `policy_store_token` | optional bearer token for the policy store; held in bootstrap memory only |
 | `MICRO_AGENT_AUDIT_SINK` | `audit_sink` | wired; `stdout` (default), `file`, `sqlite`, or `none` |
 | `MICRO_AGENT_AUDIT_FILE` | `audit_file` | wired for the file sink, or as the SQLite database path when `audit_sink=sqlite` |
 | `MICRO_AGENT_AUDIT_DATABASE` | `audit_database` | wired for the SQLite audit sink |
@@ -229,10 +231,22 @@ secret manager). Startup fails if any declared credential reference — model,
 MCP server, or security — cannot be resolved. Resolved values are never
 included in models, responses, logs, or exception text.
 
-Policy references (`security.policy_refs`) resolve the same way at the
-policy level: through an injected `AgentPolicy` or a configured policy
-resolver callable. Unresolved policy references fail startup rather than
-silently running without the declared policy.
+Policy references (`security.policy_refs`) resolve at bootstrap through an
+injected `AgentPolicy`, a resolver callable, or the configured HTTP policy
+store. The store receives a `POST` request with
+`{"policy_refs": ["..."]}` and returns either the policy object or
+`{"policy": {...}}`. The response parser rejects unknown fields and invalid
+rules, and unresolved references fail startup rather than silently running
+without the declared policy.
+
+Configure the endpoint through `EnvironmentConfig`, `EnvironmentOverlay`, or
+`MICRO_AGENT_POLICY_STORE_ENDPOINT`. Use `policy_store_token_ref` with an
+injected `CredentialProvider` when the token must come from a secret manager;
+the direct `MICRO_AGENT_POLICY_STORE_TOKEN` binding is intended for local or
+platform-managed secret injection. Remote endpoints must use HTTPS. HTTP is
+accepted only for `localhost`, `127.0.0.1`, or `::1`. The client disables
+ambient proxy discovery, follows no redirects, and does not include response
+bodies in bootstrap errors.
 
 `AgentPolicy.rules` adds conditional, resource-scoped decisions on top of the
 legacy allow/deny lists. Resources use `skill:<id>`, `tool:<name>`,
