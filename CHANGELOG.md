@@ -4,6 +4,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-09-13
+
+- Hardened release image references by normalizing GHCR and Docker Hub names to
+  lowercase before pushing, signing, and attesting images.
+
 ## [0.1.1] — 2026-09-13
 
 ### Security and downstream protocols

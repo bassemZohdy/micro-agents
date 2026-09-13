@@ -67,6 +67,10 @@ jobs:
           name: python-distributions
           path: dist/
 
+      - name: Normalize GHCR image name
+        id: ghcr_image
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -78,7 +82,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.ghcr_image.outputs.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -97,7 +101,7 @@ jobs:
 
       - name: Sign and verify image
         env:
-          IMAGE: ghcr.io/${{ github.repository }}
+          IMAGE: ${{ steps.ghcr_image.outputs.image }}
           DIGEST: ${{ steps.image-build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
@@ -111,7 +115,7 @@ jobs:
       - name: Attest image build provenance
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ghcr.io/${{ github.repository }}
+          subject-name: ${{ steps.ghcr_image.outputs.image }}
           subject-digest: ${{ steps.image-build.outputs.digest }}
 
       - name: Attest distribution build provenance
@@ -128,7 +132,7 @@ jobs:
 
       - name: Attest and verify image SBOM
         env:
-          IMAGE: ghcr.io/${{ github.repository }}
+          IMAGE: ${{ steps.ghcr_image.outputs.image }}
           DIGEST: ${{ steps.image-build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
@@ -170,10 +174,20 @@ jobs:
           test -n "$DOCKERHUB_USERNAME"
           test -n "$DOCKERHUB_TOKEN"
 
+      - name: Normalize Docker Hub image name
+        id: dockerhub_image
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+        run: |
+          namespace="${DOCKERHUB_USERNAME,,}"
+          echo "namespace=$namespace" >> "$GITHUB_OUTPUT"
+          echo "image=docker.io/${namespace}/micro-agents" >> "$GITHUB_OUTPUT"
+
       - name: Ensure Docker Hub repository exists
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_NAMESPACE: ${{ steps.dockerhub_image.outputs.namespace }}
         run: |
           set -euo pipefail
 
@@ -185,7 +199,7 @@ jobs:
               --arg secret "$DOCKERHUB_TOKEN" \
               '{identifier: $identifier, secret: $secret}')" \
             https://hub.docker.com/v2/auth/token | jq -er '.access_token')"
-          repo_url="https://hub.docker.com/v2/namespaces/${DOCKERHUB_USERNAME}/repositories/micro-agents"
+          repo_url="https://hub.docker.com/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories/micro-agents"
           repo_response="$(mktemp)"
           create_response="$(mktemp)"
           trap 'rm -f "$repo_response" "$create_response"' EXIT
@@ -212,9 +226,9 @@ jobs:
                 --header "Authorization: Bearer $api_token" \
                 --data "$(jq -n \
                   --arg name 'micro-agents' \
-                  --arg namespace "$DOCKERHUB_USERNAME" \
+                  --arg namespace "$DOCKERHUB_NAMESPACE" \
                   '{name: $name, namespace: $namespace, description: "Micro-Agents self-hosted AI agent reference framework", is_private: false}')" \
-                "https://hub.docker.com/v2/namespaces/${DOCKERHUB_USERNAME}/repositories")"
+                "https://hub.docker.com/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories")"
               case "$create_status" in
                 201)
                   echo "Created public Docker Hub repository: $repo_url"
@@ -260,7 +274,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          images: ${{ steps.dockerhub_image.outputs.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -282,7 +296,7 @@ jobs:
 
       - name: Sign and verify Docker Hub image
         env:
-          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          IMAGE: ${{ steps.dockerhub_image.outputs.image }}
           DIGEST: ${{ steps.image-build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
@@ -296,12 +310,12 @@ jobs:
       - name: Attest Docker Hub image provenance
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          subject-name: ${{ steps.dockerhub_image.outputs.image }}
           subject-digest: ${{ steps.image-build.outputs.digest }}
 
       - name: Generate Docker Hub image SBOM
         env:
-          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          IMAGE: ${{ steps.dockerhub_image.outputs.image }}
           DIGEST: ${{ steps.image-build.outputs.digest }}
         uses: anchore/sbom-action@v0
         with:
@@ -311,7 +325,7 @@ jobs:
 
       - name: Attest and verify Docker Hub image SBOM
         env:
-          IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents
+          IMAGE: ${{ steps.dockerhub_image.outputs.image }}
           DIGEST: ${{ steps.image-build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}
