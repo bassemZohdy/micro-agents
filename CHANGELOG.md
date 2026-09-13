@@ -4,6 +4,8 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-13
+
 ### Security and downstream protocols
 
 - Upgraded the optional A2A integration to the official `a2a-sdk==1.0.1`
