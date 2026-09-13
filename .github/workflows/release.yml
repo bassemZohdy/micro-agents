@@ -322,6 +322,7 @@ jobs:
           image: ${{ env.IMAGE }}@${{ env.DIGEST }}
           format: spdx-json
           output-file: dockerhub-micro-agents-sbom.spdx.json
+          upload-release-assets: false
 
       - name: Attest and verify Docker Hub image SBOM
         env:
