@@ -41,7 +41,7 @@ spec:
         - name: micro-agent
           # Pin an immutable version tag or digest; never deploy :latest.
           # image: ghcr.io/bassemzohdy/micro-agents@sha256:<digest>
-          image: ghcr.io/bassemzohdy/micro-agents:0.1.4
+          image: ghcr.io/bassemzohdy/micro-agents:0.1.5
           args:
             - "--definition"
             - "/etc/micro-agent/agent.yaml"
