@@ -56,6 +56,7 @@ class TestReleaseValidation:
         assert "steps.dockerhub_image.outputs.image" in dockerhub_job
         assert "docker/build-push-action@v6" in dockerhub_job
         assert "upload-release-assets: false" in dockerhub_job
+        assert "--offline=true" in dockerhub_job
 
         assert "id: ghcr_image" in publish_job
         assert "ghcr.io/${GITHUB_REPOSITORY,,}" in publish_job

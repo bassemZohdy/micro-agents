@@ -4,6 +4,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-09-13
+
+- Avoided the known GitHub Actions hang when verifying large Docker Hub SBOM
+  attestations by verifying the embedded Sigstore bundle offline.
+
 ## [0.1.3] — 2026-09-13
 
 - Fixed Docker Hub SBOM publication so the Docker Hub release job does not try to

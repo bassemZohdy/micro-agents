@@ -335,7 +335,11 @@ jobs:
             --type spdxjson \
             --predicate dockerhub-micro-agents-sbom.spdx.json \
             "${IMAGE}@${DIGEST}"
+          # Large SBOM attestations can hang while Cosign re-queries Rekor in
+          # GitHub-hosted runners. The embedded Sigstore bundle still provides
+          # the certificate and transparency proof needed for offline checks.
           cosign verify-attestation \
+            --offline=true \
             --type spdxjson \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity "${CERTIFICATE_IDENTITY}" \
