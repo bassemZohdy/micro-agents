@@ -45,11 +45,17 @@ class TestReleaseValidation:
         assert "pypa/gh-action-pypi-publish" not in workflow
         assert "if: vars.ENABLE_DOCKERHUB_PUBLISH" not in dockerhub_job
         assert "name: Publish image to Docker Hub" in dockerhub_job
+        assert "id: dockerhub_image" in dockerhub_job
+        assert 'namespace="${DOCKERHUB_USERNAME,,}"' in dockerhub_job
         assert "DOCKERHUB_USERNAME" in dockerhub_job
         assert "DOCKERHUB_TOKEN" in dockerhub_job
         assert "https://hub.docker.com/v2/auth/token" in dockerhub_job
-        assert "/v2/namespaces/${DOCKERHUB_USERNAME}/repositories/micro-agents" in dockerhub_job
+        assert "/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories/micro-agents" in dockerhub_job
         assert "'{name: $name, namespace: $namespace" in dockerhub_job
         assert "is_private: false" in dockerhub_job
-        assert "docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents" in dockerhub_job
+        assert "steps.dockerhub_image.outputs.image" in dockerhub_job
         assert "docker/build-push-action@v6" in dockerhub_job
+
+        assert "id: ghcr_image" in publish_job
+        assert "ghcr.io/${GITHUB_REPOSITORY,,}" in publish_job
+        assert "steps.ghcr_image.outputs.image" in publish_job
