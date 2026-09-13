@@ -45,10 +45,12 @@ distribution.
 ## Distribution
 
 The project can be run directly from a source checkout or from the container
-and wheel/sdist artifacts attached to a GitHub Release. GHCR images are the
-canonical container distribution path; Docker Hub can be enabled as a public
-mirror. PyPI is not required for self-hosted deployments; see
-[Deployment](docs/DEPLOYMENT.md) for the Docker Hub configuration.
+and wheel/sdist artifacts attached to a GitHub Release. Release tags publish
+signed images to GHCR and Docker Hub; GHCR remains the canonical container
+distribution path, while Docker Hub provides a public mirror. The release
+workflow creates the public Docker Hub repository when it does not exist.
+PyPI is not required for self-hosted deployments; see
+[Deployment](docs/DEPLOYMENT.md) for the release configuration.
 
 ## Architecture
 

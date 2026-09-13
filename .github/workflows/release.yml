@@ -152,8 +152,7 @@ jobs:
             micro-agents-sbom.spdx.json
 
   publish-dockerhub:
-    name: Publish image to Docker Hub (opt-in)
-    if: vars.ENABLE_DOCKERHUB_PUBLISH == 'true'
+    name: Publish image to Docker Hub
     needs: publish
     runs-on: ubuntu-latest
     permissions:
@@ -170,6 +169,86 @@ jobs:
         run: |
           test -n "$DOCKERHUB_USERNAME"
           test -n "$DOCKERHUB_TOKEN"
+
+      - name: Ensure Docker Hub repository exists
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          api_token="$(curl --fail --silent --show-error \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -n \
+              --arg identifier "$DOCKERHUB_USERNAME" \
+              --arg secret "$DOCKERHUB_TOKEN" \
+              '{identifier: $identifier, secret: $secret}')" \
+            https://hub.docker.com/v2/auth/token | jq -er '.access_token')"
+          repo_url="https://hub.docker.com/v2/namespaces/${DOCKERHUB_USERNAME}/repositories/micro-agents"
+          repo_response="$(mktemp)"
+          create_response="$(mktemp)"
+          trap 'rm -f "$repo_response" "$create_response"' EXIT
+
+          repo_status="$(curl --silent --show-error \
+            --output "$repo_response" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $api_token" \
+            "$repo_url")"
+          case "$repo_status" in
+            200)
+              jq -e '.is_private == false' "$repo_response" > /dev/null || {
+                echo "Docker Hub repository must be public: $repo_url" >&2
+                exit 1
+              }
+              echo "Docker Hub repository already exists and is public: $repo_url"
+              ;;
+            404)
+              create_status="$(curl --silent --show-error \
+                --output "$create_response" \
+                --write-out '%{http_code}' \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $api_token" \
+                --data "$(jq -n \
+                  --arg name 'micro-agents' \
+                  --arg namespace "$DOCKERHUB_USERNAME" \
+                  '{name: $name, namespace: $namespace, description: "Micro-Agents self-hosted AI agent reference framework", is_private: false}')" \
+                "https://hub.docker.com/v2/namespaces/${DOCKERHUB_USERNAME}/repositories")"
+              case "$create_status" in
+                201)
+                  echo "Created public Docker Hub repository: $repo_url"
+                  ;;
+                409)
+                  echo "Docker Hub repository was created concurrently; verifying it."
+                  verify_status="$(curl --silent --show-error \
+                    --output "$repo_response" \
+                    --write-out '%{http_code}' \
+                    --header "Authorization: Bearer $api_token" \
+                    "$repo_url")"
+                  test "$verify_status" = 200 || {
+                    echo "Docker Hub repository verification failed with HTTP $verify_status" >&2
+                    cat "$repo_response" >&2
+                    exit 1
+                  }
+                  jq -e '.is_private == false' "$repo_response" > /dev/null || {
+                    echo "Docker Hub repository must be public: $repo_url" >&2
+                    exit 1
+                  }
+                  ;;
+                *)
+                  echo "Docker Hub repository creation failed with HTTP $create_status" >&2
+                  cat "$create_response" >&2
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "Docker Hub repository lookup failed with HTTP $repo_status" >&2
+              cat "$repo_response" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3

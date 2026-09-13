@@ -40,9 +40,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ### Packaging and deployment
 
-- Made Docker Hub publication opt-in through the
-  `ENABLE_DOCKERHUB_PUBLISH` GitHub repository variable; GitHub Releases and
-  GHCR remain the default release distribution paths.
+- Made Docker Hub publication part of the default release flow alongside
+  GitHub Releases and GHCR; the workflow creates the public repository through
+  the Docker Hub API when it does not exist.
 - Documented self-hosted supply-chain admission requirements and clarified
   that live cluster promotion and rollback are operator-owned checks.
 - Added an opt-in external benchmark harness for deployed Micro-Agent HTTP and

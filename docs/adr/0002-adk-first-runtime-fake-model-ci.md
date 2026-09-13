@@ -26,5 +26,5 @@ work.
 - CI needs no network or API keys; behavioral tests cover the full invoke loop.
 - The custom loop and genuine adapter have separate package boundaries.
 - Broader provider and external-service integrations remain follow-up work.
-  GitHub Releases and GHCR are the default distribution paths; Docker Hub is an
-  optional owner-enabled image mirror.
+  GitHub Releases, GHCR, and Docker Hub are the default distribution paths;
+  the release workflow creates the public Docker Hub repository when needed.
