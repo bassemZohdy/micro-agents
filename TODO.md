@@ -4,15 +4,16 @@ This file tracks implementation work and its completion status. Completed work
 is summarized in [CHANGELOG.md](CHANGELOG.md); implementation evidence and
 limitations belong in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Backlog audited against merged `main` on 2026-09-12.
+Backlog audited against merged `main` on 2026-09-13.
 
 ## Project scope and release policy
 
-The default release path is GitHub Releases plus signed GHCR images. Source
-checkouts and release artifacts are supported installation paths; Docker Hub is
-an optional public image mirror and is not a release gate. The tag-triggered
-workflow keeps Docker Hub in a separate opt-in job controlled by the
-`ENABLE_DOCKERHUB_PUBLISH` repository variable.
+The default release path is GitHub Releases plus signed GHCR and Docker Hub
+images. Source checkouts and release artifacts remain supported installation
+paths; GHCR is the canonical registry and Docker Hub is the public mirror. The
+tag-triggered workflow creates the `micro-agents` Docker Hub repository when it
+does not exist and requires only the owner-configured Docker Hub namespace and
+access token.
 
 This remains a pre-release reference implementation, not a project-operated
 production service. Cloud C0–C5 code is reference/control-plane material, and
@@ -23,9 +24,9 @@ rollback are owned by each self-hosting deployment.
 
 All repository-owned implementation and documentation tasks in this backlog are
 complete. The checked items below record the delivered contract and its
-limitations. Docker Hub setup and live cluster validation are optional operator
-activities, not unfinished repository work. Python package publication to PyPI
-is outside the current distribution plan.
+limitations. Docker Hub credentials are owner configuration for the release
+workflow; live cluster validation remains an optional self-hosting activity.
+Python package publication to PyPI is outside the current distribution plan.
 
 ## Standalone framework backlog
 

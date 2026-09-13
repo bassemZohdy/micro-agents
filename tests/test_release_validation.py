@@ -34,7 +34,7 @@ class TestReleaseValidation:
         assert "cosign verify-attestation" in workflow
         assert "steps.image-build.outputs.digest" in workflow
 
-    def test_docker_hub_publication_is_opt_in(self):
+    def test_docker_hub_publication_is_default_and_creates_repository(self):
         workflow = (validate_release.ROOT / ".github" / "workflows" / "release.yml").read_text(
             encoding="utf-8"
         )
@@ -43,8 +43,13 @@ class TestReleaseValidation:
         )
 
         assert "pypa/gh-action-pypi-publish" not in workflow
-        assert "if: vars.ENABLE_DOCKERHUB_PUBLISH == 'true'" in dockerhub_job
+        assert "if: vars.ENABLE_DOCKERHUB_PUBLISH" not in dockerhub_job
+        assert "name: Publish image to Docker Hub" in dockerhub_job
         assert "DOCKERHUB_USERNAME" in dockerhub_job
         assert "DOCKERHUB_TOKEN" in dockerhub_job
+        assert "https://hub.docker.com/v2/auth/token" in dockerhub_job
+        assert "/v2/namespaces/${DOCKERHUB_USERNAME}/repositories/micro-agents" in dockerhub_job
+        assert "'{name: $name, namespace: $namespace" in dockerhub_job
+        assert "is_private: false" in dockerhub_job
         assert "docker.io/${{ vars.DOCKERHUB_USERNAME }}/micro-agents" in dockerhub_job
         assert "docker/build-push-action@v6" in dockerhub_job

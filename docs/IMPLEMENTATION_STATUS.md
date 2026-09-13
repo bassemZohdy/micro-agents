@@ -1,7 +1,7 @@
 # Implementation Status
 
-Last audited: 2026-09-12
-Audited implementation revision: latest merged `main` on 2026-09-12
+Last audited: 2026-09-13
+Audited implementation revision: latest merged `main` on 2026-09-13
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -20,8 +20,8 @@ readiness or protocol compliance.
 | Performance budgets | Pass | deterministic fake-model runtime and HTTP scenarios pass locally; CI enforces both; the external HTTP/MCP harness is operator-invoked |
 | Strict type check | Pass | `types-PyYAML` is part of the development extra |
 | Dependency audit | Pass | runtime and development environments are audited separately |
-| Overall GitHub CI | Pass | [CI run #249](https://github.com/bassemZohdy/micro-agents/actions/runs/34707849169), all required jobs successful |
-| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); GitHub Releases/GHCR do not depend on Docker Hub, whose mirror job is opt-in |
+| Overall GitHub CI | Pass | [main CI workflow](https://github.com/bassemZohdy/micro-agents/actions/workflows/ci.yml?query=branch%3Amain), all required jobs successful |
+| Ref protection | Pass | active rulesets `main-required-CI` (15 required CI checks, no deletion/force-push, empty bypass) and `release-tags-immutable` (`v*` tags undeletable and unmovable); release publishing includes GHCR and Docker Hub, with repository creation handled by the workflow |
 
 The OpenAI-compatible client defaults to direct connections (`trust_env=False`)
 so ambient proxy variables cannot unexpectedly route model traffic or loopback
@@ -453,8 +453,9 @@ Implemented:
 - build metadata, Dockerfile, sample manifests
 - CI jobs for tests, schema, package/container smoke, separate dependency
   audits, SBOM, and strict docs
-- tag-triggered, quality-gated GitHub Release/GHCR workflow with an opt-in
-  Docker Hub mirror job
+- tag-triggered, quality-gated GitHub Release/GHCR/Docker Hub workflow; the
+  Docker Hub job authenticates through the Hub API and creates the public
+  repository when it is missing
 - package metadata and `micro-agent` console entrypoint
 - hash-pinned Linux/Python 3.11 runtime requirements with `pip --require-hashes`
   installation in the Dockerfile
@@ -475,10 +476,11 @@ Implemented:
 
 Gaps and operator-owned checks:
 
-- Docker Hub is an optional public mirror. Its repository, namespace, and
-  scoped access token must be configured by the owner only when that mirror is
-  wanted; it is not needed for GitHub Releases, GHCR, source installs, or
-  self-hosting. PyPI publication is outside the current distribution plan.
+- Docker Hub is the default public mirror. Its namespace and scoped access
+  token must be configured by the owner for release publishing; the workflow
+  creates the public repository when it is missing and does not change an
+  existing private repository. PyPI publication is outside the current
+  distribution plan.
 - provider-specific NetworkPolicy selectors and self-hosting-cluster OpenShift
   SecurityContextConstraints validation require the self-hosting cluster
 - immutable digest/signature admission and live promotion/rollback require an
@@ -516,9 +518,8 @@ interfaces, and deterministic tests. Its primary risk is documentation that
 previously promoted injected seams and fake-client tests as end-to-end
 production capabilities.
 
-The default release path is complete through GitHub Releases and GHCR; Docker
-Hub is an optional owner-enabled image mirror. PyPI is outside the current
-distribution plan. Remaining deployment checks—
+The default release path is complete through GitHub Releases, GHCR, and Docker
+Hub. PyPI is outside the current distribution plan. Remaining deployment checks—
 provider wiring, self-host supply-chain admission, OpenShift policy,
 capacity/SLO review, and live promotion/rollback—belong to each self-hosting
 operator. The complete implementation record is in

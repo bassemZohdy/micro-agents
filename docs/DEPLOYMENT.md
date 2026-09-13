@@ -170,8 +170,9 @@ The release pipeline is gated by two active GitHub rulesets: `main-required-CI`
 requires every PR-visible CI check before `main` advances, and
 `release-tags-immutable` makes `v*` tags undeletable and unmovable once
 created — a cut release cannot be silently rewritten. The default tag flow
-publishes the signed image and release artifacts to GHCR and GitHub Releases;
-Docker Hub is an optional public mirror.
+publishes signed images to GHCR and Docker Hub plus release artifacts to GitHub
+Releases; GHCR remains the canonical registry and Docker Hub is the public
+mirror.
 
 Per release:
 
@@ -190,25 +191,24 @@ Per release:
    self-hosted Deployment only after its operator checks pass; do not deploy a
    mutable tag where admission policy requires immutable references.
 
-### Optional Docker Hub mirror
+### Docker Hub distribution
 
-Docker Hub is not required for runtime use or self-hosting. To publish the
-release image there, create a public Docker Hub repository named `micro-agents`
-under the intended namespace and create a scoped read/write access token. Add
-the following to the GitHub repository under **Settings → Secrets and
-variables → Actions**:
+Docker Hub is part of the default release flow, so the repository owner must
+add these to the GitHub repository under **Settings → Secrets and variables →
+Actions**:
 
 - repository variable `DOCKERHUB_USERNAME`: the Docker Hub namespace
-- repository variable `ENABLE_DOCKERHUB_PUBLISH`: `true`
-- repository secret `DOCKERHUB_TOKEN`: the Docker Hub access token
+- repository secret `DOCKERHUB_TOKEN`: a scoped Docker Hub access token
 
-The independent `publish-dockerhub` job rebuilds the tagged image, pushes both
-release tags, signs and verifies the exact Docker Hub digest with the release
-workflow identity, and attaches build-provenance and SPDX SBOM attestations.
-When `ENABLE_DOCKERHUB_PUBLISH` is absent or false, the GitHub Release/GHCR
-flow does not depend on Docker Hub. Docker recommends access tokens rather than
-passwords for CI; see its [GitHub Actions guide](https://docs.docker.com/guides/gha/)
-and [access-token documentation](https://docs.docker.com/security/access-tokens/personal-access-tokens/).
+The `publish-dockerhub` job authenticates with the Docker Hub API, creates a
+public `micro-agents` repository under that namespace when it does not exist,
+and reuses it when it is already public. It fails if an existing repository is
+private rather than changing its visibility. The job then rebuilds the tagged
+image, pushes both release tags, signs and verifies the exact Docker Hub digest
+with the release workflow identity, and attaches build-provenance and SPDX SBOM
+attestations. Docker recommends access tokens rather than account passwords for
+CI; see its [GitHub Actions guide](https://docs.docker.com/guides/gha/) and
+[access-token documentation](https://docs.docker.com/security/access-tokens/personal-access-tokens/).
 
 ## OpenShift
 
