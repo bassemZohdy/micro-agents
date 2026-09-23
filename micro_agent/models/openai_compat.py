@@ -125,7 +125,7 @@ class OpenAICompatProvider(ModelProvider):
             content=message.get("content") or "",
             tool_requests=tool_requests,
             finish_reason=choice.get("finish_reason") or "stop",
-            usage=dict(data.get("usage") or {}),
+            usage=_parse_usage(data.get("usage")),
         )
 
     async def stream(
@@ -159,7 +159,7 @@ class OpenAICompatProvider(ModelProvider):
                     continue
                 data = json.loads(raw)
                 if isinstance(data.get("usage"), dict):
-                    usage = {str(k): int(v) for k, v in data["usage"].items() if isinstance(v, int)}
+                    usage = _parse_usage(data["usage"])
                 choice = (data.get("choices") or [{}])[0]
                 delta = choice.get("delta") or {}
                 content = delta.get("content")
@@ -224,3 +224,10 @@ def _parse_arguments(raw: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {"raw": raw}
     return {}
+
+
+def _parse_usage(raw: Any) -> dict[str, int]:
+    """Keep scalar token counts; compatible APIs may include nested details."""
+    if not isinstance(raw, dict):
+        return {}
+    return {str(key): value for key, value in raw.items() if type(value) is int}

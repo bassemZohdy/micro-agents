@@ -124,6 +124,38 @@ class TestOpenAICompatProvider:
         )
 
     @pytest.mark.asyncio
+    async def test_nested_usage_details_do_not_replace_token_counts(self):
+        import httpx
+
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": "Ready"}}],
+                        "usage": {
+                            "prompt_tokens": 30,
+                            "prompt_tokens_details": {"cached_tokens": 22},
+                            "completion_tokens": 8,
+                            "total_tokens": 38,
+                        },
+                    },
+                )
+            )
+        )
+        try:
+            response = await self._provider(client).generate(_model_config(), messages=[])
+        finally:
+            await client.aclose()
+
+        assert response.content == "Ready"
+        assert response.usage == {
+            "prompt_tokens": 30,
+            "completion_tokens": 8,
+            "total_tokens": 38,
+        }
+
+    @pytest.mark.asyncio
     async def test_tool_call_ids_are_preserved_from_the_wire(self):
         import json as jsonlib
 
