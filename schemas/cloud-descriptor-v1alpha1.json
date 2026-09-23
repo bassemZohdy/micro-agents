@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "SkillDescriptorContract": {
+      "additionalProperties": false,
+      "description": "Wire contract for one discoverable agent skill.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "SkillDescriptorContract",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Versioned registry descriptor contract.",
+  "properties": {
+    "schema_version": {
+      "const": "v1alpha1",
+      "default": "v1alpha1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "a2a_protocol_version": {
+      "minLength": 1,
+      "title": "A2A Protocol Version",
+      "type": "string"
+    },
+    "card_url": {
+      "default": "",
+      "title": "Card Url",
+      "type": "string"
+    },
+    "card_fingerprint": {
+      "default": "",
+      "pattern": "^(?:[0-9a-f]{64})?$",
+      "title": "Card Fingerprint",
+      "type": "string"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/SkillDescriptorContract"
+      },
+      "title": "Skills",
+      "type": "array"
+    },
+    "capabilities": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "title": "Capabilities",
+      "type": "object"
+    },
+    "labels": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Labels",
+      "type": "object"
+    },
+    "visibility": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Visibility",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "a2a_protocol_version"
+  ],
+  "title": "Micro-Agent Cloud cloud-descriptor-v1alpha1 contract",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microagents.io/schemas/cloud/v1alpha1/cloud-descriptor-v1alpha1.json"
+}
