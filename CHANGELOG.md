@@ -4,6 +4,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-09-24
+
+- Fixed OpenAI-compatible model invocations when a provider includes nested
+  token-usage details alongside integer token counts.
+
 ## [0.1.5] — 2026-09-13
 
 - Prevented GitHub Actions secret-scanning delays by redirecting large Cosign SBOM
