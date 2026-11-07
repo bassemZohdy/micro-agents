@@ -4,7 +4,7 @@ This file tracks implementation work and its completion status. Completed work
 is summarized in [CHANGELOG.md](CHANGELOG.md); implementation evidence and
 limitations belong in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Backlog audited against merged `main` on 2026-09-13.
+Backlog audited against `main` (v0.1.6 plus unreleased work) on 2026-11-07.
 
 ## Project scope and release policy
 
@@ -88,8 +88,20 @@ Python package publication to PyPI is outside the current distribution plan.
 
 - [x] Add a model adapter beyond the fake and OpenAI-compatible providers:
       the native Anthropic Messages adapter supports tool-use translation and
-      streaming; native Google Gemini and Azure OpenAI remain optional future
-      adapters.
+      streaming.
+- [x] Add native Google Gemini and Azure OpenAI model adapters. Gemini speaks
+      `generateContent`/SSE with tool translation and header-only API keys;
+      Azure OpenAI reuses the OpenAI-compatible translation with deployment URLs,
+      `api-version`, and `api-key` auth. Vertex AI (OAuth/ADC) and Entra ID
+      bearer authentication remain deployment-owned via an injected signing
+      client. See [ADR 0020](docs/adr/0020-native-model-providers-and-adk-approval-state.md).
+- [x] Remove the `core`↔`runtime` import cycle that made
+      `import micro_agent.runtime` fail in a fresh interpreter, and guard every
+      package with an isolated-interpreter import test.
+- [x] Resolve the Google ADK approval-store gap by design: ADK approval
+      continuations live in the durable ADK session transcript, and bootstrap
+      fails fast if `MICRO_AGENT_APPROVAL_ENDPOINT` is combined with the ADK
+      runtime. See ADR 0020.
 - [x] Add a bundled native tool beyond `echo`: the bounded, side-effect-free
       `json_parse` utility is available for portable structured-data flows;
       domain tools still require installed plugins or programmatic injection.

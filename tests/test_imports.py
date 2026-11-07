@@ -1,5 +1,10 @@
 """Verify that all micro_agent packages import successfully."""
 
+import subprocess
+import sys
+
+import pytest
+
 import micro_agent
 import micro_agent.config
 import micro_agent.core
@@ -32,3 +37,37 @@ import micro_agent.tools.plugin
 
 def test_all_packages_importable():
     assert micro_agent is not None
+
+
+_TOP_LEVEL_PACKAGES = [
+    "micro_agent",
+    "micro_agent.checkpoint",
+    "micro_agent.config",
+    "micro_agent.core",
+    "micro_agent.definition",
+    "micro_agent.health",
+    "micro_agent.interoperability",
+    "micro_agent.knowledge",
+    "micro_agent.mcp",
+    "micro_agent.memory",
+    "micro_agent.models",
+    "micro_agent.observability",
+    "micro_agent.resilience",
+    "micro_agent.runtime",
+    "micro_agent.security",
+    "micro_agent.session",
+    "micro_agent.skills",
+    "micro_agent.tools",
+]
+
+
+@pytest.mark.parametrize("package", _TOP_LEVEL_PACKAGES)
+def test_package_imports_first_in_fresh_interpreter(package: str) -> None:
+    """Every package must import cleanly regardless of import order (no cycles)."""
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {package}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

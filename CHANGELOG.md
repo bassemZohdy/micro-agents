@@ -4,6 +4,28 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Added a native Google Gemini model provider (`generateContent` and SSE
+  streaming over the existing HTTP client) with tool-call translation,
+  JSON-Schema-to-OpenAPI sanitising, header-only API-key authentication, and
+  bootstrap selection through `provider: gemini` on the custom runtime. The
+  Google ADK runtime still uses its native model path when no endpoint is set.
+- Added an Azure OpenAI model provider (`provider: azure-openai`) that reuses
+  the OpenAI-compatible translation with deployment-scoped URLs, an
+  `api-version` query parameter, and `api-key` authentication.
+- Fixed `import micro_agent.runtime` failing in a fresh interpreter because of a
+  `core`↔`runtime` import cycle; `DefaultMicroAgent` now imports the runtime
+  SPI for type checking only. A new test imports every package first in an
+  isolated interpreter so import-order cycles cannot return.
+- Fixed the Anthropic adapter appending an empty text block (rejected by the
+  Messages API) when an empty message was merged into its neighbour.
+- Fixed SQLite/Redis A2A task listing raising a bare `ValueError` or an
+  inconsistent exception for unknown or malformed page tokens; both stores now
+  raise the SDK `InvalidParamsError` (JSON-RPC -32602).
+- Added tests for startup health-check failures in the custom runtime, active
+  health probes, every contract primitive type, the HTTP model catalog, SQLite
+  A2A task listing, and Anthropic/Gemini/Azure wire edge cases. Default-CI line
+  coverage rose from 81.8% to 84.4%.
+
 ## [0.1.6] — 2026-09-24
 
 - Fixed OpenAI-compatible model invocations when a provider includes nested

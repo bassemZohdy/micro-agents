@@ -59,11 +59,16 @@ from micro_agent.memory import (
     RedisMemoryProvider,
 )
 from micro_agent.models import (
+    DEFAULT_GEMINI_ENDPOINT,
     AnthropicConfig,
     AnthropicProvider,
+    AzureOpenAIConfig,
+    AzureOpenAIProvider,
     CatalogError,
     FakeModelConfig,
     FakeModelProvider,
+    GeminiConfig,
+    GeminiProvider,
     HttpModelCatalog,
     ModelCatalog,
     ModelProvider,
@@ -128,6 +133,8 @@ _OPENAI_PROVIDER_NAMES = {
 }
 _FAKE_PROVIDER_NAMES = {"fake", "test", "stub"}
 _ANTHROPIC_PROVIDER_NAMES = {"anthropic", "claude"}
+_AZURE_PROVIDER_NAMES = {"azure", "azure-openai", "azure_openai"}
+_GEMINI_PROVIDER_NAMES = {"google", "gemini", "google-genai"}
 
 
 def build_runtime(
@@ -782,15 +789,26 @@ def _build_model_provider(
     provider_name = (config.model_provider or "").strip().lower()
     endpoint = config.model_endpoint
 
-    if provider_name in {"google", "gemini", "google-genai"}:
+    if provider_name in _GEMINI_PROVIDER_NAMES:
         if allow_native_google and not endpoint:
             if not config.model_id and not config.model_ref:
                 raise BootstrapError(
                     "Google ADK runtime requires model_id or model_ref for a native model"
                 )
             return None
-        raise BootstrapError(
-            "Google model providers require runtime: google-adk without an endpoint"
+        if not config.model_id:
+            raise BootstrapError(
+                "Gemini model provider requires model_id or MICRO_AGENT_MODEL_ID; "
+                "model_ref is a logical alias only"
+            )
+        return GeminiProvider(
+            GeminiConfig(
+                endpoint=endpoint or DEFAULT_GEMINI_ENDPOINT,
+                model_id=config.model_id,
+                api_key=config.model_api_key,
+                timeout_seconds=float(config.model_timeout_seconds or 30),
+                telemetry=telemetry,
+            )
         )
 
     if provider_name in _FAKE_PROVIDER_NAMES:
@@ -805,6 +823,27 @@ def _build_model_provider(
         return AnthropicProvider(
             AnthropicConfig(
                 endpoint=endpoint or "https://api.anthropic.com",
+                model_id=config.model_id,
+                api_key=config.model_api_key,
+                timeout_seconds=float(config.model_timeout_seconds or 30),
+                telemetry=telemetry,
+            )
+        )
+
+    if provider_name in _AZURE_PROVIDER_NAMES:
+        if not endpoint:
+            raise BootstrapError(
+                "Azure OpenAI model provider requires model_endpoint or "
+                "MICRO_AGENT_MODEL_ENDPOINT (https://<resource>.openai.azure.com)"
+            )
+        if not config.model_id:
+            raise BootstrapError(
+                "Azure OpenAI model provider requires model_id (the deployment name) or "
+                "MICRO_AGENT_MODEL_ID; model_ref is a logical alias only"
+            )
+        return AzureOpenAIProvider(
+            AzureOpenAIConfig(
+                endpoint=endpoint,
                 model_id=config.model_id,
                 api_key=config.model_api_key,
                 timeout_seconds=float(config.model_timeout_seconds or 30),
@@ -838,7 +877,13 @@ def _build_model_provider(
 
     if provider_name:
         supported = ", ".join(
-            sorted(_ANTHROPIC_PROVIDER_NAMES | _FAKE_PROVIDER_NAMES | _OPENAI_PROVIDER_NAMES)
+            sorted(
+                _ANTHROPIC_PROVIDER_NAMES
+                | _AZURE_PROVIDER_NAMES
+                | _FAKE_PROVIDER_NAMES
+                | _GEMINI_PROVIDER_NAMES
+                | _OPENAI_PROVIDER_NAMES
+            )
         )
         raise BootstrapError(
             f"Unsupported model provider '{config.model_provider}'. "

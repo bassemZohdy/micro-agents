@@ -67,6 +67,14 @@ class OpenAICompatProvider(ModelProvider):
             proxy=config.proxy,
         )
 
+    def _chat_url(self, config: ModelConfig) -> str:
+        """URL of the chat-completions resource; overridden by Azure OpenAI."""
+        return f"{self._endpoint}/chat/completions"
+
+    def _models_url(self) -> str:
+        """URL of the cheap availability probe resource."""
+        return f"{self._endpoint}/models"
+
     def _payload(
         self,
         config: ModelConfig,
@@ -103,7 +111,7 @@ class OpenAICompatProvider(ModelProvider):
         if self._config.telemetry is not None:
             self._config.telemetry.inject_context(headers)
         response = await self._client.post(
-            f"{self._endpoint}/chat/completions",
+            self._chat_url(config),
             json=self._payload(config, messages, tools),
             headers=headers or None,
         )
@@ -146,7 +154,7 @@ class OpenAICompatProvider(ModelProvider):
         usage: dict[str, int] = {}
         async with self._client.stream(
             "POST",
-            f"{self._endpoint}/chat/completions",
+            self._chat_url(config),
             json=payload,
             headers=headers or None,
         ) as response:
@@ -202,7 +210,7 @@ class OpenAICompatProvider(ModelProvider):
     async def health_check(self) -> bool:
         """GET /models as a cheap availability probe."""
         try:
-            response = await self._client.get(f"{self._endpoint}/models")
+            response = await self._client.get(self._models_url())
             return response.status_code < 500
         except httpx.HTTPError:
             return False

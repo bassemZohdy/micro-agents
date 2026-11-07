@@ -1117,3 +1117,57 @@ async def test_available_knowledge_source_passes_startup():
         await agent.stop()
         await agent.shutdown()
         await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_definition_selects_azure_openai_provider():
+    from micro_agent.models import AzureOpenAIProvider
+
+    bootstrap = build_runtime(
+        _definition(
+            ref="azure-model",
+            model_id="my-deployment",
+            provider="azure-openai",
+            endpoint="https://res.openai.azure.example",
+            timeout_seconds=11,
+        )
+    )
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, AzureOpenAIProvider)
+        assert provider._azure.model_id == "my-deployment"
+        assert provider._azure.timeout_seconds == 11.0
+    finally:
+        await bootstrap.runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_definition_selects_gemini_provider_on_custom_runtime():
+    from micro_agent.models import DEFAULT_GEMINI_ENDPOINT, GeminiProvider
+
+    bootstrap = build_runtime(
+        _definition(ref="gem", model_id="gemini-2.5-flash", provider="gemini")
+    )
+    try:
+        provider = bootstrap.runtime._model_provider
+        assert isinstance(provider, GeminiProvider)
+        assert provider._config.endpoint == DEFAULT_GEMINI_ENDPOINT
+        assert provider._config.model_id == "gemini-2.5-flash"
+    finally:
+        await bootstrap.runtime.close()
+
+
+@pytest.mark.parametrize(
+    ("model", "message"),
+    [
+        ({"provider": "azure", "model_id": "dep"}, "requires model_endpoint"),
+        (
+            {"provider": "azure", "endpoint": "https://res.openai.azure.example"},
+            "deployment name",
+        ),
+        ({"provider": "gemini"}, "requires model_id"),
+    ],
+)
+def test_azure_and_gemini_require_complete_binding(model, message):
+    with pytest.raises(BootstrapError, match=message):
+        build_runtime(_definition(ref="alias-only", **model))
