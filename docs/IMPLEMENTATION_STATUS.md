@@ -12,7 +12,8 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 881 collected | 774 passed and 2 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 84.4% line coverage (gate: 80%); 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs, which provide real Redis/PostgreSQL services |
+| Tests | 1059 collected | 952 passed and 2 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.2% line coverage (gate: 80%); the 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. With real Redis 7 and PostgreSQL 16 services the whole suite passes (1057 passed, 2 skipped) at 91.3% coverage |
+| Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |

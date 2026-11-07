@@ -150,7 +150,7 @@ class ResolvedConfig:
     model_id: str | None = None
     model_provider: str | None = None
     model_endpoint: str | None = None
-    model_api_key: str | None = None
+    model_api_key: str | None = field(default=None, repr=False)
     model_generation: dict[str, Any] = field(default_factory=dict)
     model_timeout_seconds: int | None = None
     mcp_endpoints: dict[str, str] = field(default_factory=dict)
@@ -165,7 +165,7 @@ class ResolvedConfig:
     model_catalog_endpoint: str | None = None
     model_catalog_token: str | None = field(default=None, repr=False)
     policy_store_endpoint: str | None = None
-    policy_store_token: str | None = None
+    policy_store_token: str | None = field(default=None, repr=False)
     log_level: str = "INFO"
     auth: str | None = None
     auth_issuer: str | None = None

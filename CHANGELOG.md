@@ -21,10 +21,19 @@ All notable changes to the Micro-Agents project are documented in this file.
 - Fixed SQLite/Redis A2A task listing raising a bare `ValueError` or an
   inconsistent exception for unknown or malformed page tokens; both stores now
   raise the SDK `InvalidParamsError` (JSON-RPC -32602).
+- Hardened `ResolvedConfig` so `model_api_key` and `policy_store_token` are
+  excluded from `repr()` like the other token fields, preventing an accidental
+  log or traceback from printing them.
+- Added `tests/test_dependency_rules.py`, which enforces package layering,
+  acyclic import-time subpackage graphs and unguarded-optional-dependency
+  rules, and proves its analyzer fails on the original `core`↔`runtime` cycle.
 - Added tests for startup health-check failures in the custom runtime, active
   health probes, every contract primitive type, the HTTP model catalog, SQLite
-  A2A task listing, and Anthropic/Gemini/Azure wire edge cases. Default-CI line
-  coverage rose from 81.8% to 84.4%.
+  A2A task listing, Redis memory/session/idempotency edge cases, Vault and AWS
+  Secrets Manager contracts, token delegation, configuration precedence and
+  Anthropic/Gemini/Azure wire edge cases. Default-CI line coverage rose from
+  81.8% to 87.2%, and the full suite with real Redis and PostgreSQL from 88.9% to
+  91.3%.
 
 ## [0.1.6] — 2026-09-24
 
