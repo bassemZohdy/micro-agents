@@ -276,7 +276,10 @@ def _merge_content(existing: Any, incoming: Any) -> list[Any]:
     def blocks(value: Any) -> list[Any]:
         if isinstance(value, list):
             return list(value)
-        return [{"type": "text", "text": _content_text(value)}]
+        text = _content_text(value)
+        # The Messages API rejects empty text blocks, so an empty message
+        # contributes nothing when folded into its neighbour.
+        return [{"type": "text", "text": text}] if text else []
 
     return blocks(existing) + blocks(incoming)
 

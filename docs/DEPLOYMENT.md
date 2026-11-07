@@ -22,8 +22,8 @@ exercises the image's arbitrary-UID and read-only-filesystem assumptions before
 deployment. OpenShift SecurityContextConstraints, namespace policy, storage
 classes, and admission configuration remain self-hosting-cluster checks.
 
-The executable resolves an explicit fake, OpenAI-compatible, or Anthropic model
-provider from the mounted definition and environment. It constructs local memory/session
+The executable resolves an explicit fake, OpenAI-compatible, Anthropic, Azure
+OpenAI, or Gemini model provider from the mounted definition and environment. It constructs local memory/session
 providers, optional Redis/PostgreSQL-backed external memory/session/idempotency
 providers, the official
 MCP SDK client for declared servers, knowledge and credential providers,

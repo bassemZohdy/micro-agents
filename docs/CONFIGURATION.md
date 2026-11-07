@@ -28,7 +28,7 @@ corresponding provider.
 | `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
-| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake`, OpenAI-compatible aliases, or `anthropic`/`claude` |
+| `MICRO_AGENT_MODEL_PROVIDER` | `model_provider` | wired; `fake`, OpenAI-compatible aliases, `anthropic`/`claude`, `azure-openai`, or `gemini` |
 | `MICRO_AGENT_MODEL_CATALOG_ENDPOINT` | `model_catalog_endpoint` | optional versioned alias catalog; fills provider/model endpoint metadata before bootstrap |
 | `MICRO_AGENT_MODEL_CATALOG_TOKEN` | `model_catalog_token` | optional bearer token for the catalog; held in bootstrap memory only |
 | `MICRO_AGENT_MEMORY_ENDPOINT` | `memory_endpoint` | wired for built-in memory, Redis (`redis://`/`rediss://`), or PostgreSQL (`postgres://`/`postgresql://`) memory; unsupported endpoints fail fast |
@@ -561,6 +561,26 @@ Anthropic adapter uses `POST /v1/messages` and `GET /v1/models` against
 the runtime tool transcript to `tool_use`/`tool_result` blocks, and supports
 Anthropic SSE streaming. It reports structured output as unsupported so an
 output contract cannot be silently downgraded.
+
+The native Gemini adapter (`provider: gemini`, also `google`/`google-genai` when
+the Google ADK runtime is not selecting its native model path) calls
+`POST /v1beta/models/{model}:generateContent` and
+`:streamGenerateContent?alt=sse` on
+`https://generativelanguage.googleapis.com` by default. It sends the API key in
+the `x-goog-api-key` header only, folds system messages into
+`systemInstruction`, maps tool results to `functionResponse` parts, reduces
+tool JSON Schemas to the OpenAPI subset Gemini accepts, and reports structured
+output as unsupported. Vertex AI (OAuth/ADC) is not covered; inject an
+`http_client` that signs requests when it is required.
+
+The Azure OpenAI adapter (`provider: azure-openai`) takes the resource root as
+`model_endpoint` (for example `https://<resource>.openai.azure.com`) and the
+*deployment name* as `model_id`. It invokes
+`/openai/deployments/{deployment}/chat/completions?api-version=2024-10-21`,
+probes `/openai/models`, and authenticates with the `api-key` header. The API
+version is pinned by default and can be overridden programmatically through
+`AzureOpenAIConfig.api_version`. Microsoft Entra ID bearer authentication is not
+built in; inject an `http_client` that signs requests when it is required.
 
 ## Definition versus deployment configuration
 

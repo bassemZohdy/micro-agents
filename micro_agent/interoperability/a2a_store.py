@@ -264,18 +264,16 @@ class SqliteA2ATaskStore:
         start = 0
         page_token = str(getattr(params, "page_token", ""))
         if page_token:
-            try:
-                from a2a.utils.task import decode_page_token
+            from a2a.utils.errors import InvalidParamsError
+            from a2a.utils.task import decode_page_token
 
-                marker = decode_page_token(page_token)
-            except (ImportError, ValueError) as exc:
-                raise ValueError("invalid A2A page token") from exc
+            marker = decode_page_token(page_token)
             for index, task in enumerate(tasks):
                 if task.id == marker:
                     start = index
                     break
             else:
-                raise ValueError("invalid A2A page token")
+                raise InvalidParamsError("invalid A2A page token")
         page = tasks[start : start + page_size]
         next_page_token = None
         if start + page_size < total_size:
@@ -568,6 +566,7 @@ class RedisA2ATaskStore:
         start = 0
         page_token = str(getattr(params, "page_token", ""))
         if page_token:
+            from a2a.utils.errors import InvalidParamsError
             from a2a.utils.task import decode_page_token
 
             marker = decode_page_token(page_token)
@@ -576,7 +575,7 @@ class RedisA2ATaskStore:
                     start = index
                     break
             else:
-                raise ValueError("invalid A2A page token")
+                raise InvalidParamsError("invalid A2A page token")
         page = tasks[start : start + page_size]
         next_page_token = ""
         if start + page_size < total_size:
