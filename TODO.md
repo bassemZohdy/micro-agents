@@ -30,6 +30,129 @@ Python package publication to PyPI is outside the current distribution plan.
 
 ## Standalone framework backlog
 
+### P1 — Runtime gap-filling layer (custom implementation over the abstraction)
+
+Goal: the runtime registry already makes frameworks swappable, but each adapter
+reports a different capability set (LangGraph has no checkpoint/resume or
+approval pauses; Google ADK has its own session layout and approval storage and
+no `ApprovalStore`). Micro-Agents should own those semantics once, in a
+project-owned layer between the bootstrap and the framework, so a definition
+behaves the same on every runtime and a framework adapter only supplies
+orchestration. Design rule: fill gaps at the **boundaries Micro-Agents already
+controls** (tools, model provider, stores, request/response), never by reaching
+into framework internals. See [Runtimes](docs/RUNTIMES.md) and
+[ADR 0021](docs/adr/0021-runtime-registry-and-langgraph-adapter.md).
+
+Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`):
+
+| Gap | custom | google-adk | langgraph |
+|---|---|---|---|
+| Durable approval continuations via `ApprovalStore` | yes | no (ADK-native, in session) | no (fails closed) |
+| Checkpoint / resume via `CheckpointStore` | yes | yes (ADK-specific) | no |
+| Uniform session transcript layout | yes | no (ADK layout) | yes |
+| Governance shared without inheriting `AdkRuntime` | n/a | partial | no (subclass, private helpers) |
+
+#### Phase 0 — Specify the contract (design, no behavior change)
+
+- [ ] Write ADR 0022: the gap-filling layer. Decide the three mechanisms below
+      (governed tools, governed model, runtime decorator), what is guaranteed
+      identically on every runtime, and what stays framework-native (for
+      example ADK's own session transcript). Record the rejected alternative of
+      per-adapter reimplementation.
+- [ ] Extend `RuntimeCapabilities` to separate **native** from **provided**
+      support (for example `checkpointing: native | provided | none`), keeping
+      `as_dict()` backwards compatible and the schema/status docs in sync.
+- [ ] Define the "uniform guarantees" list and make it the conformance contract:
+      policy deny/approve, argument validation, idempotent operations, audit and
+      telemetry events, retry/fallback/circuit breaker, deadline, session replay,
+      checkpoint/resume, approval pause/resume, max-iteration bound.
+
+#### Phase 1 — Neutral governance core (remove the `AdkRuntime` inheritance)
+
+- [ ] Extract the framework-independent logic now living in `runtimes/adk`
+      (`_execute_tools`, `_invoke` retry/fallback/breaker, `_system_prompt`,
+      `_resolve_tools`, deadline, call-id helpers) into
+      `micro_agent/runtime/governance.py` as composable pieces with no framework
+      imports; keep `runtimes/adk` as the reference loop that uses them.
+- [ ] Rebase `LangGraphRuntime` on the neutral core instead of subclassing
+      `AdkRuntime`; delete its imports of private `runtimes.adk.runtime` names
+      and tighten the `runtimes.langgraph` coupling cap in
+      `tests/test_dependency_rules.py`.
+- [ ] Rename the misleading `runtimes/adk` package/module surface (it is the
+      custom loop) behind a compatibility alias, per ADR 0008, with a
+      deprecation note and changelog entry.
+- [ ] Guard with tests: behavior-preserving refactor, all 21 conformance cases
+      and the existing runtime tests pass unchanged.
+
+#### Phase 2 — Governed tools (works on any framework)
+
+- [ ] Add `GovernedTool`: wraps a `Tool` so policy check, argument validation,
+      idempotent operation handling, audit and telemetry happen at the tool
+      boundary no matter which framework invokes it. Frameworks receive wrapped
+      tools; they cannot bypass governance.
+- [ ] Add the approval gate at that boundary: a tool that needs approval raises
+      a framework-neutral `ApprovalRequired(continuation_id, tool, arguments)`;
+      the adapter converts it to a stop, and the layer persists the pending
+      request in the `ApprovalStore`. Replaces LangGraph's fail-closed denial
+      and ADK's session-only approval state.
+- [ ] Route the Google ADK adapter's tools through `GovernedTool` and make its
+      approval path use `ApprovalStore`; remove the "`MICRO_AGENT_APPROVAL_ENDPOINT`
+      is rejected for ADK" restriction once parity tests pass (keep ADK-native
+      continuations only as an opt-in `native_approvals` setting).
+- [ ] Tests: the same denied / approval-required / idempotent-retry scenarios
+      pass unchanged on custom, google-adk and langgraph.
+
+#### Phase 3 — Provided checkpoint and resume
+
+- [ ] Add a `CheckpointingRuntime` decorator that implements `checkpoint_id`
+      resume for any runtime lacking native support: it snapshots the neutral
+      invocation state (request, transcript so far, tool results, iteration
+      count) to `CheckpointStore` at tool-round boundaries and replays it into a
+      fresh framework invocation on resume.
+- [ ] Define the neutral invocation-state schema (versioned, JSON, secret-free)
+      and a migration rule; reject checkpoints written by an incompatible
+      version.
+- [ ] Wire it through the registry: `RuntimeRegistration.provides` lists the
+      gaps the layer may fill; bootstrap wraps the runtime only for capabilities
+      it lacks and reports them as `provided` in `capabilities()`.
+- [ ] Tests: kill-and-resume mid tool loop on langgraph and google-adk using the
+      in-memory and SQLite `CheckpointStore`; resume is exactly-once for
+      idempotent operations.
+
+#### Phase 4 — Governed model boundary and session uniformity
+
+- [ ] Add a `GovernedModelProvider` wrapper (retry, fallback, circuit breaker,
+      deadline, usage and cost accounting, redaction) so adapters that call the
+      Micro-Agent provider SPI get identical behavior, and the google-adk native
+      Gemini path reports the same usage metadata.
+- [ ] Normalize the stored session transcript to one Micro-Agent layout
+      regardless of runtime (an adapter-side mapper for ADK's layout) so
+      sessions are portable when an operator changes `MICRO_AGENT_RUNTIME`;
+      document the migration and add a cross-runtime session round-trip test.
+
+#### Phase 5 — Conformance and documentation
+
+- [ ] Grow `tests/test_runtime_conformance.py` from 7 to a full matrix covering
+      every item in the uniform-guarantees list; a capability reported `provided`
+      must pass the same cases as `native`.
+- [ ] Add a "capability gaps" report command or doc table generated from
+      `RuntimeCapabilities` so `docs/RUNTIMES.md` cannot drift from code.
+- [ ] Update `docs/RUNTIMES.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/STANDARDS.md`,
+      README and CHANGELOG; document how a third-party adapter opts into the layer.
+- [ ] Add the `langgraph` job (and a combined `adk`+`langgraph` parity job) to
+      the required-checks ruleset (owner action).
+
+#### Risks and open questions
+
+- ADK runs its own tool loop; wrapping tools may not cover ADK-native
+  confirmation flows. Decide in ADR 0022 whether ADK keeps native approvals as
+  the default and `ApprovalStore` as an opt-in.
+- Checkpointing at tool-round boundaries cannot resume inside a single model
+  call or a streaming response; state this explicitly rather than claim it.
+- Idempotency for resumed side effects depends on `OperationRegistry`; resume
+  must reuse operation keys, so key derivation needs to be stable across
+  frameworks.
+
 ### P1 — A2A and production state
 
 - [x] Add a durable, tenant-scoped A2A task store behind an SPI. SQLite is the
@@ -111,9 +234,9 @@ Python package publication to PyPI is outside the current distribution plan.
 - [x] Add a second framework adapter, LangGraph (`runtimes/langgraph`), driven
       by a real `StateGraph`, plus a conformance suite run against the custom,
       Google ADK and LangGraph runtimes.
-- [ ] Optional follow-ups for the LangGraph adapter: map LangGraph's native
-      checkpointer onto `CheckpointStore`, and support approval continuations
-      via LangGraph interrupts. Not claimed today.
+- [x] Superseded by "P1 — Runtime gap-filling layer" below: the LangGraph
+      checkpoint and approval gaps are closed by the project-owned layer, not by
+      LangGraph-specific code.
 - [x] Add a bundled native tool beyond `echo`: the bounded, side-effect-free
       `json_parse` utility is available for portable structured-data flows;
       domain tools still require installed plugins or programmatic injection.
@@ -231,7 +354,7 @@ and production validation remain deployment-owner work.
 
 ## Deferred / non-goals
 
-- LangChain or another second runtime
+- LangChain model abstractions (adapters call the Micro-Agent provider SPI)
 - visual designer
 - workflow engine
 - agent marketplace
