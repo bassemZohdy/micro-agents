@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from micro_agent.core.agent import (
     AgentCapabilities,
@@ -18,7 +18,11 @@ from micro_agent.core.agent import (
 )
 from micro_agent.definition import MicroAgentDefinition, validate_input, validate_output
 from micro_agent.definition.models import ConcurrencyPolicy
-from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
+
+if TYPE_CHECKING:
+    # Type-only: the runtime SPI imports ``micro_agent.core``, so a runtime import
+    # here would make ``import micro_agent.runtime`` order-dependent.
+    from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 
 
 class DefaultMicroAgent(MicroAgent):

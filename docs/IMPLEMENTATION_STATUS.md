@@ -1,7 +1,7 @@
 # Implementation Status
 
-Last audited: 2026-09-13
-Audited implementation revision: latest merged `main` on 2026-09-13
+Last audited: 2026-11-08
+Audited implementation revision: `main` at v0.1.7
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -12,7 +12,8 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 777 collected | 670 passed and 2 skipped in the default CI selection (`not integration`, `not e2e`, and `not otel`); 105 integration/e2e/OTel tests are deselected for their dedicated CI jobs, including real Redis/PostgreSQL state-provider coverage |
+| Tests | 1059 collected | 952 passed and 2 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.2% line coverage (gate: 80%); the 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. With real Redis 7 and PostgreSQL 16 services the whole suite passes (1057 passed, 2 skipped) at 91.3% coverage |
+| Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
 | Package build | Pass | wheel/sdist build plus isolated wheel import and console-entrypoint smoke |
@@ -152,7 +153,7 @@ Current runtime capability matrix:
 
 | Capability | Availability | Notes |
 |---|---|---|
-| `streaming` | provider-dependent | true for OpenAI-compatible and native Anthropic providers, a fake provider configured with stream chunks, and the Google ADK adapter when its injected provider advertises streaming; native ADK model selection remains conservative |
+| `streaming` | provider-dependent | true for OpenAI-compatible, Azure OpenAI, native Anthropic and native Gemini providers, a fake provider configured with stream chunks, and the Google ADK adapter when its injected provider advertises streaming; native ADK model selection remains conservative |
 | `structured_output` | provider-dependent | true for the OpenAI-compatible provider and the Google ADK adapter when its injected provider advertises structured output; native ADK model selection remains conservative |
 | `memory` | configured | true only when a memory provider is injected |
 | `mcp` | configured | true only when an MCP manager is injected |
@@ -161,8 +162,12 @@ Current runtime capability matrix:
 
 Gaps:
 
-- the Google ADK adapter still uses native approval continuations, so the
-  durable `MICRO_AGENT_APPROVAL_ENDPOINT` remains a custom-runtime binding
+- none that are repository-owned. The Google ADK adapter keeps approval
+  continuations in the ADK session transcript, which is durable whenever the
+  Redis, PostgreSQL or SQLite session bridge is configured, so a second
+  approval store would duplicate state. Bootstrap fails fast if
+  `MICRO_AGENT_APPROVAL_ENDPOINT` is set with the ADK runtime
+  ([ADR 0020](adr/0020-native-model-providers-and-adk-approval-state.md))
 
 ### Performance and resource budgets
 
@@ -192,6 +197,11 @@ Implemented:
 
 - deterministic fake provider
 - injectable OpenAI-compatible chat-completions provider
+- native Google Gemini provider over `generateContent` with `functionCall`/
+  `functionResponse` translation, OpenAPI-subset schema sanitising, SSE
+  streaming, and header-only API-key authentication
+- Azure OpenAI provider that reuses the OpenAI-compatible translation with
+  deployment-scoped URLs, an `api-version` query parameter and `api-key` auth
 - native Anthropic Messages provider with `tool_use`/`tool_result` translation
   and SSE streaming
 - versioned `ModelCatalog` SPI with in-memory and strict HTTPS HTTP
@@ -219,9 +229,10 @@ Implemented (additions):
 
 Gaps:
 
-- the built-in provider set currently covers fake, OpenAI-compatible chat
-  completions, and Anthropic Messages; other model families require additional
-  provider adapters
+- the built-in provider set covers fake, OpenAI-compatible chat completions,
+  Azure OpenAI, Anthropic Messages and Gemini; Vertex AI (OAuth/ADC) and
+  Microsoft Entra ID bearer authentication are not built in and require an
+  injected signing `http_client`; other model families need additional adapters
 - bundled native tools remain intentionally domain-neutral; conceptual examples
   that declare domain tools require installed plugins or programmatic injection
 
@@ -473,6 +484,13 @@ Implemented:
 - optional Redis-backed A2A task and push-configuration stores selected by a
   `redis://`/`rediss://` A2A store location, with tenant-scoped task keys,
   bounded snapshots, TTLs, and shared-worker integration coverage
+
+Known coupling: the two ADK adapters are composition layers and import many
+framework subpackages (`runtimes/adk` 14, `runtimes/google_adk` 13). That is
+intentional for a runtime that wires every provider seam, and
+`tests/test_dependency_rules.py` caps it so it cannot grow unnoticed. Reducing
+it would mean introducing a facade over the provider seams, which is not
+planned.
 
 Gaps and operator-owned checks:
 
