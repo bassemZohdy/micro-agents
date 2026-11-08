@@ -4,6 +4,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- CI: a `runtime-parity` job installs the `adk` and `langgraph` extras together
+  and runs the conformance, session-portability, guarantee and governed-boundary
+  suites plus `tools/runtime_capabilities.py --check`; the `adk` job also runs
+  the transcript tests.
 - Documentation for the runtime gap-filling layer: README overview, status and
   standards updates, and a guide in `docs/RUNTIMES.md` for opting a third-party
   adapter into the layer (loop-owning and framework-owned-loop paths).
