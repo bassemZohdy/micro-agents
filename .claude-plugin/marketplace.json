@@ -10,7 +10,7 @@
       "name": "micro-agents",
       "source": "./",
       "description": "Skills for building, running, governing and extending Micro-Agents: portable agent definitions that run unchanged on the custom, Google ADK and LangGraph runtimes.",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "category": "development",
       "tags": [
         "micro-agents",
