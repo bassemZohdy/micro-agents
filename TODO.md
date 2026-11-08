@@ -145,8 +145,8 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       README and CHANGELOG; document how a third-party adapter opts into the layer.
 - [x] Add a combined `adk`+`langgraph` `runtime-parity` CI job (conformance,
       session portability, guarantees, generated capability table).
-- [ ] Add the `langgraph` and `runtime-parity` jobs to the required-checks
-      ruleset (owner action: Settings -> Rules -> main -> required status checks).
+- [x] Add the `langgraph` and `runtime-parity` jobs to the required-checks
+      ruleset (done: ruleset main-required-CI now requires 17 checks).
 
 #### Risks and open questions
 
