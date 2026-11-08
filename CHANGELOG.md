@@ -4,6 +4,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- The Google ADK adapter now runs every tool through the shared `ToolGovernor`
+  instead of its own copy of the policy, side-effect, idempotency and
+  execution logic. ADK keeps only its native confirmation handshake. Tool calls
+  gain argument validation, tool timeouts and tool spans, refused calls report
+  `denied`/`error` in `tool_results` like the other runtimes, and the shared
+  conformance cases for policy denial and approval pause/resume pass on ADK.
 - The LangGraph runtime now pauses for and resumes after human approvals through
   the shared `ApprovalStore` (`approval_required`, `continuation_id`,
   `approval_decision`), and `MICRO_AGENT_APPROVAL_ENDPOINT` is accepted for it.

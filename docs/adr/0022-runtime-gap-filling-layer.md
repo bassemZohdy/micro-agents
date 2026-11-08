@@ -57,6 +57,13 @@ point at an existing conformance case and every conformance case to belong to a
 guarantee, so the list and the suite cannot drift. A capability reported
 `provided` must pass the same cases as `native`.
 
+**Decision on ADK approvals (Phase 2).** ADK runs its own tool loop and owns its
+resumable session, so its approval continuation stays ADK-native. Its tools run
+through the shared `ToolGovernor` (policy, validation, idempotency, timeouts,
+telemetry, audit); only the confirmation handshake is ADK's. The conformance
+suite proves the approval contract (pause, approve, deny, unknown continuation)
+on every runtime, so the difference is the storage location, not behavior.
+
 **Stays framework-native.** The layer does not replace what a framework owns by
 design: ADK's internal session transcript and its native confirmation flow
 remain available (native approvals become an opt-in for ADK in Phase 2), and

@@ -56,6 +56,7 @@ from micro_agent.core import (
     ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.governance import ToolCallScope, ToolGovernor
 from micro_agent.health import DependencyProbe, HealthStatus
 from micro_agent.knowledge import (
     KnowledgeRetriever,
@@ -76,18 +77,15 @@ from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
     InvocationIdentity,
-    Operation,
     OperationRegistryProtocol,
-    OperationResult,
     PolicyEvaluator,
-    RetryClassification,
     get_invocation_identity,
     reset_invocation_identity,
     resolve_workload_identity,
     set_invocation_identity,
 )
 from micro_agent.session import SessionProvider
-from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
+from micro_agent.tools import Tool, builtin_tool_registry
 from micro_agent.tools.plugin import load_plugin_tools
 
 _ADK_REQUEST_CONFIRMATION_NAME = "adk_request_confirmation"
@@ -209,6 +207,7 @@ class GoogleAdkRuntime(AgentRuntime):
                 audit=self._config.audit,
                 operation_registry=self._config.operation_registry,
                 side_effect=tool_side_effects.get(tool.metadata.name),
+                labels={"agent": definition.metadata.name},
             )
             for tool in tools.values()
         ]
@@ -398,6 +397,7 @@ class GoogleAdkRuntime(AgentRuntime):
                         side_effect=(agent._internal.get("tool_side_effects") or {}).get(
                             tool.metadata.name
                         ),
+                        labels={"agent": agent.identity.agent_name},
                     )
                     for tool in discovered.values()
                 ]
@@ -1324,6 +1324,7 @@ def _as_adk_tool(
     audit: AuditSink | None = None,
     operation_registry: OperationRegistryProtocol | None = None,
     side_effect: str | None = None,
+    labels: dict[str, str] | None = None,
 ) -> Any:
     """Adapt a Micro-Agent tool to ADK's client-side ``BaseTool`` contract.
 
@@ -1337,6 +1338,16 @@ def _as_adk_tool(
     except ImportError as exc:  # pragma: no cover - guarded by ``_load_adk``
         raise GoogleAdkError("Google ADK tool APIs are unavailable") from exc
 
+    tool_telemetry = telemetry or Telemetry.from_environment()
+    tool_labels: dict[str, str] = dict(labels or {})
+    governor = ToolGovernor(
+        telemetry=tool_telemetry,
+        policy_evaluator=evaluator,
+        operation_registry=operation_registry,
+        audit=audit.record if audit is not None else None,
+    )
+    side_effects = {tool.metadata.name: side_effect} if side_effect else None
+
     class AdkToolAdapter(BaseTool):
         def __init__(self, micro_tool: Tool) -> None:
             super().__init__(
@@ -1344,9 +1355,6 @@ def _as_adk_tool(
                 description=micro_tool.metadata.description or micro_tool.metadata.name,
             )
             self._micro_tool = micro_tool
-            self._side_effect = normalize_tool_side_effect(
-                side_effect or micro_tool.metadata.side_effect
-            )
 
         def _get_declaration(self) -> Any:
             schema = self._micro_tool.input_schema.parameters
@@ -1356,134 +1364,58 @@ def _as_adk_tool(
                 parameters=cast(Any, schema or None),
             )
 
-        def _denied(self, reason: str, event: str = "policy.tool_denied") -> dict[str, Any]:
-            tool_name = self._micro_tool.metadata.name
-            if telemetry is not None:
-                telemetry.increment("policy_denials_total", {"tool": tool_name})
-                telemetry.logger.warning("tool denied by policy", tool=tool_name, reason=reason)
-            if audit is not None:
-                audit.record(event, tool=tool_name, reason=reason)
-            return {"error": reason}
-
         async def check_require_confirmation(self, args: dict[str, Any], tool_context: Any) -> bool:
             """Expose Micro-Agent approval policy to ADK's resume validator."""
-            if evaluator is None or self._side_effect == "read_only":
-                return False
-            return evaluator.evaluate_side_effect(self._micro_tool.metadata.name).requires_approval
+            return governor.requires_approval(self._micro_tool, side_effects)
 
         async def run_async(self, *, args: dict[str, Any], tool_context: Any) -> Any:
-            if evaluator is not None:
-                decision = evaluator.evaluate_tool(self._micro_tool.metadata.name)
-                if not decision.allowed:
-                    return self._denied(f"denied by policy: {decision.reason}")
-                if self._side_effect != "read_only":
-                    side_effect_decision = evaluator.evaluate_side_effect(
-                        self._micro_tool.metadata.name
+            """Run the tool through the shared governor.
+
+            Only ADK's native confirmation handshake lives here; policy,
+            validation, idempotency, timeouts, telemetry and audit are the
+            framework-neutral :class:`ToolGovernor`'s.
+            """
+            name = self._micro_tool.metadata.name
+            confirmed = False
+            if governor.requires_approval(self._micro_tool, side_effects):
+                confirmation = getattr(tool_context, "tool_confirmation", None)
+                if confirmation is None:
+                    tool_context.request_confirmation(
+                        hint=f"Approve the side-effect tool call {name}",
+                        payload={"tool": name},
                     )
-                else:
-                    side_effect_decision = None
-                if side_effect_decision is not None and not side_effect_decision.allowed:
-                    if side_effect_decision.requires_approval:
-                        confirmation = getattr(tool_context, "tool_confirmation", None)
-                        if confirmation is None:
-                            tool_context.request_confirmation(
-                                hint=(
-                                    f"Approve the side-effect tool call "
-                                    f"{self._micro_tool.metadata.name}"
-                                ),
-                                payload={"tool": self._micro_tool.metadata.name},
-                            )
-                            tool_context.actions.skip_summarization = True
-                            if telemetry is not None:
-                                telemetry.increment(
-                                    "approval_requests_total",
-                                    {"tool": self._micro_tool.metadata.name},
-                                )
-                            return {
-                                "error": (
-                                    "This tool call requires confirmation, "
-                                    "please approve or reject."
-                                )
-                            }
-                        if not getattr(confirmation, "confirmed", False):
-                            return self._denied(
-                                "denied by caller: approval denied",
-                                event="approval.denied",
-                            )
-                        if audit is not None:
-                            audit.record(
-                                "approval.granted",
-                                tool=self._micro_tool.metadata.name,
-                            )
-                    else:
-                        return self._denied(
-                            f"denied by side-effect policy: {side_effect_decision.reason}",
-                            event="policy.side_effect_denied",
-                        )
-            operation: Operation | None = None
-            registry = operation_registry
-            if registry is not None and self._side_effect != "read_only":
-                identity = get_invocation_identity()
-                tenant_id = (
-                    identity.user.tenant_id
-                    if identity is not None and identity.user is not None
-                    else None
-                )
-                operation = Operation(
-                    name=self._micro_tool.metadata.name,
-                    arguments=args,
-                    idempotency_key=(
-                        str(args["idempotency_key"])
-                        if args.get("idempotency_key") is not None
-                        else None
-                    ),
-                    tenant_id=tenant_id,
-                    retry_classification={
-                        "idempotent": RetryClassification.IDEMPOTENT,
-                        "unsafe": RetryClassification.UNSAFE,
-                    }.get(self._side_effect, RetryClassification.SAFE),
-                )
-                claimed, prior = await _maybe_await(registry.claim(operation))
-                if not claimed:
+                    tool_context.actions.skip_summarization = True
+                    tool_telemetry.increment("approval_requests_total", {"tool": name})
                     return {
-                        "output": prior.output if prior is not None else None,
-                        "error": (
-                            "operation is already in progress"
-                            if prior is not None and prior.status == "in_progress"
-                            else (prior.error if prior is not None else None)
-                        ),
-                        "was_deduplicated": True,
+                        "error": "This tool call requires confirmation, please approve or reject."
                     }
-            try:
-                result = await self._micro_tool.execute(args)
-            except Exception as exc:  # noqa: BLE001 — preserve operation outcome
-                if operation is not None and registry is not None:
-                    await _maybe_await(
-                        registry.record(
-                            operation,
-                            OperationResult(
-                                operation_id=operation.operation_id,
-                                status="failed",
-                                error=str(exc),
-                            ),
-                        )
-                    )
-                raise
-            if operation is not None and registry is not None:
-                await _maybe_await(
-                    registry.record(
-                        operation,
-                        OperationResult(
-                            operation_id=operation.operation_id,
-                            status="failed" if result.is_error else "success",
-                            output=result.output,
-                            error=result.error,
-                        ),
-                    )
-                )
-            if result.is_error:
-                return {"error": result.error or f"tool '{self.name}' failed"}
-            return result.output
+                if not getattr(confirmation, "confirmed", False):
+                    reason = "denied by caller: approval denied"
+                    governor.deny(tool_labels, name, reason, event="approval.denied")
+                    return {"error": reason, "denied": True}
+                confirmed = True
+                if audit is not None:
+                    audit.record("approval.granted", tool=name)
+            record = await governor.run(
+                self._micro_tool,
+                {"name": name, "arguments": args},
+                ToolCallScope(
+                    labels=tool_labels,
+                    skip_side_effect_approval=confirmed,
+                    side_effects=side_effects,
+                ),
+            )
+            if record.get("was_deduplicated"):
+                return {
+                    "output": record.get("output"),
+                    "error": record.get("error"),
+                    "was_deduplicated": True,
+                }
+            if record.get("denied"):
+                return {"error": record["error"], "denied": True}
+            if record.get("error"):
+                return {"error": record["error"]}
+            return record.get("output")
 
     return AdkToolAdapter(tool)
 
@@ -1629,13 +1561,18 @@ def _tool_results_from_events(events: list[Any]) -> list[dict[str, Any]]:
             response = getattr(part, "function_response", None)
             if response is None:
                 continue
-            results.append(
-                {
-                    "tool": getattr(response, "name", ""),
-                    "output": getattr(response, "response", {}) or {},
-                    "tool_call_id": getattr(response, "id", None),
-                }
-            )
+            output = getattr(response, "response", {}) or {}
+            result: dict[str, Any] = {
+                "tool": getattr(response, "name", ""),
+                "output": output,
+                "tool_call_id": getattr(response, "id", None),
+            }
+            if isinstance(output, dict) and output.get("error"):
+                # Same record shape the other runtimes use for refused calls.
+                result["error"] = output["error"]
+                if output.get("denied"):
+                    result["denied"] = True
+            results.append(result)
     return results
 
 

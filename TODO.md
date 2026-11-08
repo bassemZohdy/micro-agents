@@ -95,12 +95,16 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       the adapter converts it to a stop, and the layer persists the pending
       request in the `ApprovalStore`. Replaces LangGraph's fail-closed denial
       and ADK's session-only approval state.
-- [ ] Route the Google ADK adapter's tools through `GovernedTool` and make its
-      approval path use `ApprovalStore`; remove the "`MICRO_AGENT_APPROVAL_ENDPOINT`
-      is rejected for ADK" restriction once parity tests pass (keep ADK-native
-      continuations only as an opt-in `native_approvals` setting).
-- [ ] Tests: the same denied / approval-required / idempotent-retry scenarios
-      pass unchanged on custom, google-adk and langgraph.
+- [x] Route the Google ADK adapter's tools through the shared `ToolGovernor`.
+      Decision: ADK keeps its **native** confirmation protocol, because the
+      continuation lives inside ADK's resumable session and replacing it with
+      `ApprovalStore` would abandon ADK's own resumability. Behavioral parity is
+      proven by the conformance cases instead, and
+      `MICRO_AGENT_APPROVAL_ENDPOINT` stays rejected for ADK (ADR 0020/0022).
+- [x] Tests: the same denied / approval-required / unknown-continuation
+      scenarios pass unchanged on custom, google-adk and langgraph (shared
+      conformance suite); idempotent retry is covered at the governor level in
+      `tests/test_governed_tools.py`.
 
 #### Phase 3 — Provided checkpoint and resume
 

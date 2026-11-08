@@ -213,7 +213,7 @@ def test_optional_backends_import_without_their_libraries(package):
 # unnoticed. Raising a limit is a deliberate, reviewed decision.
 ADAPTER_SUBPACKAGE_LIMITS = {
     "runtimes.custom": 11,
-    "runtimes.google_adk": 13,
+    "runtimes.google_adk": 14,  # +1: shares micro_agent.governance
     "runtimes.langgraph": 10,
 }
 
