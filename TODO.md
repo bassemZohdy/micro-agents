@@ -315,6 +315,20 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       throughput and can record replica/shared-state metadata; live Redis/
       Postgres execution and SLO sign-off remain deployment-owned.
 
+### P2 — Agent skills and plugins
+
+- [x] Ship the project's playbooks as Agent Skills plus per-harness plugin
+      manifests, with a validator and drift guards (`docs/AGENT_SKILLS.md`).
+- [ ] Exercise the Cursor packaging (`.cursor-plugin/plugin.json`, root
+      `plugin.json`) in Cursor itself; only Claude Code, Codex and Gemini CLI
+      were run against their real tools.
+- [ ] Add a square plugin icon (the Claude Code directory check warns
+      `ICON_MISSING`) and submit the plugin to the harness directories if the
+      project wants public listings.
+- [x] Bump the plugin manifest versions together with `pyproject.toml`; the
+      release procedure in `docs/DEPLOYMENT.md` says so and
+      `tools/validate_skills.py` fails until they agree.
+
 ## Micro-Agent Cloud — C5 production hardening
 
 Cloud C0–C4 reference slices and SQLite durability reference backends are

@@ -54,6 +54,16 @@ workflow creates the public Docker Hub repository when it does not exist.
 PyPI is not required for self-hosted deployments; see
 [Deployment](docs/DEPLOYMENT.md) for the release configuration.
 
+## Agent skills and plugins
+
+Task playbooks for AI coding agents live in [`skills/`](skills/) in the open
+[Agent Skills](https://agentskills.io/specification) format and are packaged as
+a plugin for Claude Code, Codex, Gemini CLI and Cursor, with `AGENTS.md` for any
+other harness. They cover authoring a definition, running and deploying,
+choosing a runtime, governing tools, adding a runtime adapter and contributing.
+A validator keeps them in sync with the code (`python tools/validate_skills.py`).
+See [Agent Skills and Plugins](docs/AGENT_SKILLS.md) for install commands.
+
 ## Architecture
 
 ```text

@@ -4,6 +4,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Agent Skills and plugins: six `micro-agents-*` skills in `skills/` (author a
+  definition, run and deploy, choose a runtime, govern tools, add a runtime
+  adapter, contribute) in the open Agent Skills format, plus `AGENTS.md` and
+  `CLAUDE.md`. The repository is also a plugin for Claude Code
+  (`.claude-plugin/`, read by Codex's marketplace too), Gemini CLI
+  (`gemini-extension.json`) and Cursor (`.cursor-plugin/`, root `plugin.json`).
+  `tools/validate_skills.py` (run by the test suite and the `docs` CI job)
+  enforces the specification, keeps every manifest on the package version and
+  fails when a skill cites a path, extra, variable, script, module or YAML
+  example that no longer exists. See `docs/AGENT_SKILLS.md`.
 - Session hand-over between the custom and Google ADK runtimes is now tested
   over real Redis and PostgreSQL session providers (run by the `runtime-parity`
   job, which gained Redis and PostgreSQL services).

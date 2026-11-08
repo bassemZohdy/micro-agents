@@ -57,11 +57,15 @@ conformance case.
    ```python
    from micro_agent.runtime import RuntimeRegistration, register_runtime
 
-   register_runtime(RuntimeRegistration(
-       name="my-runtime", factory=build_my_runtime, aliases=("mine",),
-       provides=("checkpointing",),         # capabilities the governance layer supplies
-       approval_note="my-runtime does not map MICRO_AGENT_APPROVAL_ENDPOINT",
-   ))
+   register_runtime(
+       RuntimeRegistration(
+           name="my-runtime",
+           factory=build_my_runtime,
+           aliases=("mine",),
+           provides=("checkpointing",),  # capabilities the governance layer supplies
+           approval_note="my-runtime does not map MICRO_AGENT_APPROVAL_ENDPOINT",
+       )
+   )
    ```
 
    ```toml
