@@ -5,6 +5,14 @@ from micro_agent.governance.errors import (
     ApprovalRequiredError,
     RetrySuppressedAfterSideEffectError,
 )
+from micro_agent.governance.invocation import InvocationGovernor, wait_for_retry
+from micro_agent.governance.models import (
+    GovernedModelProvider,
+    ModelCallScope,
+    add_usage,
+    current_model_scope,
+    use_model_scope,
+)
 from micro_agent.governance.runtime import (
     GovernedRuntime,
     GovernedRuntimeConfig,
@@ -31,17 +39,24 @@ __all__ = [
     "MAX_SESSION_HISTORY_MESSAGES",
     "ApprovalPausedError",
     "ApprovalRequiredError",
+    "GovernedModelProvider",
     "GovernedRuntime",
     "GovernedRuntimeConfig",
     "GovernedTool",
     "InvocationDeadline",
+    "InvocationGovernor",
+    "ModelCallScope",
     "RetrySuppressedAfterSideEffectError",
     "ToolCallScope",
     "ToolGovernor",
+    "add_usage",
     "call_with_supported_kwargs",
+    "current_model_scope",
     "current_tool_scope",
     "maybe_await",
     "new_call_id",
+    "use_model_scope",
     "use_tool_scope",
     "validate_tool_arguments",
+    "wait_for_retry",
 ]

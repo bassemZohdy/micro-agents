@@ -124,10 +124,11 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 4 — Governed model boundary and session uniformity
 
-- [ ] Add a `GovernedModelProvider` wrapper (retry, fallback, circuit breaker,
-      deadline, usage and cost accounting, redaction) so adapters that call the
-      Micro-Agent provider SPI get identical behavior, and the google-adk native
-      Gemini path reports the same usage metadata.
+- [x] Add a `GovernedModelProvider` (per-call deadline, span, latency and usage
+      telemetry, streaming) plus a shared `InvocationGovernor` (circuit breaker,
+      deadline, retry, fallback) so every adapter gets identical behavior, and
+      the google-adk native Gemini path reports the same usage metadata.
+      Redaction stays in telemetry/audit, which already scrub secrets.
 - [ ] Normalize the stored session transcript to one Micro-Agent layout
       regardless of runtime (an adapter-side mapper for ADK's layout) so
       sessions are portable when an operator changes `MICRO_AGENT_RUNTIME`;

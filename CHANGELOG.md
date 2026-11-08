@@ -4,6 +4,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Model-call and invocation resilience are now shared governance services.
+  `InvocationGovernor` (circuit breaker, deadline, retry with backoff, fallback
+  policy) moved out of the base runtime and now also wraps the Google ADK
+  runner, so the `retry`/`fallback` error policies and `circuit_breaker_*`
+  semantics apply to ADK as well; ADK retries restore the pre-attempt session so
+  they do not duplicate the user's turn. `GovernedModelProvider` applies the
+  deadline, model span, latency and token telemetry and streaming deltas for the
+  custom, LangGraph and ADK-bridge paths. ADK responses now include
+  `metadata["usage"]`, including for the native Gemini model. ADK tools inherit
+  the invocation deadline and side-effect state.
 - Checkpoint and resume are now services of the governance layer
   (`GovernedRuntime._load_checkpoint` / `_save_checkpoint` / `_delete_checkpoint`)
   stamped with a versioned neutral schema. The reference loop uses them

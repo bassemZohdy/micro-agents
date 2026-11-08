@@ -53,6 +53,7 @@ from micro_agent.governance import (
     GovernedRuntimeConfig,
     InvocationDeadline,
     call_with_supported_kwargs,
+    current_model_scope,
     new_call_id,
 )
 from micro_agent.knowledge import build_knowledge_query, retrieve_knowledge_context
@@ -60,7 +61,6 @@ from micro_agent.memory import MemoryEntry, MemoryPolicy
 from micro_agent.models import (
     ModelConfig,
     ModelProvider,
-    ModelResponse,
     structured_output_generation,
 )
 from micro_agent.runtime import RuntimeAgent, RuntimeCapabilities
@@ -341,48 +341,13 @@ class LangGraphRuntime(GovernedRuntime):
         messages = list(state["messages"])
         iterations = state["iterations"] + 1
         tool_schemas = run.tool_schemas or None
-        emit_delta = run.emit_delta
 
-        model_span = self._telemetry.start_span(
-            "model.generate",
-            trace_id=run.trace_id,
-            parent_span_id=run.agent_span.span_id,
-            attributes={"iteration": iterations},
-        )
-        model_start = time.monotonic()
-        try:
-            if emit_delta is None:
-                response = await run.deadline.run(
-                    provider.generate(model_config, messages, tools=tool_schemas),
-                    cap=model_config.timeout_seconds,
-                )
-            else:
-
-                async def consume_stream() -> ModelResponse:
-                    final: ModelResponse | None = None
-                    async for event in provider.stream(model_config, messages, tools=tool_schemas):
-                        if event.delta:
-                            await emit_delta(event.delta)
-                        if event.response is not None:
-                            final = event.response
-                    if final is None:
-                        raise RuntimeError("model stream ended without a final response")
-                    return final
-
-                response = await run.deadline.run(
-                    consume_stream(), cap=model_config.timeout_seconds
-                )
-        except Exception as exc:
-            model_span.add_event("model.error", {"error": str(exc)})
-            self._telemetry.finish_span(model_span)
-            raise
-        latency = round((time.monotonic() - model_start) * 1000, 2)
-        model_span.set_attribute("latency_ms", latency)
-        model_span.add_event("model.response", {"finish_reason": response.finish_reason})
-        self._telemetry.finish_span(model_span)
-        self._telemetry.record("model_latency_ms", latency, run.labels)
-        self._telemetry.observe_histogram("model_latency_histogram_ms", latency, run.labels)
-        self._telemetry.record_model_usage(response.usage, run.labels)
+        # Deadline, span, latency/usage telemetry and streaming deltas are applied
+        # by the governed provider from the bound model scope.
+        model_scope = current_model_scope()
+        if model_scope is not None:
+            model_scope.parent_span_id = run.agent_span.span_id
+        response = await provider.generate(model_config, messages, tools=tool_schemas)
         usage = {k: state["usage"].get(k, 0) + v for k, v in response.usage.items()}
 
         assistant: dict[str, Any] = {"role": "assistant", "content": response.content}

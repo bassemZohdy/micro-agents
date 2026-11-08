@@ -43,6 +43,8 @@ definition, core contracts or bootstrap depends on a particular framework.
 | Checkpoint / resume | yes | yes (ADK-specific state) | **provided** (needs a `CheckpointStore`) |
 | Durable approval continuations | yes (`ApprovalStore`) | yes (ADK native, in the session) | yes (`ApprovalStore`) |
 | Native framework model path | no | yes (Gemini) | no |
+| Retry, fallback, circuit breaker, deadline | yes | yes (shared `InvocationGovernor`) | yes |
+| Model usage and latency telemetry | yes | yes (native Gemini: from framework events) | yes |
 
 `langgraph` shares the reference runtime's approval pause/resume (through the
 same `ApprovalStore`, including `MICRO_AGENT_APPROVAL_ENDPOINT`). Where it lacks

@@ -1084,3 +1084,74 @@ async def test_adk_runtime_health_probes_cover_injected_dependencies():
         assert await probes["knowledge"]() is True
     finally:
         await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_adk_retry_starts_from_the_pre_attempt_session_not_a_duplicate_turn():
+    class FlakyOnce(FakeModelProvider):
+        def __init__(self) -> None:
+            super().__init__(FakeModelConfig(response="second try"))
+            self.calls = 0
+
+        async def generate(self, config, messages, tools=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise ConnectionError("connection reset")
+            return ModelResponse(content="second try")
+
+    provider = FlakyOnce()
+    runtime = GoogleAdkRuntime(GoogleAdkRuntimeConfig(model_provider=provider))
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "adk-retry", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "x"},
+                "dependencies": {"model": {"ref": "m", "provider": "fake"}},
+                "runtime": {"error_policy": "retry", "retry_max_attempts": 1},
+            },
+        }
+    )
+    agent = await runtime.create(definition)
+    try:
+        await runtime.start(agent)
+        response = await runtime.invoke(
+            agent, AgentRequest(input={"q": "once"}, session_id="retry-session")
+        )
+        service = agent._internal["adk_session_service"]
+        session = await service.get_session(
+            app_name=agent._internal["app_name"],
+            user_id=agent._internal["user_id"],
+            session_id="retry-session",
+        )
+    finally:
+        await runtime.shutdown(agent)
+        await runtime.close()
+    assert response.output["content"] == "second try" and provider.calls == 2
+    user_turns = [e for e in session.events if getattr(e.content, "role", None) == "user"]
+    assert len(user_turns) == 1
+
+
+@pytest.mark.asyncio
+async def test_adk_native_model_usage_is_reported_from_framework_events():
+    from runtimes.google_adk.runtime import _usage_from_events
+
+    final = SimpleNamespace(
+        partial=False,
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=7, candidates_token_count=3, total_token_count=10
+        ),
+    )
+    partial = SimpleNamespace(
+        partial=True,
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=99, candidates_token_count=99, total_token_count=198
+        ),
+    )
+    assert _usage_from_events([partial, final, SimpleNamespace(partial=False)]) == {
+        "prompt_tokens": 7,
+        "completion_tokens": 3,
+        "total_tokens": 10,
+    }
+    assert _usage_from_events([SimpleNamespace(partial=False)]) == {}

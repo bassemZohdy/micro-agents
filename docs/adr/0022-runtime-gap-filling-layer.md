@@ -77,6 +77,28 @@ telemetry, audit); only the confirmation handshake is ADK's. The conformance
 suite proves the approval contract (pause, approve, deny, unknown continuation)
 on every runtime, so the difference is the storage location, not behavior.
 
+**Model boundary and invocation resilience (Phase 4).** Two pieces sit at the
+points Micro-Agents already controls, so no adapter reaches into framework
+internals:
+
+- `InvocationGovernor` (`micro_agent.governance.invocation`) applies the
+  declared runtime semantics around one invocation attempt: circuit breaker,
+  deadline, retry with backoff and jitter (never after a side effect or streamed
+  output) and the `fallback` error policy. It used to live inside the base class
+  and was therefore unavailable to the Google ADK adapter, which now runs its
+  runner through it. Because an ADK attempt appends to the framework's own
+  session, the adapter snapshots the session through ADK's public service API
+  and restores it before a retry, so a retry does not duplicate the user turn.
+- `GovernedModelProvider` (`micro_agent.governance.models`) wraps the provider
+  SPI per call: invocation deadline capped by the model timeout, a
+  `model.generate` span, latency and token telemetry, and streamed deltas.
+  Per-invocation context travels in a `ModelCallScope`, like `ToolCallScope`
+  does for tools. The custom loop, the LangGraph node and the ADK
+  `BaseLlm` bridge all call it and no longer carry copies of this code. The
+  ADK native Gemini path has no provider call to wrap, so its usage is read
+  from the framework's final model events and reported through the same
+  telemetry and the same `usage` metadata.
+
 **Stays framework-native.** The layer does not replace what a framework owns by
 design: ADK's internal session transcript and its native confirmation flow
 remain available (native approvals become an opt-in for ADK in Phase 2), and

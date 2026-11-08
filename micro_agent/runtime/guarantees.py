@@ -127,14 +127,24 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "retry-fallback-breaker",
         "Model retry, fallback and circuit breaking behave identically.",
-        "planned",
-        phase=4,
+        "covered",
+        (
+            "test_a_transient_model_failure_is_retried_under_the_retry_policy",
+            "test_a_fatal_model_failure_follows_the_fallback_policy",
+            "test_repeated_failures_open_the_circuit_breaker",
+        ),
     ),
     Guarantee(
         "deadline",
         "The invocation deadline bounds model and tool calls.",
-        "planned",
-        phase=4,
+        "covered",
+        ("test_the_invocation_deadline_bounds_a_slow_model",),
+    ),
+    Guarantee(
+        "usage-telemetry",
+        "Token usage is reported in the response and recorded as telemetry.",
+        "covered",
+        ("test_token_usage_is_reported_and_recorded",),
     ),
     Guarantee(
         "session-portability",

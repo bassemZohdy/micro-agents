@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
-import time
 from abc import abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -31,12 +29,10 @@ from micro_agent.core import (
     CheckpointNotFoundError,
     ContinuationNotFoundError,
 )
-from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
+from micro_agent.definition import MicroAgentDefinition
 from micro_agent.governance.checkpoints import ensure_neutral_checkpoint, neutral_runtime_state
-from micro_agent.governance.errors import (
-    ApprovalPausedError,
-    RetrySuppressedAfterSideEffectError,
-)
+from micro_agent.governance.invocation import InvocationGovernor
+from micro_agent.governance.models import GovernedModelProvider, ModelCallScope, use_model_scope
 from micro_agent.governance.support import (
     InvocationDeadline,
     maybe_await,
@@ -55,7 +51,7 @@ from micro_agent.models import (
     ModelProvider,
 )
 from micro_agent.observability import AuditSink, Telemetry
-from micro_agent.resilience import CircuitBreaker, Retryability, classify_retry
+from micro_agent.resilience import CircuitBreaker
 from micro_agent.runtime import AgentRuntime, RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import (
     AgentPolicy,
@@ -73,31 +69,6 @@ from micro_agent.security import (
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
 from micro_agent.tools.plugin import load_plugin_tools
-
-
-async def wait_for_retry(
-    delay_seconds: float,
-    invocation_deadline: InvocationDeadline,
-    retry_deadline: InvocationDeadline,
-) -> None:
-    """Sleep for a retry delay without exceeding either invocation budget."""
-    if delay_seconds <= 0:
-        if invocation_deadline.expired or retry_deadline.expired:
-            raise TimeoutError("retry budget exceeded")
-        return
-    remaining = [
-        value
-        for value in (invocation_deadline.remaining(), retry_deadline.remaining())
-        if value is not None
-    ]
-    if remaining:
-        allowed = min(remaining)
-        if allowed <= 0:
-            raise TimeoutError("retry budget exceeded")
-        if delay_seconds > allowed:
-            await asyncio.sleep(allowed)
-            raise TimeoutError("retry budget exceeded")
-    await asyncio.sleep(delay_seconds)
 
 
 @dataclass
@@ -161,7 +132,7 @@ class GovernedRuntime(AgentRuntime):
             operation_registry=self._config.operation_registry,
             audit=self._audit,
         )
-        self._circuits: dict[str, CircuitBreaker] = {}
+        self._invocations = InvocationGovernor(telemetry=lambda: self._telemetry, audit=self._audit)
         self._knowledge_refs: list[KnowledgeSource] = []
         self._started = False
 
@@ -227,7 +198,9 @@ class GovernedRuntime(AgentRuntime):
             capabilities=capabilities,
             _internal={
                 "definition": definition,
-                "model_provider": self._model_provider,
+                "model_provider": GovernedModelProvider(
+                    self._model_provider, lambda: self._telemetry
+                ),
                 "tools": tools,
                 "tool_side_effects": tool_side_effects,
                 "unresolved_tools": unresolved,
@@ -517,12 +490,10 @@ class GovernedRuntime(AgentRuntime):
         definition: MicroAgentDefinition = agent._internal["definition"]
         semantics = definition.spec.runtime
         trace_id = request.request_id or str(uuid4())
-        labels = {"agent": definition.metadata.name}
         deadline = InvocationDeadline.from_seconds(
             semantics.timeout_seconds,
             request.timeout_seconds,
         )
-        retry_deadline = InvocationDeadline.from_seconds(semantics.retry_budget_seconds)
         side_effect_state: dict[str, Any] = {"attempted_tools": []}
         emitted_stream_output = False
 
@@ -533,145 +504,33 @@ class GovernedRuntime(AgentRuntime):
             emitted_stream_output = True
             await emit_delta(delta)
 
-        breaker = self._circuit_for(definition)
-        if breaker is not None:
-            # Reject before any work while the circuit is open; after the
-            # cooldown this allows one probe invocation.
-            breaker.check(agent=definition.metadata.name)
-
         async def run_once() -> AgentResponse:
-            return await self._invoke_inner(
-                agent,
-                request,
-                trace_id,
-                deadline,
-                side_effect_state=side_effect_state,
+            # Fresh per attempt: usage and span numbering restart on a retry. The
+            # orchestration sets ``parent_span_id`` once it has opened its span.
+            scope = ModelCallScope(
+                trace_id=trace_id,
+                labels={"agent": definition.metadata.name},
+                deadline=deadline,
                 emit_delta=tracked_emit if emit_delta is not None else None,
             )
-
-        start_time = time.monotonic()
-        try:
-            response = await run_once()
-        except TimeoutError:
-            self._telemetry.increment("agent_invocation_errors_total", labels)
-            self._telemetry.logger.error(
-                "invocation deadline exceeded",
-                request_id=request.request_id,
-                session_id=request.session_id,
-            )
-            if breaker is not None and breaker.record_failure() == "open":
-                self._telemetry.increment("circuit_breaker_trips_total", labels)
-            raise
-        except ApprovalPausedError as paused:
-            # A pause is not an error: retry/fallback policies must not apply.
-            approval = paused.approval
-            pending_names = [str(tr.get("name", "")) for tr in approval.tool_requests]
-            self._audit(
-                "approval.requested",
-                agent=definition.metadata.name,
-                tools=pending_names,
-                continuation_id=approval.continuation_id,
-            )
-            self._telemetry.logger.warning(
-                "invocation paused awaiting approval",
-                request_id=request.request_id,
-                tools=pending_names,
-            )
-            return AgentResponse(
-                output={"content": "", "tool_results": approval.all_tool_results},
-                request_id=approval.request_id or request.request_id,
-                session_id=approval.session_id,
-                status="approval_required",
-                metadata={
-                    "continuation_id": approval.continuation_id,
-                    "pending_tools": pending_names,
-                },
-            )
-        except Exception as exc:
-            self._telemetry.increment("agent_invocation_errors_total", labels)
-            if emitted_stream_output:
-                self._telemetry.increment("agent_retries_suppressed_total", labels)
-                raise RuntimeError(
-                    "invocation failed after streaming output was emitted; "
-                    "retry/fallback suppressed"
-                ) from exc
-            self._telemetry.logger.error(
-                "invocation failed",
-                request_id=request.request_id,
-                session_id=request.session_id,
-                error=str(exc),
-            )
-            if breaker is not None and breaker.record_failure() == "open":
-                self._telemetry.increment("circuit_breaker_trips_total", labels)
-            if semantics.error_policy is ErrorPolicy.RETRY:
-                if isinstance(exc, RetrySuppressedAfterSideEffectError):
-                    raise
-                attempted_tools = side_effect_state.get("attempted_tools", [])
-                if attempted_tools:
-                    tool_names = ", ".join(str(name) for name in attempted_tools)
-                    self._telemetry.increment("agent_retries_suppressed_total", labels)
-                    raise RetrySuppressedAfterSideEffectError(
-                        "invocation retry suppressed after side-effect tool execution: "
-                        f"{tool_names}"
-                    ) from exc
-                retry_error: Exception = exc
-                if classify_retry(retry_error) is Retryability.NON_RETRYABLE:
-                    # Deterministic failures (denials, contract violations,
-                    # authentication) cannot succeed on retry — fail now.
-                    raise retry_error from exc
-                for retry_index in range(semantics.retry_max_attempts):
-                    if side_effect_state.get("attempted_tools", []):
-                        tool_names = ", ".join(
-                            str(name) for name in side_effect_state["attempted_tools"]
-                        )
-                        self._telemetry.increment("agent_retries_suppressed_total", labels)
-                        raise RetrySuppressedAfterSideEffectError(
-                            "invocation retry suppressed after side-effect tool execution: "
-                            f"{tool_names}"
-                        ) from retry_error
-                    if classify_retry(retry_error) is Retryability.NON_RETRYABLE:
-                        raise retry_error from exc
-                    delay = semantics.retry_backoff_seconds * (2**retry_index)
-                    if semantics.retry_jitter_seconds:
-                        delay += random.uniform(0, semantics.retry_jitter_seconds)
-                    await wait_for_retry(delay, deadline, retry_deadline)
-                    self._telemetry.increment("agent_retries_total", labels)
-                    try:
-                        response = await run_once()
-                    except TimeoutError:
-                        raise
-                    except ApprovalPausedError:
-                        raise
-                    except RetrySuppressedAfterSideEffectError:
-                        raise
-                    except Exception as retry_exc:
-                        self._telemetry.increment("agent_invocation_errors_total", labels)
-                        retry_error = retry_exc
-                        continue
-                    break
-                else:
-                    raise retry_error from exc
-            elif semantics.error_policy is ErrorPolicy.FALLBACK:
-                response = AgentResponse(
-                    output={},
-                    request_id=request.request_id,
-                    session_id=request.session_id,
-                    status="error",
-                    error=str(exc),
-                    metadata={"error_policy": "fallback"},
+            with use_model_scope(scope):
+                return await self._invoke_inner(
+                    agent,
+                    request,
+                    trace_id,
+                    deadline,
+                    side_effect_state=side_effect_state,
+                    emit_delta=tracked_emit if emit_delta is not None else None,
                 )
-            else:
-                raise
 
-        latency_ms = round((time.monotonic() - start_time) * 1000, 2)
-        self._telemetry.increment("agent_invocations_total", labels)
-        self._telemetry.record("agent_invocation_latency_ms", latency_ms, labels)
-        self._telemetry.observe_histogram(
-            "agent_invocation_latency_histogram_ms", latency_ms, labels
+        return await self._invocations.run(
+            definition,
+            request,
+            attempt=run_once,
+            deadline=deadline,
+            side_effect_state=side_effect_state,
+            streamed_output=lambda: emitted_stream_output,
         )
-        if breaker is not None:
-            breaker.record_success()
-        return response
 
     @abstractmethod
     async def _invoke_inner(
@@ -913,21 +772,10 @@ class GovernedRuntime(AgentRuntime):
         if self._config.audit is not None:
             self._config.audit.record(event, **fields)
 
-    def _circuit_for(self, definition: MicroAgentDefinition) -> CircuitBreaker | None:
-        """Per-agent breaker from declared runtime semantics (None = disabled)."""
-        semantics = definition.spec.runtime
-        if semantics.circuit_breaker_failures is None or (
-            semantics.circuit_breaker_cooldown_seconds is None
-        ):
-            return None
-        breaker = self._circuits.get(definition.metadata.name)
-        if breaker is None:
-            breaker = CircuitBreaker(
-                semantics.circuit_breaker_failures,
-                semantics.circuit_breaker_cooldown_seconds,
-            )
-            self._circuits[definition.metadata.name] = breaker
-        return breaker
+    @property
+    def _circuits(self) -> dict[str, CircuitBreaker]:
+        """Per-agent circuit breakers (owned by the invocation governor)."""
+        return self._invocations.circuits
 
     def _resolve_tools(self, definition: MicroAgentDefinition) -> tuple[dict[str, Tool], list[str]]:
         """Resolve definition-declared tools against the configured/built-in registry."""

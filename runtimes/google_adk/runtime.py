@@ -56,7 +56,17 @@ from micro_agent.core import (
     ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
-from micro_agent.governance import ToolCallScope, ToolGovernor
+from micro_agent.governance import (
+    GovernedModelProvider,
+    InvocationDeadline,
+    InvocationGovernor,
+    ModelCallScope,
+    ToolCallScope,
+    ToolGovernor,
+    current_tool_scope,
+    use_model_scope,
+    use_tool_scope,
+)
 from micro_agent.health import DependencyProbe, HealthStatus
 from micro_agent.knowledge import (
     KnowledgeRetriever,
@@ -151,6 +161,7 @@ class GoogleAdkRuntime(AgentRuntime):
         self._model_provider = self._config.model_provider
         self._native_model_clients: list[Any] = []
         self._telemetry = self._config.telemetry or Telemetry.from_environment()
+        self._invocations = InvocationGovernor(telemetry=lambda: self._telemetry, audit=self._audit)
         self._policy_evaluator = (
             PolicyEvaluator(self._config.policy) if self._config.policy is not None else None
         )
@@ -652,8 +663,21 @@ class GoogleAdkRuntime(AgentRuntime):
         )
         start_time = time.monotonic()
 
+        semantics = definition.spec.runtime
+        deadline = InvocationDeadline.from_seconds(
+            semantics.timeout_seconds, request.timeout_seconds
+        )
+        side_effect_state: dict[str, Any] = {"attempted_tools": []}
+        model_scope = ModelCallScope(trace_id=trace_id, labels=labels, deadline=deadline)
+        #: Session as it stood before the first runner call, so a retry can start
+        #: from it instead of appending a second copy of the user's message.
+        snapshot: tuple[list[Any], dict[str, Any]] | None = None
+
         async def run() -> AgentResponse:
+            nonlocal snapshot
             knowledge_counts: dict[str, int] = {}
+            if snapshot is not None:
+                await _reset_adk_session(service, app_name, user_id, session_id, snapshot)
             if checkpoint is not None:
                 await _restore_adk_checkpoint(
                     service,
@@ -698,6 +722,8 @@ class GoogleAdkRuntime(AgentRuntime):
                 run_kwargs["new_message"] = content
             if streaming:
                 run_kwargs["run_config"] = _adk_streaming_run_config()
+            if snapshot is None:
+                snapshot = await _snapshot_adk_session(service, app_name, user_id, session_id)
             try:
                 async for event in runner.run_async(**run_kwargs):
                     events.append(event)
@@ -754,6 +780,12 @@ class GoogleAdkRuntime(AgentRuntime):
                     },
                 )
             output = _terminal_text(events, agent._internal["adk_agent"].name)
+            usage = dict(model_scope.usage)
+            if model_scope.calls == 0:
+                # A native ADK model (no Micro-Agent provider call to observe):
+                # report the usage the framework recorded, through the same telemetry.
+                usage = _usage_from_events(events)
+                self._telemetry.record_model_usage(usage, labels)
             if checkpoint_store is not None:
                 await checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id)
             return AgentResponse(
@@ -771,6 +803,7 @@ class GoogleAdkRuntime(AgentRuntime):
                 status="success",
                 metadata={
                     "runtime": "google-adk",
+                    "usage": usage,
                     "event_count": len(events),
                     "knowledge_entries": sum(knowledge_counts.values())
                     if request.continuation_id is None
@@ -782,33 +815,39 @@ class GoogleAdkRuntime(AgentRuntime):
                 },
             )
 
-        timeout = _shortest_timeout(
-            definition.spec.runtime.timeout_seconds,
-            request.timeout_seconds,
-        )
-        try:
-            if timeout is None:
-                response = await run()
-            else:
-                response = await asyncio.wait_for(run(), timeout=timeout)
-        except Exception:
-            self._telemetry.increment("agent_invocation_errors_total", labels)
-            self._telemetry.logger.error(
-                "invocation failed",
-                request_id=request.request_id,
-                session_id=request.session_id,
+        async def attempt() -> AgentResponse:
+            scope = ToolCallScope(
+                trace_id=trace_id,
+                parent_span_id=span.span_id,
+                labels=labels,
+                deadline=deadline,
+                side_effect_state=side_effect_state,
             )
+            nonlocal model_scope
+            model_scope = ModelCallScope(
+                trace_id=trace_id,
+                parent_span_id=span.span_id,
+                labels=labels,
+                deadline=deadline,
+            )
+            with use_tool_scope(scope), use_model_scope(model_scope):
+                return await deadline.run(run())
+
+        try:
+            response = await self._invocations.run(
+                definition,
+                request,
+                attempt=attempt,
+                deadline=deadline,
+                side_effect_state=side_effect_state,
+            )
+        except Exception:
             self._telemetry.finish_span(span)
             raise
         latency_ms = round((time.monotonic() - start_time) * 1000, 2)
         span.set_attribute("latency_ms", latency_ms)
         span.set_attribute("event_count", response.metadata.get("event_count", 0))
         self._telemetry.finish_span(span)
-        self._telemetry.increment("agent_invocations_total", labels)
-        self._telemetry.record("agent_invocation_latency_ms", latency_ms, labels)
-        self._telemetry.observe_histogram(
-            "agent_invocation_latency_histogram_ms", latency_ms, labels
-        )
         return response
 
     async def _auto_store(
@@ -847,7 +886,8 @@ class GoogleAdkRuntime(AgentRuntime):
         if self._config.model_factory is not None:
             return self._config.model_factory(definition)
         if self._model_provider is not None:
-            return _provider_model(self._model_provider, config)
+            governed = GovernedModelProvider(self._model_provider, lambda: self._telemetry)
+            return _provider_model(governed, config)
         model = config.model_id or config.ref
         provider = (config.provider or "").lower()
         if provider and provider not in {"google", "gemini", "google-genai"}:
@@ -1227,10 +1267,21 @@ def _llm_response(
                     )
                 )
             )
+    usage = getattr(response, "usage", None) or {}
+    usage_metadata = None
+    if usage and not partial:
+        prompt = int(usage.get("prompt_tokens", 0))
+        completion = int(usage.get("completion_tokens", 0))
+        usage_metadata = types.GenerateContentResponseUsageMetadata(
+            prompt_token_count=prompt,
+            candidates_token_count=completion,
+            total_token_count=int(usage.get("total_tokens", prompt + completion)),
+        )
     return llm_response_cls(
         content=types.Content(role="model", parts=parts),
         finish_reason=cast(Any, getattr(response, "finish_reason", "stop")),
         partial=partial,
+        usage_metadata=usage_metadata,
     )
 
 
@@ -1401,13 +1452,18 @@ def _as_adk_tool(
                 confirmed = True
                 if audit is not None:
                     audit.record("approval.granted", tool=name)
+            bound = current_tool_scope()  # the invocation's deadline, trace and state
             record = await governor.run(
                 self._micro_tool,
                 {"name": name, "arguments": args},
                 ToolCallScope(
-                    labels=tool_labels,
+                    trace_id=bound.trace_id,
+                    parent_span_id=bound.parent_span_id,
+                    labels={**tool_labels, **bound.labels},
+                    deadline=bound.deadline,
                     skip_side_effect_approval=confirmed,
                     side_effects=side_effects,
+                    side_effect_state=bound.side_effect_state,
                 ),
             )
             if record.get("was_deduplicated"):
@@ -1423,6 +1479,59 @@ def _as_adk_tool(
             return record.get("output")
 
     return AdkToolAdapter(tool)
+
+
+def _usage_from_events(events: list[Any]) -> dict[str, int]:
+    """Sum token usage ADK recorded on final model events, in Micro-Agent's shape."""
+    prompt = completion = total = 0
+    seen = False
+    for event in events:
+        metadata = getattr(event, "usage_metadata", None)
+        if metadata is None or getattr(event, "partial", False):
+            continue
+        seen = True
+        prompt += int(getattr(metadata, "prompt_token_count", 0) or 0)
+        completion += int(getattr(metadata, "candidates_token_count", 0) or 0)
+        total += int(getattr(metadata, "total_token_count", 0) or 0)
+    if not seen:
+        return {}
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": total or prompt + completion,
+    }
+
+
+async def _snapshot_adk_session(
+    service: Any, app_name: str, user_id: str, session_id: str
+) -> tuple[list[Any], dict[str, Any]]:
+    """Record the session's events and state through the public service API."""
+    session = await service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
+    if session is None:
+        return [], {}
+    state = getattr(session, "state", {})
+    return list(getattr(session, "events", []) or []), dict(state) if isinstance(
+        state, dict
+    ) else {}
+
+
+async def _reset_adk_session(
+    service: Any,
+    app_name: str,
+    user_id: str,
+    session_id: str,
+    snapshot: tuple[list[Any], dict[str, Any]],
+) -> None:
+    """Restore a snapshot so a retried attempt does not see the failed attempt's events."""
+    events, state = snapshot
+    existing = await service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
+    if existing is not None:
+        await service.delete_session(app_name=app_name, user_id=user_id, session_id=session_id)
+    session = await service.create_session(
+        app_name=app_name, user_id=user_id, session_id=session_id, state=state or None
+    )
+    for event in events:
+        await service.append_event(session=session, event=event)
 
 
 async def _ensure_session(service: Any, app_name: str, user_id: str, session_id: str) -> None:

@@ -115,7 +115,13 @@ class _RequestsThenAnswers(FakeModelProvider):
         return ModelResponse(content=self.answer)
 
 
-def _definition(*, tools: bool = False, max_iterations: int | None = None, tool: str = "echo"):
+def _definition(
+    *,
+    tools: bool = False,
+    max_iterations: int | None = None,
+    tool: str = "echo",
+    **runtime_overrides,
+):
     spec: dict = {
         "behavior": {"instructions": "Answer briefly."},
         "dependencies": {"model": {"ref": "conformance-model", "provider": "fake"}},
@@ -123,7 +129,9 @@ def _definition(*, tools: bool = False, max_iterations: int | None = None, tool:
     if tools:
         spec["dependencies"]["tools"] = [{"name": tool, "source": "native"}]
     if max_iterations is not None:
-        spec["runtime"] = {"max_iterations": max_iterations}
+        runtime_overrides["max_iterations"] = max_iterations
+    if runtime_overrides:
+        spec["runtime"] = runtime_overrides
     return load_definition_from_dict(
         {
             "apiVersion": "microagents.io/v1alpha1",
@@ -421,3 +429,118 @@ async def test_resuming_an_unknown_checkpoint_is_rejected(make_runtime):
             await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="never-saved"))
     finally:
         await runtime.close()
+
+
+# ---------------------------------------------------------------------------
+# Model resilience, deadline and usage: identical under every runtime
+# ---------------------------------------------------------------------------
+
+
+class _FlakyProvider(FakeModelProvider):
+    """Fails the first ``failures`` calls with a transient error, then answers."""
+
+    def __init__(self, failures: int, answer: str = "recovered") -> None:
+        super().__init__(FakeModelConfig(response=answer))
+        self.failures, self.answer, self.calls = failures, answer, 0
+
+    async def generate(self, config, messages, tools=None):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise ConnectionError("connection reset")
+        return ModelResponse(content=self.answer)
+
+
+@pytest.mark.asyncio
+async def test_a_transient_model_failure_is_retried_under_the_retry_policy(make_runtime):
+    from micro_agent.observability import Telemetry
+
+    telemetry = Telemetry()
+    provider = _FlakyProvider(failures=2)
+    response = await _run(
+        make_runtime(provider, telemetry=telemetry),
+        _definition(error_policy="retry", retry_max_attempts=3, retry_backoff_seconds=0),
+        AgentRequest(input={}),
+    )
+    assert response.status == "success" and response.output["content"] == "recovered"
+    assert provider.calls == 3
+    assert telemetry.metrics.get_metrics("agent_retries_total")
+
+
+@pytest.mark.asyncio
+async def test_a_fatal_model_failure_follows_the_fallback_policy(make_runtime):
+    provider = FakeModelProvider(FakeModelConfig(should_error=True, error_message="boom"))
+    response = await _run(
+        make_runtime(provider),
+        _definition(error_policy="fallback"),
+        AgentRequest(input={}),
+    )
+    assert response.status == "error"
+    assert "boom" in (response.error or "")
+    assert response.metadata["error_policy"] == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_repeated_failures_open_the_circuit_breaker(make_runtime):
+    from micro_agent.observability import Telemetry
+
+    telemetry = Telemetry()
+    provider = _FlakyProvider(failures=100)
+    runtime = make_runtime(provider, telemetry=telemetry)
+    definition = _definition(circuit_breaker_failures=2, circuit_breaker_cooldown_seconds=60)
+    agent = await runtime.create(definition)
+    try:
+        await runtime.start(agent)
+        for _ in range(2):
+            with pytest.raises(ConnectionError):
+                await runtime.invoke(agent, AgentRequest(input={}))
+        calls_when_open = provider.calls
+        with pytest.raises(Exception, match="circuit breaker open"):
+            await runtime.invoke(agent, AgentRequest(input={}))
+    finally:
+        await runtime.shutdown(agent)
+        await runtime.close()
+    assert provider.calls == calls_when_open  # the open circuit rejected before any model call
+    assert telemetry.metrics.get_metrics("circuit_breaker_trips_total")
+
+
+@pytest.mark.asyncio
+async def test_the_invocation_deadline_bounds_a_slow_model(make_runtime):
+    import asyncio
+
+    class Slow(FakeModelProvider):
+        async def generate(self, config, messages, tools=None):
+            await asyncio.sleep(5)
+            return ModelResponse(content="too late")
+
+    with pytest.raises(TimeoutError):
+        await _run(
+            make_runtime(Slow()),
+            _definition(),
+            AgentRequest(input={}, timeout_seconds=0.2),
+        )
+
+
+@pytest.mark.asyncio
+async def test_token_usage_is_reported_and_recorded(make_runtime):
+    from micro_agent.observability import Telemetry
+
+    class Metered(FakeModelProvider):
+        async def generate(self, config, messages, tools=None):
+            return ModelResponse(
+                content="counted",
+                usage={"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16},
+            )
+
+    telemetry = Telemetry()
+    response = await _run(
+        make_runtime(Metered(), telemetry=telemetry),
+        _definition(),
+        AgentRequest(input={}),
+    )
+    assert response.metadata["usage"] == {
+        "prompt_tokens": 11,
+        "completion_tokens": 5,
+        "total_tokens": 16,
+    }
+    assert telemetry.metrics.get_metrics("model_tokens_total")
+    assert telemetry.metrics.get_metrics("model_latency_ms")
