@@ -4,6 +4,11 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Added `RuntimeCapabilities.provided`, `source()` and `sources()` so a runtime
+  can report each capability as `native`, `provided` (supplied by the
+  Micro-Agents gap-filling layer) or `none`; `supports()` and `as_dict()` are
+  unchanged. Added `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES`, the
+  tested list of behaviors every runtime must show identically, and ADR 0022.
 - Added a runtime registry (`RuntimeRegistry`, `RuntimeRegistration`,
   `RuntimeBuildContext`, `register_runtime`, `micro_agent.runtimes` entry
   points). The bootstrap now builds providers once and selects the runtime by

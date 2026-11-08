@@ -1,5 +1,11 @@
 """Micro-Agent Runtime — SPI for runtime implementations."""
 
+from micro_agent.runtime.guarantees import (
+    UNIFORM_GUARANTEES,
+    Guarantee,
+    GuaranteeStatus,
+    guarantees_by_status,
+)
 from micro_agent.runtime.registry import (
     RUNTIME_ENTRY_POINT_GROUP,
     RuntimeBuildContext,
@@ -20,7 +26,10 @@ from micro_agent.runtime.runtime import (
 
 __all__ = [
     "RUNTIME_ENTRY_POINT_GROUP",
+    "UNIFORM_GUARANTEES",
     "AgentRuntime",
+    "Guarantee",
+    "GuaranteeStatus",
     "RuntimeAgent",
     "RuntimeBuildContext",
     "RuntimeCapabilities",
@@ -30,6 +39,7 @@ __all__ = [
     "UnknownRuntimeError",
     "default_registry",
     "get_runtime_registration",
+    "guarantees_by_status",
     "register_runtime",
     "registered_runtimes",
 ]

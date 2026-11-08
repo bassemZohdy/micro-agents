@@ -111,6 +111,10 @@ async def test_reports_a_capability_matrix(make_runtime):
         "checkpointing",
     }
     assert all(isinstance(value, bool) for value in capabilities.values())
+    sources = runtime.capabilities().sources()
+    assert set(sources) == set(capabilities)
+    for name, supported in capabilities.items():
+        assert sources[name] in ({"native", "provided"} if supported else {"none"})
     await runtime.close()
 
 

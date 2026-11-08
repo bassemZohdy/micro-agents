@@ -54,15 +54,15 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 0 — Specify the contract (design, no behavior change)
 
-- [ ] Write ADR 0022: the gap-filling layer. Decide the three mechanisms below
+- [x] Write ADR 0022: the gap-filling layer. Decide the three mechanisms below
       (governed tools, governed model, runtime decorator), what is guaranteed
       identically on every runtime, and what stays framework-native (for
       example ADK's own session transcript). Record the rejected alternative of
       per-adapter reimplementation.
-- [ ] Extend `RuntimeCapabilities` to separate **native** from **provided**
+- [x] Extend `RuntimeCapabilities` to separate **native** from **provided**
       support (for example `checkpointing: native | provided | none`), keeping
       `as_dict()` backwards compatible and the schema/status docs in sync.
-- [ ] Define the "uniform guarantees" list and make it the conformance contract:
+- [x] Define the "uniform guarantees" list and make it the conformance contract:
       policy deny/approve, argument validation, idempotent operations, audit and
       telemetry events, retry/fallback/circuit breaker, deadline, session replay,
       checkpoint/resume, approval pause/resume, max-iteration bound.

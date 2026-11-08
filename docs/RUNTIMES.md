@@ -61,6 +61,15 @@ unchanged; no LangChain chat model is involved.
 The same definition and the same providers run on all three; see the
 [conformance suite](#proving-a-runtime-conforms).
 
+### Native versus provided capabilities
+
+`RuntimeCapabilities.sources()` reports each capability as `native`, `provided`
+or `none`. `provided` means the Micro-Agents gap-filling layer supplies it on
+top of the framework ([ADR 0022](adr/0022-runtime-gap-filling-layer.md)); no
+built-in runtime reports `provided` yet. The behaviors every runtime must show
+identically are listed in `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES`
+and proven by the conformance suite.
+
 ## The abstraction layer
 
 Three pieces, all in `micro_agent.runtime`:
