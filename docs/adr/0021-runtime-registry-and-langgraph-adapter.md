@@ -30,8 +30,9 @@ deadlines, circuit breaking) and replaces only orchestration. Models are called
 through the Micro-Agent provider SPI, so no LangChain model abstraction is
 involved and every built-in provider works.
 
-**Honest scope.** The adapter does not implement checkpoint/resume or approval
-continuations. It reports `checkpointing: false`, rejects `checkpoint_id` and
+**Honest scope.** *(Updated by ADR 0022 Phase 2: approval continuations are now
+supported through the shared `ApprovalStore`.)* The adapter does not implement
+checkpoint/resume or, as first shipped, approval continuations. It reports `checkpointing: false`, rejects `checkpoint_id` and
 `continuation_id`, denies tools whose policy requires approval (fail closed),
 and bootstrap rejects `MICRO_AGENT_APPROVAL_ENDPOINT` for it. Wiring LangGraph's
 own checkpointer to `CheckpointStore` is possible later and is not claimed now.

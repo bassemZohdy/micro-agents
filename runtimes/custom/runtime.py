@@ -20,7 +20,6 @@ from micro_agent.core import (
     AgentRequest,
     AgentResponse,
     CheckpointNotFoundError,
-    ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.governance import (
@@ -103,11 +102,7 @@ class CustomRuntime(GovernedRuntime):
         resume: PendingApproval | None = None
         approved: bool = False
         if request.continuation_id:
-            resume = await self._approval_store.get(request.continuation_id)
-            if resume is None or resume.agent_id != agent.identity.agent_id:
-                raise ContinuationNotFoundError("unknown or expired continuation")
-            await self._approval_store.delete(request.continuation_id)
-            approved = request.approval_decision == "approve"
+            resume, approved = await self._load_pending_approval(agent, request)
 
         if checkpoint is not None:
             session_id = checkpoint.session_id
@@ -211,61 +206,22 @@ class CustomRuntime(GovernedRuntime):
         max_iterations_reached = False
 
         if resume is not None:
-            # Replay the paused tool wave: approved requests execute (hard
-            # policy denials still apply), denied requests feed the model a
-            # denial so it can respond. The conversation continues from the
-            # paused snapshot, which already ends with the assistant
-            # tool-request turn.
+            # Replay the paused tool wave and continue from the paused transcript
+            # (it already ends with the assistant tool-request turn).
+            replay = await self._replay_pending_approval(
+                agent,
+                tools,
+                resume,
+                approved,
+                trace_id=trace_id,
+                parent_span_id=agent_span.span_id,
+                labels=labels,
+                deadline=deadline,
+                side_effect_state=side_effect_state,
+            )
             iterations = resume.iterations
-            all_tool_results = list(resume.all_tool_results)
-            if approved:
-                self._audit(
-                    "approval.granted",
-                    agent=definition.metadata.name,
-                    tools=[str(tr.get("name", "")) for tr in resume.tool_requests],
-                    continuation_id=resume.continuation_id,
-                )
-                tool_results = await self._execute_tools(
-                    tools,
-                    resume.tool_requests,
-                    trace_id,
-                    agent_span.span_id,
-                    labels,
-                    deadline=deadline,
-                    skip_side_effect_approval=True,
-                    side_effects=agent._internal.get("tool_side_effects"),
-                    side_effect_state=side_effect_state,
-                )
-            else:
-                self._audit(
-                    "approval.denied",
-                    agent=definition.metadata.name,
-                    tools=[str(tr.get("name", "")) for tr in resume.tool_requests],
-                    continuation_id=resume.continuation_id,
-                )
-                tool_results = [
-                    {
-                        "tool": str(tool_request.get("name", "")),
-                        "output": None,
-                        "error": "denied by caller: approval denied",
-                        "latency_ms": 0.0,
-                        "denied": True,
-                    }
-                    for tool_request in resume.tool_requests
-                ]
-            all_tool_results.extend(tool_results)
-            # Continue from the paused transcript verbatim; freshly built
-            # history is discarded so the assistant tool-request turn stays
-            # in place ahead of the replayed results.
-            messages = list(resume.messages)
-            for result in tool_results:
-                messages.append(
-                    {
-                        "role": "tool",
-                        "name": result["tool"],
-                        "content": json.dumps(result["error"] or result["output"], default=str),
-                    }
-                )
+            all_tool_results = [*resume.all_tool_results, *replay.tool_results]
+            messages = replay.messages
 
         checkpoint_id = request.checkpoint_id or request.request_id
         if checkpoint_store is not None:
@@ -367,19 +323,16 @@ class CustomRuntime(GovernedRuntime):
                 break
 
             if self._approval_needed(agent, tools, response.tool_requests):
-                continuation_id = request.continuation_id or str(uuid4())
-                approval = PendingApproval(
-                    continuation_id=continuation_id,
-                    agent_id=agent.identity.agent_id,
-                    tool_requests=[dict(tr) for tr in response.tool_requests],
-                    messages=[dict(m) for m in messages],
-                    all_tool_results=list(all_tool_results),
+                approval = await self._save_pending_approval(
+                    agent,
+                    request,
+                    tool_requests=response.tool_requests,
+                    messages=messages,
+                    all_tool_results=all_tool_results,
                     iterations=iterations,
-                    request_id=request.request_id,
                     session_id=session_id,
-                    input_payload=dict(input_payload),
+                    input_payload=input_payload,
                 )
-                await self._approval_store.save(approval)
                 if checkpoint_store is not None:
                     await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
                 raise ApprovalPausedError(approval)
@@ -506,33 +459,6 @@ class CustomRuntime(GovernedRuntime):
             if classification != "read_only":
                 return False
         return True
-
-    def _approval_needed(
-        self,
-        agent: RuntimeAgent,
-        tools: dict[str, Tool],
-        tool_requests: list[dict[str, Any]],
-    ) -> bool:
-        """Whether any pending tool request is waiting on an approval policy."""
-        if self._policy_evaluator is None:
-            return False
-        for tool_request in tool_requests:
-            tool_name = tool_request.get("name", "")
-            tool = tools.get(tool_name)
-            if tool is None:
-                continue
-            if not self._policy_evaluator.evaluate_tool(tool.metadata.name).allowed:
-                continue
-            classification = normalize_tool_side_effect(
-                (agent._internal.get("tool_side_effects") or {}).get(tool_name)
-                or tool.metadata.side_effect
-            )
-            if classification == "read_only":
-                continue
-            decision = self._policy_evaluator.evaluate_side_effect(tool.metadata.name)
-            if decision.requires_approval:
-                return True
-        return False
 
 
 CustomRuntimeConfig = GovernedRuntimeConfig

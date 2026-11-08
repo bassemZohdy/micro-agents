@@ -89,6 +89,7 @@ def _build_langgraph(context: RuntimeBuildContext) -> AgentRuntime:
             audit=context.audit,
             telemetry=context.telemetry,
             tool_registry=context.tool_registry,
+            approval_store=context.approval_store,
         )
     )
 
@@ -117,11 +118,7 @@ BUILTIN_RUNTIMES: tuple[RuntimeRegistration, ...] = (
         factory=_build_langgraph,
         aliases=("lang-graph",),
         description="LangGraph StateGraph adapter (requires the 'langgraph' extra)",
-        approval_note=(
-            "LangGraph runtime does not support approval continuations and does not map "
-            "MICRO_AGENT_APPROVAL_ENDPOINT; tools that require approval are denied. "
-            "Use the custom runtime for durable approvals"
-        ),
+        approval_store=True,
     ),
 )
 

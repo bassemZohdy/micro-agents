@@ -4,6 +4,13 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- The LangGraph runtime now pauses for and resumes after human approvals through
+  the shared `ApprovalStore` (`approval_required`, `continuation_id`,
+  `approval_decision`), and `MICRO_AGENT_APPROVAL_ENDPOINT` is accepted for it.
+  The pause/resume logic moved into `GovernedRuntime` and is shared with the
+  reference loop; resumed tool results now always carry their `tool_call_id`.
+  The conformance suite gained policy-denial and approval pause/resume cases
+  for every runtime.
 - Added `ToolGovernor` and `GovernedTool` to `micro_agent.governance`: per-call tool
   governance (argument validation, policy, side-effect policy, idempotent
   operations, timeouts, telemetry, audit) now lives in one place, and a framework

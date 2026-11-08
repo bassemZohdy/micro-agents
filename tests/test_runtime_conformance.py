@@ -15,14 +15,16 @@ import pytest
 
 from micro_agent.core import AgentRequest
 from micro_agent.definition import load_definition_from_dict
-from micro_agent.models import FakeModelConfig, FakeModelProvider
+from micro_agent.models import FakeModelConfig, FakeModelProvider, ModelResponse
 from micro_agent.runtime import AgentRuntime
+from micro_agent.security import AgentPolicy
 from micro_agent.session import InMemorySessionProvider
-from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+from micro_agent.tools import Tool, ToolInputSchema, ToolMetadata, ToolOutputSchema, ToolResult
+from runtimes.custom import CustomRuntime, CustomRuntimeConfig
 
 
 def _custom(provider, **services) -> AgentRuntime:
-    return AdkRuntime(AdkRuntimeConfig(model_provider=provider, **services))
+    return CustomRuntime(CustomRuntimeConfig(model_provider=provider, **services))
 
 
 def _google_adk(provider, **services) -> AgentRuntime:
@@ -69,13 +71,50 @@ def make_runtime(request):
     return request.param
 
 
-def _definition(*, tools: bool = False, max_iterations: int | None = None):
+class _ChargeTool(Tool):
+    """A side-effecting tool that records how often it really ran."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    @property
+    def metadata(self) -> ToolMetadata:
+        return ToolMetadata(name="charge", description="Charge.", source="native")
+
+    @property
+    def input_schema(self) -> ToolInputSchema:
+        return ToolInputSchema(parameters={"type": "object", "properties": {}})
+
+    @property
+    def output_schema(self) -> ToolOutputSchema:
+        return ToolOutputSchema()
+
+    async def execute(self, arguments):
+        self.calls += 1
+        return ToolResult(output={"charged": True})
+
+
+class _RequestsThenAnswers(FakeModelProvider):
+    """Requests ``tool`` on the first call, then answers with ``answer``."""
+
+    def __init__(self, tool: str, answer: str = "all done") -> None:
+        super().__init__(FakeModelConfig(response=answer))
+        self.tool, self.answer, self.calls = tool, answer, 0
+
+    async def generate(self, config, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            return ModelResponse(tool_requests=[{"name": self.tool, "arguments": {}}])
+        return ModelResponse(content=self.answer)
+
+
+def _definition(*, tools: bool = False, max_iterations: int | None = None, tool: str = "echo"):
     spec: dict = {
         "behavior": {"instructions": "Answer briefly."},
         "dependencies": {"model": {"ref": "conformance-model", "provider": "fake"}},
     }
     if tools:
-        spec["dependencies"]["tools"] = [{"name": "echo", "source": "native"}]
+        spec["dependencies"]["tools"] = [{"name": tool, "source": "native"}]
     if max_iterations is not None:
         spec["runtime"] = {"max_iterations": max_iterations}
     return load_definition_from_dict(
@@ -168,8 +207,6 @@ async def test_tool_loop_executes_requested_tools_then_answers(make_runtime):
 
     class ToolThenAnswer(FakeModelProvider):
         async def generate(self, config, messages, tools=None):
-            from micro_agent.models import ModelResponse
-
             calls["n"] += 1
             if calls["n"] == 1:
                 return ModelResponse(
@@ -207,3 +244,105 @@ async def test_unhealthy_model_blocks_startup(make_runtime):
     with pytest.raises(RuntimeError, match="health check"):
         await runtime.start(agent)
     await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_policy_denied_tool_is_never_executed(make_runtime):
+    tool = _ChargeTool()
+    runtime = make_runtime(
+        _RequestsThenAnswers("charge"),
+        policy=AgentPolicy(denied_tools=["charge"]),
+        tool_registry={"charge": tool},
+    )
+    response = await _run(runtime, _definition(tools=True, tool="charge"), AgentRequest(input={}))
+    assert response.status == "success"
+    assert tool.calls == 0
+    (result,) = response.output["tool_results"]
+    assert result["denied"] is True and "denied by policy" in result["error"]
+
+
+async def _paused(runtime):
+    """Run until the tool needs approval; return the agent and the pause response."""
+    agent = await runtime.create(_definition(tools=True, tool="charge"))
+    await runtime.start(agent)
+    paused = await runtime.invoke(agent, AgentRequest(input={"go": 1}, session_id="approve-1"))
+    return agent, paused
+
+
+def _approval_runtime(make_runtime, tool, answer):
+    return make_runtime(
+        _RequestsThenAnswers("charge", answer),
+        session_provider=InMemorySessionProvider(),
+        policy=AgentPolicy(approval_required=True),
+        tool_registry={"charge": tool},
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_tool_needing_approval_pauses_then_runs_once_when_approved(make_runtime):
+    tool = _ChargeTool()
+    runtime = _approval_runtime(make_runtime, tool, "charged ok")
+    agent, paused = await _paused(runtime)
+    try:
+        assert paused.status == "approval_required"
+        assert paused.metadata["pending_tools"] == ["charge"]
+        assert tool.calls == 0  # nothing ran while waiting for the decision
+        resumed = await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={},
+                session_id="approve-1",
+                continuation_id=paused.metadata["continuation_id"],
+                approval_decision="approve",
+            ),
+        )
+    finally:
+        await runtime.close()
+    assert resumed.status == "success"
+    assert resumed.output["content"] == "charged ok"
+    assert tool.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_a_denied_approval_never_runs_the_tool_and_the_model_still_answers(make_runtime):
+    tool = _ChargeTool()
+    runtime = _approval_runtime(make_runtime, tool, "understood")
+    agent, paused = await _paused(runtime)
+    try:
+        resumed = await runtime.invoke(
+            agent,
+            AgentRequest(
+                input={},
+                session_id="approve-1",
+                continuation_id=paused.metadata["continuation_id"],
+                approval_decision="deny",
+            ),
+        )
+    finally:
+        await runtime.close()
+    assert resumed.status == "success"
+    assert resumed.output["content"] == "understood"
+    assert tool.calls == 0
+    assert any(r.get("denied") for r in resumed.output["tool_results"])
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_continuation_is_rejected(make_runtime):
+    from micro_agent.core import ContinuationNotFoundError
+
+    runtime = make_runtime(FakeModelProvider(), session_provider=InMemorySessionProvider())
+    agent = await runtime.create(_definition())
+    try:
+        await runtime.start(agent)
+        with pytest.raises(ContinuationNotFoundError):
+            await runtime.invoke(
+                agent,
+                AgentRequest(
+                    input={},
+                    session_id="x",
+                    continuation_id="never-issued",
+                    approval_decision="approve",
+                ),
+            )
+    finally:
+        await runtime.close()

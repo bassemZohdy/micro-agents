@@ -41,13 +41,13 @@ definition, core contracts or bootstrap depends on a particular framework.
 | Idempotent side-effect operations | yes | yes | yes |
 | Session persistence | yes | yes (ADK transcript layout) | yes |
 | Checkpoint / resume | yes | yes | **no** |
-| Durable approval continuations | yes (`ApprovalStore`) | yes (ADK native, in the session) | **no** |
+| Durable approval continuations | yes (`ApprovalStore`) | yes (ADK native, in the session) | yes (`ApprovalStore`) |
 | Native framework model path | no | yes (Gemini) | no |
 
-`langgraph` fails closed where it lacks a feature: a tool whose side-effect
-policy requires approval is **denied** rather than paused, `checkpoint_id` and
-`continuation_id` requests are rejected, and bootstrap rejects
-`MICRO_AGENT_APPROVAL_ENDPOINT` with that runtime instead of ignoring it.
+`langgraph` shares the reference runtime's approval pause/resume (through the
+same `ApprovalStore`, including `MICRO_AGENT_APPROVAL_ENDPOINT`). Where it lacks
+a feature it fails closed: `checkpoint_id` requests are rejected and a
+checkpoint store is refused at construction instead of ignored.
 Models are reached through the Micro-Agent provider SPI, so every built-in
 provider (OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, fake) works
 unchanged; no LangChain chat model is involved.

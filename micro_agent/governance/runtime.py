@@ -12,6 +12,7 @@ LangGraph ``StateGraph`` in ``runtimes/langgraph`` are two such orchestrations.
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import time
 from abc import abstractmethod
@@ -27,6 +28,7 @@ from micro_agent.core import (
     AgentRequest,
     AgentResponse,
     AgentStreamEvent,
+    ContinuationNotFoundError,
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
 from micro_agent.governance.errors import (
@@ -59,6 +61,7 @@ from micro_agent.security import (
     InMemoryApprovalStore,
     InvocationIdentity,
     OperationRegistryProtocol,
+    PendingApproval,
     PolicyEvaluator,
     build_security_context,
     reset_invocation_identity,
@@ -93,6 +96,18 @@ async def wait_for_retry(
             await asyncio.sleep(allowed)
             raise TimeoutError("retry budget exceeded")
     await asyncio.sleep(delay_seconds)
+
+
+@dataclass
+class ApprovalReplay:
+    """The outcome of resuming a paused tool wave after a decision."""
+
+    pending: PendingApproval
+    approved: bool
+    #: Results of the paused wave (executed when approved, denials otherwise).
+    tool_results: list[dict[str, Any]]
+    #: The paused transcript followed by the wave's tool messages.
+    messages: list[dict[str, Any]]
 
 
 @dataclass
@@ -672,6 +687,124 @@ class GovernedRuntime(AgentRuntime):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Approval pause and resume (shared by every orchestration)
+    # ------------------------------------------------------------------
+
+    def _approval_needed(
+        self,
+        agent: RuntimeAgent,
+        tools: dict[str, Tool],
+        tool_requests: list[dict[str, Any]],
+    ) -> bool:
+        """Whether any pending tool request is waiting on an approval policy."""
+        return self._tool_governor.approval_needed(
+            tools, tool_requests, agent._internal.get("tool_side_effects")
+        )
+
+    async def _load_pending_approval(
+        self, agent: RuntimeAgent, request: AgentRequest
+    ) -> tuple[PendingApproval, bool]:
+        """Consume a continuation: unknown, expired or foreign ones fail fast."""
+        assert request.continuation_id
+        pending = await self._approval_store.get(request.continuation_id)
+        if pending is None or pending.agent_id != agent.identity.agent_id:
+            raise ContinuationNotFoundError("unknown or expired continuation")
+        await self._approval_store.delete(request.continuation_id)
+        return pending, request.approval_decision == "approve"
+
+    async def _save_pending_approval(
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        *,
+        tool_requests: list[dict[str, Any]],
+        messages: list[dict[str, Any]],
+        all_tool_results: list[dict[str, Any]],
+        iterations: int,
+        session_id: str | None,
+        input_payload: dict[str, Any],
+    ) -> PendingApproval:
+        """Persist a paused tool wave so a later decision can resume it."""
+        approval = PendingApproval(
+            continuation_id=request.continuation_id or str(uuid4()),
+            agent_id=agent.identity.agent_id,
+            tool_requests=[dict(tr) for tr in tool_requests],
+            messages=[dict(m) for m in messages],
+            all_tool_results=list(all_tool_results),
+            iterations=iterations,
+            request_id=request.request_id,
+            session_id=session_id,
+            input_payload=dict(input_payload),
+        )
+        await self._approval_store.save(approval)
+        return approval
+
+    async def _replay_pending_approval(
+        self,
+        agent: RuntimeAgent,
+        tools: dict[str, Tool],
+        pending: PendingApproval,
+        approved: bool,
+        *,
+        trace_id: str,
+        parent_span_id: str,
+        labels: dict[str, str],
+        deadline: InvocationDeadline,
+        side_effect_state: dict[str, Any] | None,
+    ) -> ApprovalReplay:
+        """Replay a paused wave: approved calls run (hard denials still apply),
+        denied calls feed the model a denial so it can answer."""
+        definition: MicroAgentDefinition = agent._internal["definition"]
+        tool_names = [str(tr.get("name", "")) for tr in pending.tool_requests]
+        if approved:
+            self._audit(
+                "approval.granted",
+                agent=definition.metadata.name,
+                tools=tool_names,
+                continuation_id=pending.continuation_id,
+            )
+            tool_results = await self._execute_tools(
+                tools,
+                pending.tool_requests,
+                trace_id,
+                parent_span_id,
+                labels,
+                deadline=deadline,
+                skip_side_effect_approval=True,
+                side_effects=agent._internal.get("tool_side_effects"),
+                side_effect_state=side_effect_state,
+            )
+        else:
+            self._audit(
+                "approval.denied",
+                agent=definition.metadata.name,
+                tools=tool_names,
+                continuation_id=pending.continuation_id,
+            )
+            tool_results = [
+                {
+                    "tool": str(tool_request.get("name", "")),
+                    "tool_call_id": tool_request.get("id"),
+                    "output": None,
+                    "error": "denied by caller: approval denied",
+                    "latency_ms": 0.0,
+                    "denied": True,
+                }
+                for tool_request in pending.tool_requests
+            ]
+        messages = [dict(message) for message in pending.messages]
+        for result in tool_results:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": result.get("tool_call_id"),
+                    "name": result["tool"],
+                    "content": json.dumps(result["error"] or result["output"], default=str),
+                }
+            )
+        return ApprovalReplay(pending, approved, tool_results, messages)
 
     def _deny(
         self,

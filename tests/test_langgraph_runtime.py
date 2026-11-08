@@ -7,8 +7,8 @@ import sys
 import pytest
 
 from micro_agent.checkpoint import InMemoryCheckpointStore
-from micro_agent.config.bootstrap import BootstrapError, build_runtime
-from micro_agent.core import AgentRequest
+from micro_agent.config.bootstrap import build_runtime
+from micro_agent.core import AgentRequest, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
 from micro_agent.models import FakeModelConfig, FakeModelProvider, ModelResponse
@@ -25,7 +25,7 @@ from runtimes.langgraph import (  # noqa: E402 - after the optional-dependency g
 )
 
 
-def _definition(*, tools: bool = True, **runtime):
+def _definition(*, tools: bool = True, name: str = "lg-agent", **runtime):
     spec: dict = {
         "behavior": {"instructions": "You are a LangGraph test agent."},
         "dependencies": {"model": {"ref": "lg-model", "provider": "fake"}},
@@ -38,7 +38,7 @@ def _definition(*, tools: bool = True, **runtime):
         {
             "apiVersion": "microagents.io/v1alpha1",
             "kind": "MicroAgent",
-            "metadata": {"name": "lg-agent", "version": "1.0.0"},
+            "metadata": {"name": name, "version": "1.0.0"},
             "spec": spec,
         }
     )
@@ -96,20 +96,24 @@ async def test_capabilities_are_honest():
     await runtime.close()
 
 
-def test_unsupported_stores_are_rejected_instead_of_ignored():
+def test_unsupported_checkpoint_store_is_rejected_instead_of_ignored():
     with pytest.raises(ValueError, match="checkpoint_store"):
         LangGraphRuntime(LangGraphRuntimeConfig(checkpoint_store=InMemoryCheckpointStore()))
-    with pytest.raises(ValueError, match="approval_store"):
-        LangGraphRuntime(LangGraphRuntimeConfig(approval_store=InMemoryApprovalStore()))
+
+
+def test_the_approval_store_is_supported():
+    store = InMemoryApprovalStore()
+    runtime = LangGraphRuntime(LangGraphRuntimeConfig(approval_store=store))
+    assert runtime._approval_store is store
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_and_continuation_requests_are_rejected():
+async def test_checkpoint_requests_are_rejected_and_unknown_continuations_fail_fast():
     runtime = LangGraphRuntime(LangGraphRuntimeConfig(model_provider=FakeModelProvider()))
     agent = await _started(runtime, _definition(tools=False))
     with pytest.raises(ValueError, match="checkpoint"):
         await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="cp-1"))
-    with pytest.raises(ValueError, match="approval continuations"):
+    with pytest.raises(ContinuationNotFoundError):
         await runtime.invoke(
             agent,
             AgentRequest(input={}, continuation_id="c-1", approval_decision="approve"),
@@ -198,17 +202,106 @@ async def test_policy_denied_tool_is_not_executed():
     await runtime.close()
 
 
+def _approval_runtime(provider, store=None, **extra):
+    return LangGraphRuntime(
+        LangGraphRuntimeConfig(
+            model_provider=provider,
+            policy=AgentPolicy(approval_required=True),
+            approval_store=store,
+            **extra,
+        )
+    )
+
+
 @pytest.mark.asyncio
-async def test_tools_needing_approval_fail_closed_because_pausing_is_unsupported():
+async def test_tools_needing_approval_pause_with_a_durable_continuation():
+    store = InMemoryApprovalStore()
+    runtime = _approval_runtime(_ToolCaller(), store)
+    agent = await _started(runtime, _definition())
+    paused = await runtime.invoke(agent, AgentRequest(input={"q": 1}, session_id="s-1"))
+    assert paused.status == "approval_required"
+    assert paused.metadata["pending_tools"] == ["echo"]
+    pending = await store.get(paused.metadata["continuation_id"])
+    assert pending is not None
+    assert pending.input_payload == {"q": 1} and pending.session_id == "s-1"
+    assert pending.messages[-1]["role"] == "assistant" and "tool_calls" in pending.messages[-1]
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_approved_continuation_runs_the_wave_and_the_model_continues():
+    provider = _ToolCaller()
+    runtime = _approval_runtime(provider)
+    agent = await _started(runtime, _definition())
+    paused = await runtime.invoke(agent, AgentRequest(input={"q": 1}))
+    resumed = await runtime.invoke(
+        agent,
+        AgentRequest(
+            input={},
+            continuation_id=paused.metadata["continuation_id"],
+            approval_decision="approve",
+        ),
+    )
+    assert resumed.status == "success" and resumed.output["content"] == "final answer"
+    assert [r["tool"] for r in resumed.output["tool_results"]] == ["echo"]
+    # The resumed model call sees the executed tool result with its call id.
+    tool_messages = [m for m in provider.invocations[-1]["messages"] if m["role"] == "tool"]
+    assert len(tool_messages) == 1 and tool_messages[0]["tool_call_id"]
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_denied_continuation_tells_the_model_and_a_continuation_is_single_use():
+    provider = _ToolCaller()
+    runtime = _approval_runtime(provider)
+    agent = await _started(runtime, _definition())
+    paused = await runtime.invoke(agent, AgentRequest(input={}))
+    decision = AgentRequest(
+        input={},
+        continuation_id=paused.metadata["continuation_id"],
+        approval_decision="deny",
+    )
+    resumed = await runtime.invoke(agent, decision)
+    assert resumed.metadata["tools_called"] == []
+    assert resumed.output["tool_results"][0]["error"] == "denied by caller: approval denied"
+    with pytest.raises(ContinuationNotFoundError):
+        await runtime.invoke(agent, decision)
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_a_continuation_cannot_be_used_by_another_agent():
+    store = InMemoryApprovalStore()
+    runtime = _approval_runtime(_ToolCaller(), store)
+    agent = await _started(runtime, _definition())
+    paused = await runtime.invoke(agent, AgentRequest(input={}))
+    other = await _started(runtime, _definition(name="someone-else"))
+    with pytest.raises(ContinuationNotFoundError):
+        await runtime.invoke(
+            other,
+            AgentRequest(
+                input={},
+                continuation_id=paused.metadata["continuation_id"],
+                approval_decision="approve",
+            ),
+        )
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_hard_policy_denials_still_apply_after_approval():
     provider = _ToolCaller()
     runtime = LangGraphRuntime(
-        LangGraphRuntimeConfig(model_provider=provider, policy=AgentPolicy(approval_required=True))
+        LangGraphRuntimeConfig(
+            model_provider=provider,
+            policy=AgentPolicy(approval_required=True, denied_tools=["echo"]),
+        )
     )
     agent = await _started(runtime, _definition())
+    # A policy-denied tool never needs approval: it is simply denied.
     response = await runtime.invoke(agent, AgentRequest(input={}))
-    assert response.status == "success"  # never "approval_required"
-    result = response.output["tool_results"][0]
-    assert result["denied"] is True and "requires approval" in result["error"]
+    assert response.status == "success"
+    assert response.output["tool_results"][0]["denied"] is True
     await runtime.close()
 
 
@@ -272,8 +365,9 @@ def test_bootstrap_selects_the_langgraph_runtime(monkeypatch):
     assert bootstrap.runtime.capabilities().checkpointing is False
 
 
-def test_bootstrap_rejects_a_durable_approval_endpoint_for_langgraph(monkeypatch):
+def test_bootstrap_hands_the_approval_store_to_langgraph(monkeypatch):
     monkeypatch.setenv("MICRO_AGENT_RUNTIME", "langgraph")
-    monkeypatch.setenv("MICRO_AGENT_APPROVAL_ENDPOINT", "redis://approvals.example.test/0")
-    with pytest.raises(BootstrapError, match="does not support approval continuations"):
-        build_runtime(_definition(tools=False))
+    store = InMemoryApprovalStore()
+    bootstrap = build_runtime(_definition(tools=False), approval_store=store)
+    assert isinstance(bootstrap.runtime, LangGraphRuntime)
+    assert bootstrap.runtime._approval_store is store

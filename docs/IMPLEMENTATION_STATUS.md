@@ -73,7 +73,8 @@ Implemented:
 - optional `runtimes/langgraph` adapter whose invocation is a LangGraph
   `StateGraph` (`prepare → model → tools* → finalize`), reusing the reference
   runtime's policy, idempotency, audit, telemetry and retry semantics; it
-  reports `checkpointing: false` and denies tools that need approval
+  pauses for and resumes after approvals through the shared `ApprovalStore` and
+  reports `checkpointing: false`
 - a runtime conformance suite that runs one contract against the custom,
   Google ADK and LangGraph runtimes
 - custom async model/tool loop with overall/model/tool timeouts

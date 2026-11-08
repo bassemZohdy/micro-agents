@@ -100,7 +100,7 @@ tool calls with the same registry claim and result-replay contract.
 Approval continuations are process-local by default. Set
 `MICRO_AGENT_APPROVAL_ENDPOINT` to a `redis://` or `rediss://` URL, or inject
 `RedisApprovalStore`/another `ApprovalStore` into `build_runtime`, to share
-pending approvals across custom-runtime replicas. Records carry an absolute
+pending approvals across custom- and LangGraph-runtime replicas. Records carry an absolute
 expiry timestamp as well as a Redis TTL, so expired or malformed records are
 discarded safely after worker restarts. The Google ADK runtime uses its native
 approval-continuation protocol and rejects this binding.
@@ -537,9 +537,8 @@ export MICRO_AGENT_RUNTIME=google-adk
 The selector accepts `custom` (also `adk` or `reference`), `google-adk`
 (also `google_adk`) and `langgraph`, plus any runtime registered through the
 [runtime registry](RUNTIMES.md). `langgraph` (install the `langgraph` extra)
-runs the same definition on a LangGraph `StateGraph`; it does not support
-checkpoints or approval continuations and rejects
-`MICRO_AGENT_APPROVAL_ENDPOINT`. The adapter supports the native Google model path and
+runs the same definition on a LangGraph `StateGraph`; it supports approval
+continuations (including `MICRO_AGENT_APPROVAL_ENDPOINT`) but not checkpoints. The adapter supports the native Google model path and
 injected fake/OpenAI-compatible/Anthropic model providers. Declared services map onto
 ADK-native constructs: memory bridges into an ADK memory service (auto-store
 and search included), injected policy is enforced around every tool execution

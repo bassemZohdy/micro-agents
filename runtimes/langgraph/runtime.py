@@ -20,9 +20,10 @@ LangGraph's. No LangGraph or LangChain type crosses the public
 Capability reporting is honest about what this adapter does not do:
 
 * ``checkpointing`` is false and ``checkpoint_id`` requests are rejected.
-* Approval continuations are unsupported. A tool whose side-effect policy
-  requires approval is denied (fail closed) instead of paused, and bootstrap
-  rejects ``MICRO_AGENT_APPROVAL_ENDPOINT`` with this runtime.
+* Approval continuations use the shared ``ApprovalStore``: a tool whose
+  side-effect policy requires approval pauses the invocation
+  (``approval_required``) and a later request with the ``continuation_id`` and
+  decision resumes it, exactly as in the reference runtime.
 * Models are reached through the Micro-Agent provider SPI, not LangChain chat
   models, so every built-in provider works unchanged.
 
@@ -43,6 +44,7 @@ from micro_agent.core import AgentCapabilities, AgentRequest, AgentResponse
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.governance import (
     MAX_SESSION_HISTORY_MESSAGES,
+    ApprovalPausedError,
     GovernedRuntime,
     GovernedRuntimeConfig,
     InvocationDeadline,
@@ -58,7 +60,7 @@ from micro_agent.models import (
     structured_output_generation,
 )
 from micro_agent.runtime import RuntimeAgent, RuntimeCapabilities
-from micro_agent.security import get_invocation_identity
+from micro_agent.security import PendingApproval, get_invocation_identity
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool
 
@@ -84,9 +86,9 @@ class LangGraphError(RuntimeError):
 class LangGraphRuntimeConfig(GovernedRuntimeConfig):
     """Configuration for the LangGraph runtime.
 
-    It accepts the same service wiring as the reference runtime. The
-    checkpoint and approval stores are unsupported here and rejected at
-    construction rather than silently ignored.
+    It accepts the same service wiring as the reference runtime, including the
+    durable ``ApprovalStore``. The checkpoint store is unsupported here and
+    rejected at construction rather than silently ignored.
     """
 
 
@@ -129,6 +131,9 @@ class _Run:
     model_config: ModelConfig | None = None
     tool_schemas: list[dict[str, Any]] = field(default_factory=list)
     knowledge_counts: dict[str, int] = field(default_factory=dict)
+    #: Set when this invocation resumes a paused tool wave.
+    resume: PendingApproval | None = None
+    approved: bool = False
 
 
 class LangGraphRuntime(GovernedRuntime):
@@ -138,8 +143,6 @@ class LangGraphRuntime(GovernedRuntime):
         config = config or LangGraphRuntimeConfig()
         if config.checkpoint_store is not None:
             raise ValueError("LangGraph runtime does not support checkpoint_store")
-        if config.approval_store is not None:
-            raise ValueError("LangGraph runtime does not support approval_store")
         super().__init__(config)
         self._graph: Any = None
 
@@ -267,12 +270,31 @@ class LangGraphRuntime(GovernedRuntime):
             }
             for tool in tools.values()
         ]
+        iterations = 0
+        tool_results: list[dict[str, Any]] = []
+        if run.resume is not None:
+            # Continue from the paused transcript; the approved wave runs (hard
+            # policy denials still apply) or the model is told it was denied.
+            replay = await self._replay_pending_approval(
+                run.agent,
+                tools,
+                run.resume,
+                run.approved,
+                trace_id=run.trace_id,
+                parent_span_id=run.agent_span.span_id,
+                labels=run.labels,
+                deadline=run.deadline,
+                side_effect_state=run.side_effect_state,
+            )
+            messages = replay.messages
+            iterations = run.resume.iterations
+            tool_results = [*run.resume.all_tool_results, *replay.tool_results]
         return {
             "messages": messages,
             "tool_requests": [],
-            "tool_results": [],
+            "tool_results": tool_results,
             "usage": {},
-            "iterations": 0,
+            "iterations": iterations,
             "content": "",
             "finish_reason": "",
             "max_iterations_reached": False,
@@ -374,6 +396,18 @@ class LangGraphRuntime(GovernedRuntime):
     async def _node_tools(self, state: _State, config: RunnableConfig) -> _State:
         run = self._run_of(config)
         tools: dict[str, Tool] = run.agent._internal["tools"]
+        if self._approval_needed(run.agent, tools, state["tool_requests"]):
+            approval = await self._save_pending_approval(
+                run.agent,
+                run.request,
+                tool_requests=state["tool_requests"],
+                messages=state["messages"],
+                all_tool_results=state["tool_results"],
+                iterations=state["iterations"],
+                session_id=run.session_id,
+                input_payload=run.input_payload,
+            )
+            raise ApprovalPausedError(approval)
         results = await self._execute_tools(
             tools,
             state["tool_requests"],
@@ -444,8 +478,6 @@ class LangGraphRuntime(GovernedRuntime):
     ) -> AgentResponse:
         if request.checkpoint_id is not None:
             raise ValueError("LangGraph runtime does not support checkpoint resume")
-        if request.continuation_id:
-            raise ValueError("LangGraph runtime does not support approval continuations")
         if self._graph is None:  # pragma: no cover - create() compiles the graph
             self._graph = self._compile_graph()
 
@@ -458,12 +490,18 @@ class LangGraphRuntime(GovernedRuntime):
             else None
         )
         max_iterations = semantics.max_iterations or self._config.default_max_iterations
+        # Approval continuation: unknown, expired or foreign ones fail fast.
+        resume: PendingApproval | None = None
+        approved = False
+        if request.continuation_id:
+            resume, approved = await self._load_pending_approval(agent, request)
+        session_id = request.session_id or (resume.session_id if resume else None)
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
             attributes={
                 "agent": definition.metadata.name,
-                "session_id": request.session_id,
+                "session_id": session_id,
                 "caller_id": (
                     bound_identity.caller.caller_id
                     if bound_identity is not None and bound_identity.caller is not None
@@ -484,8 +522,10 @@ class LangGraphRuntime(GovernedRuntime):
             tenant_id=tenant_id,
             max_iterations=max_iterations,
             agent_span=agent_span,
-            session_id=request.session_id,
-            input_payload=request.input,
+            session_id=session_id,
+            input_payload=resume.input_payload if resume is not None else request.input,
+            resume=resume,
+            approved=approved,
         )
         started = time.monotonic()
         try:

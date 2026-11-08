@@ -90,7 +90,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       idempotent operation handling, audit and telemetry happen at the tool
       boundary no matter which framework invokes it. Frameworks receive wrapped
       tools; they cannot bypass governance.
-- [ ] Add the approval gate at that boundary: a tool that needs approval raises
+- [x] Add the approval gate at that boundary: a tool that needs approval raises
       a framework-neutral `ApprovalRequired(continuation_id, tool, arguments)`;
       the adapter converts it to a stop, and the layer persists the pending
       request in the `ApprovalStore`. Replaces LangGraph's fail-closed denial

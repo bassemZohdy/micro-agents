@@ -84,8 +84,8 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "policy-deny",
         "A tool denied by policy is never executed and yields a denied result.",
-        "planned",
-        phase=2,
+        "covered",
+        ("test_policy_denied_tool_is_never_executed",),
     ),
     Guarantee(
         "argument-validation",
@@ -102,8 +102,12 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "approval-pause-resume",
         "A tool needing approval pauses the invocation durably and resumes after a decision.",
-        "planned",
-        phase=2,
+        "covered",
+        (
+            "test_a_tool_needing_approval_pauses_then_runs_once_when_approved",
+            "test_a_denied_approval_never_runs_the_tool_and_the_model_still_answers",
+            "test_an_unknown_continuation_is_rejected",
+        ),
     ),
     Guarantee(
         "audit-telemetry",
