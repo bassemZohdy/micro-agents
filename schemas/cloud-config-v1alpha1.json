@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "Versioned response envelope for a stored definition or overlay.",
+  "properties": {
+    "agent": {
+      "minLength": 1,
+      "title": "Agent",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "definition",
+        "overlay"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Digest",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "number"
+    },
+    "payload": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Payload"
+    }
+  },
+  "required": [
+    "agent",
+    "kind",
+    "version",
+    "digest",
+    "created_at"
+  ],
+  "title": "Micro-Agent Cloud cloud-config-v1alpha1 contract",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microagents.io/schemas/cloud/v1alpha1/cloud-config-v1alpha1.json"
+}

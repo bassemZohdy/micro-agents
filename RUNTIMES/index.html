@@ -1,0 +1,2454 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Architecture and reference framework for independently deployable AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://bassemzohdy.github.io/micro-agents/RUNTIMES/">
+      
+      
+        <link rel="prev" href="../CONFIGURATION/">
+      
+      
+        <link rel="next" href="../CHECKPOINTING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Runtimes - Micro-Agents</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#runtimes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Micro-Agents" class="md-header__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Micro-Agents
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Runtimes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Micro-Agents" class="md-nav__button md-logo" aria-label="Micro-Agents" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Micro-Agents
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bassemZohdy/micro-agents" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bassemZohdy/micro-agents
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GETTING_STARTED/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMPLEMENTATION_STATUS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtimes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-runtimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in runtimes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in runtimes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-each-runtime-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each runtime supports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#choosing-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-versus-provided-capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native versus provided capabilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-abstraction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The abstraction layer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a runtime
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding a runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opting-an-adapter-into-the-gap-filling-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting an adapter into the gap-filling layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changing-runtime-with-sessions-in-flight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing runtime with sessions in flight
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proving-a-runtime-conforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proving a runtime conforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHECKPOINTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checkpointing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STREAMING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STRUCTURED_OUTPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_SKILLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Skills and Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_REGISTRY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_CONFIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUD_SCHEMAS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Contract Schemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STANDARDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/MICRO_AGENT_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/TWELVE_FACTOR_MICRO_AGENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Twelve-Factor Micro-Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/CLOUD_ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Control-Plane Architecture (C0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_22" >
+        
+          
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Schema
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/micro-agent-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Micro-Agent Definition v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/cloud-descriptor-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Descriptor v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/cloud-config-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Config v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/cloud-observability-v1alpha1.json" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Observability v1alpha1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_23" >
+        
+          
+          <label class="md-nav__link" for="__nav_23" id="__nav_23_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_23_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_23">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-runtime-neutral-definition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Runtime-neutral definition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-adk-first-runtime-fake-model-ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 One runtime first
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-telemetry-facade-before-otel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 Telemetry facade before OTel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-security-and-health-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Security and health modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-deterministic-policy-enforcement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 Deterministic policy enforcement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-sqlite-session-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 SQLite development persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-stable-protocol-baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 Stable protocol baselines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-runtime-adapter-truthfulness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 Runtime adapter truthfulness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-compat-policy-and-reexport-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Compatibility policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-redis-session-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 Redis session provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-redis-memory-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 Redis memory provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-redis-idempotency-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Redis idempotency registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-versioned-tenant-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Versioned tenant state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-cloud-control-plane-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Cloud control-plane boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-minimal-cloud-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Minimal cloud registry and discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-versioned-cloud-config-plane/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Versioned cloud config plane
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gateway-edge-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 Gateway edge policy and resilience
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-observability-aggregation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Read-mostly observability aggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-cloud-repository-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Cloud repository boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-container-first-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Container-first distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-native-model-providers-and-adk-approval-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Native model providers and ADK approval state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0021-runtime-registry-and-langgraph-adapter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 Runtime registry and LangGraph adapter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0022-runtime-gap-filling-layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 Runtime gap-filling layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-runtimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in runtimes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in runtimes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-each-runtime-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each runtime supports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#choosing-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native-versus-provided-capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native versus provided capabilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-abstraction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The abstraction layer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a runtime
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding a runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opting-an-adapter-into-the-gap-filling-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting an adapter into the gap-filling layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changing-runtime-with-sessions-in-flight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing runtime with sessions in flight
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proving-a-runtime-conforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proving a runtime conforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="runtimes">Runtimes</h1>
+<p>A Micro-Agent definition is runtime-neutral. A <strong>runtime</strong> binds it to an agent
+framework behind the small <code>AgentRuntime</code> interface (SPI); the executable
+bootstrap selects one by name from a <strong>runtime registry</strong>. Nothing in the
+definition, core contracts or bootstrap depends on a particular framework.</p>
+<pre><code> MicroAgentDefinition + MICRO_AGENT_* configuration
+                  |
+            bootstrap builds providers ──&gt; RuntimeBuildContext
+                  |
+        RuntimeRegistry (name / alias / entry point)
+                  |
+   +--------------+---------------+------------------+
+   |              |               |                  |
+ custom       google-adk       langgraph        your runtime
+ (reference)  (ADK adapter)    (StateGraph)     (entry point)
+</code></pre>
+<h2 id="built-in-runtimes">Built-in runtimes</h2>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Select with</th>
+<th>Extra</th>
+<th>Orchestration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>custom</code> (aliases <code>adk</code>, <code>reference</code>)</td>
+<td>default</td>
+<td>none</td>
+<td>project-owned bounded model/tool loop in <code>runtimes/custom</code></td>
+</tr>
+<tr>
+<td><code>google-adk</code></td>
+<td><code>MICRO_AGENT_RUNTIME=google-adk</code></td>
+<td><code>adk</code></td>
+<td>Google ADK <code>LlmAgent</code> and <code>Runner</code> in <code>runtimes/google_adk</code></td>
+</tr>
+<tr>
+<td><code>langgraph</code></td>
+<td><code>MICRO_AGENT_RUNTIME=langgraph</code></td>
+<td><code>langgraph</code></td>
+<td>LangGraph <code>StateGraph</code> in <code>runtimes/langgraph</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>The custom loop lives in <code>runtimes/custom</code>. It was published as <code>runtimes/adk</code>,
+a misleading name (<a href="../adr/0008-runtime-adapter-truthfulness/">ADR 0008</a>) that
+remains as a deprecated alias (<code>AdkRuntime</code> is <code>CustomRuntime</code>).
+<code>runtimes/google_adk</code> is the real ADK adapter.</p>
+</blockquote>
+<h3 id="what-each-runtime-supports">What each runtime supports</h3>
+<p>This table is generated from what each runtime reports with every service
+configured (<code>python tools/runtime_capabilities.py --write</code> refreshes it, and a
+test fails if it is stale). Streaming and structured output also depend on the
+model provider.</p>
+<!-- capability-gaps:start (generated by tools/runtime_capabilities.py) -->
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th><code>custom</code></th>
+<th><code>google-adk</code></th>
+<th><code>langgraph</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Streaming</td>
+<td>native</td>
+<td>native</td>
+<td>native</td>
+</tr>
+<tr>
+<td>Structured output</td>
+<td>native</td>
+<td>native</td>
+<td>native</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>native</td>
+<td>native</td>
+<td>native</td>
+</tr>
+<tr>
+<td>MCP tools</td>
+<td>native</td>
+<td>native</td>
+<td>native</td>
+</tr>
+<tr>
+<td>A2A</td>
+<td>no</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Checkpoint / resume</td>
+<td>native</td>
+<td>native</td>
+<td><strong>provided</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>native</strong> means the framework or the reference loop supplies it; <strong>provided</strong> means the Micro-Agents governance layer supplies it because the framework does not; no means not available.</p>
+<p>Gaps filled by the governance layer: <code>langgraph</code>: checkpoint / resume.</p>
+<p>Gaps left open: a2a (<code>custom</code>, <code>google-adk</code>, <code>langgraph</code>).</p>
+<p>Uniform guarantees covered by conformance cases: 17 of 17.</p>
+<!-- capability-gaps:end -->
+
+<p>A2A is served by the HTTP interoperability layer for every runtime, so the
+runtime-level flag is <code>no</code> everywhere. Behavior beyond these flags (policy, audit,
+telemetry, argument validation, idempotent side effects, approvals, retry,
+fallback, circuit breaking, deadlines, usage accounting, session portability) is
+identical on all runtimes and proven by the conformance suite. The remaining
+differences are where state lives and which model path is native:</p>
+<table>
+<thead>
+<tr>
+<th>Difference</th>
+<th>custom</th>
+<th>google-adk</th>
+<th>langgraph</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Approval continuations</td>
+<td><code>ApprovalStore</code></td>
+<td>ADK native, in the session</td>
+<td><code>ApprovalStore</code></td>
+</tr>
+<tr>
+<td>Native framework model path</td>
+<td>no</td>
+<td>yes (Gemini)</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Checkpoint state</td>
+<td>neutral schema</td>
+<td>ADK-specific</td>
+<td>neutral schema</td>
+</tr>
+</tbody>
+</table>
+<p><code>langgraph</code> shares the reference runtime's approval pause/resume (through the
+same <code>ApprovalStore</code>, including <code>MICRO_AGENT_APPROVAL_ENDPOINT</code>). Where it lacks
+a feature it fails closed: without a <code>CheckpointStore</code>, <code>checkpoint_id</code> requests
+are rejected.</p>
+<p>LangGraph has no checkpointing of its own here: the governance layer supplies it
+(<code>provided</code>). With a store configured, state is snapshotted at tool-round
+boundaries in the neutral, versioned schema and <code>checkpoint_id</code> resumes it, so
+a checkpoint written by the custom runtime can be resumed on LangGraph and vice
+versa. A checkpoint written by the Google ADK adapter carries ADK session
+events and is refused by the neutral runtimes (and the reverse).
+Models are reached through the Micro-Agent provider SPI, so every built-in
+provider (OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, fake) works
+unchanged; no LangChain chat model is involved.</p>
+<h3 id="choosing-one">Choosing one</h3>
+<ul>
+<li>Start with <strong>custom</strong>. It has no extra dependency and the fullest feature set.</li>
+<li>Pick <strong>google-adk</strong> to reuse ADK agents, its session model or native Gemini.</li>
+<li>Pick <strong>langgraph</strong> when your organisation standardises on LangGraph tooling
+  (graph visualisation, LangSmith) or you intend to extend the graph.</li>
+</ul>
+<p>The same definition and the same providers run on all three; see the
+<a href="#proving-a-runtime-conforms">conformance suite</a>.</p>
+<h3 id="native-versus-provided-capabilities">Native versus provided capabilities</h3>
+<p><code>RuntimeCapabilities.sources()</code> reports each capability as <code>native</code>, <code>provided</code>
+or <code>none</code>. <code>provided</code> means the Micro-Agents gap-filling layer supplies it on
+top of the framework (<a href="../adr/0022-runtime-gap-filling-layer/">ADR 0022</a>); no
+built-in runtime reports <code>provided</code> only for <code>langgraph</code> checkpointing. The behaviors every runtime must show
+identically are listed in <code>micro_agent.runtime.guarantees.UNIFORM_GUARANTEES</code>
+and proven by the conformance suite.</p>
+<h2 id="the-abstraction-layer">The abstraction layer</h2>
+<p>Three pieces, all in <code>micro_agent.runtime</code>:</p>
+<ul>
+<li><strong><code>AgentRuntime</code></strong> — the SPI: <code>capabilities</code>, <code>create</code>, <code>start</code>, <code>invoke</code>,
+  optional <code>stream</code>, <code>stop</code>, <code>shutdown</code>, <code>health_probes</code>, <code>close</code>. No framework
+  type crosses it.</li>
+<li><strong><code>RuntimeBuildContext</code></strong> — everything the bootstrap built for the definition:
+  model provider, session/memory/operation/approval stores, knowledge, MCP
+  manager, policy, audit sink, telemetry and tool registry.</li>
+<li><strong><code>RuntimeRegistration</code> / <code>RuntimeRegistry</code></strong> — a name, a factory
+  <code>(RuntimeBuildContext) -&gt; AgentRuntime</code>, aliases, and the few bootstrap-facing
+  facts (<code>native_model</code>, <code>approval_store</code>, <code>approval_note</code>, and <code>provides</code>: the
+  capabilities the governance layer supplies for this runtime).</li>
+</ul>
+<p>The bootstrap never mentions a framework. It resolves the registration, builds
+the context, calls the factory. Built-ins are registered in
+<code>micro_agent/config/runtimes.py</code>, the only place in <code>micro_agent</code> allowed to
+import <code>runtimes.*</code>; each factory imports its adapter lazily so selecting one
+runtime never needs another's dependency.</p>
+<h2 id="adding-a-runtime">Adding a runtime</h2>
+<ol>
+<li>Implement <code>AgentRuntime</code> (subclass <code>micro_agent.governance.GovernedRuntime</code> to inherit the shared
+   governance — policy, argument validation, idempotency, audit, telemetry,
+   retries, deadlines — and replace only the orchestration, as the LangGraph
+   adapter does; adapters never import each other, a rule enforced by
+   <code>tests/test_dependency_rules.py</code>).</li>
+<li>Write a factory that maps <code>RuntimeBuildContext</code> onto your configuration.</li>
+<li>Register it, either in code:</li>
+</ol>
+<p>```python
+   from micro_agent.runtime import RuntimeRegistration, register_runtime</p>
+<p>register_runtime(
+       RuntimeRegistration(
+           name="my-runtime",
+           factory=build_my_runtime,
+           aliases=("mine",),
+           approval_note="my-runtime does not map MICRO_AGENT_APPROVAL_ENDPOINT",
+       )
+   )
+   ```</p>
+<p>or from a package, with no change to Micro-Agents:</p>
+<p><code>toml
+   [project.entry-points."micro_agent.runtimes"]
+   my-runtime = "my_package.runtime:REGISTRATION"</code></p>
+<p>An entry point may point at a <code>RuntimeRegistration</code> or at a zero-argument
+   callable returning one. It is loaded only when selected.
+4. Select it: <code>MICRO_AGENT_RUNTIME=my-runtime</code>.</p>
+<p>Report capabilities truthfully, keep framework types out of the public
+boundary, and reject (do not silently ignore) configuration you cannot honour.</p>
+<h3 id="opting-an-adapter-into-the-gap-filling-layer">Opting an adapter into the gap-filling layer</h3>
+<p>A definition must behave the same whichever framework runs it
+(<a href="../adr/0022-runtime-gap-filling-layer/">ADR 0022</a>). Adapters supply
+orchestration only; the layer in <code>micro_agent.governance</code> fills the rest at the
+boundaries Micro-Agents controls, never by reaching into framework internals.
+Pick the path that matches who owns the loop:</p>
+<p><strong>You own the loop</strong> (like the reference loop and LangGraph's graph). Subclass
+<code>GovernedRuntime</code> and implement <code>_invoke_inner</code>. Then call, from your
+orchestration:</p>
+<ul>
+<li><code>self._execute_tools(...)</code> for a tool wave (policy, argument validation,
+  idempotent operations, approvals, timeouts, audit, telemetry);</li>
+<li><code>agent._internal["model_provider"].generate(...)</code>, which is a
+  <code>GovernedModelProvider</code> (deadline, span, latency and usage telemetry, deltas);</li>
+<li><code>_load_checkpoint</code> / <code>_save_checkpoint</code> / <code>_delete_checkpoint</code> at tool-round
+  boundaries, and <code>_approval_needed</code> / <code>_save_pending_approval</code> /
+  <code>_replay_pending_approval</code> for pause and resume.</li>
+</ul>
+<p>Retry, fallback, circuit breaking and the deadline are applied around
+<code>_invoke_inner</code> for you.</p>
+<p><strong>The framework owns the loop</strong> (like Google ADK). Compose the same pieces at
+your boundaries: give the framework <code>GovernedTool</code>-wrapped tools (or a
+<code>ToolGovernor</code> call inside your tool shim), bridge its model calls through
+<code>GovernedModelProvider</code>, run each invocation through <code>InvocationGovernor.run</code>
+with <code>use_tool_scope</code> / <code>use_model_scope</code> bound, and store sessions in the
+portable transcript layout. Anything the framework keeps natively (for example
+ADK's confirmation flow) must still satisfy the same conformance case.</p>
+<p>Either way:</p>
+<ol>
+<li>Declare what the layer fills in <code>RuntimeRegistration.provides</code>; the
+   capability then reports as <code>provided</code>, not <code>native</code>.</li>
+<li>Add your factory to <code>tests/test_runtime_conformance.py</code> and
+   <code>tests/test_session_portability.py</code>. Every guarantee in
+   <code>micro_agent.runtime.guarantees.UNIFORM_GUARANTEES</code> must pass; a <code>provided</code>
+   capability runs the same cases as a <code>native</code> one.</li>
+<li>Regenerate the table above with <code>python tools/runtime_capabilities.py --write</code>
+   (add your runtime to its <code>RUNTIMES</code> tuple) so the documented gaps stay true.</li>
+<li>Keep the adapter's imports inside its coupling cap in
+   <code>tests/test_dependency_rules.py</code>; adapters never import each other.</li>
+</ol>
+<h2 id="changing-runtime-with-sessions-in-flight">Changing runtime with sessions in flight</h2>
+<p>A stored session is the same for every runtime: <code>role</code>/<code>content</code> messages
+(<code>user</code>, <code>assistant</code> with optional <code>tool_calls</code>, and <code>tool</code> results) under the
+plain session id. The Google ADK adapter keeps its richer native events in the
+session metadata and reloads them losslessly while the transcript is unchanged;
+if another runtime appended, ADK rebuilds its events from the transcript. So
+changing <code>MICRO_AGENT_RUNTIME</code> between deployments needs no export or conversion
+step. Sessions that an earlier version stored in ADK's prefixed layout are moved
+to the portable layout the first time they are read. ADK-only protocol messages
+(confirmation requests) are not part of the portable transcript.</p>
+<p>Session ids are shared across agents in the same store, as they already were for
+the custom and LangGraph runtimes; use distinct ids per agent.</p>
+<h2 id="proving-a-runtime-conforms">Proving a runtime conforms</h2>
+<p><code>tests/test_runtime_conformance.py</code> runs one contract against every runtime:
+every item of the uniform-guarantee list (<code>micro_agent.runtime.guarantees</code>):
+capability matrix, identity without framework types, invocation, session replay,
+the tool loop, model failure, startup health, policy denial, argument
+validation, idempotent side effects, approval pause/resume, audit and telemetry,
+checkpoint/resume, model retry/fallback/circuit-breaker, the invocation deadline
+and token usage. A capability reported <code>provided</code> runs the same cases as a
+<code>native</code> one. <code>tests/test_session_portability.py</code> writes a
+session under every runtime and reads it under every other. A new runtime joins
+by adding one factory to those files.</p>
+<p><code>tests/test_dependency_rules.py</code> keeps the layering honest: <code>micro_agent</code> never
+imports <code>runtimes</code> outside the composition root, optional frameworks are never
+imported unguarded, and each adapter's fan-out into the framework is capped.</p>
+<h2 id="installing">Installing</h2>
+<pre><code class="language-bash">python -m pip install -e &quot;.[dev,adk]&quot;        # Google ADK
+python -m pip install -e &quot;.[dev,langgraph]&quot;  # LangGraph
+</code></pre>
+<p>Both extras are pinned. Neither is in the base install, the container image or
+the default CI job.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
