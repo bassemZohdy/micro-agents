@@ -21,6 +21,7 @@ nav:
   - Structured Output: STRUCTURED_OUTPUT.md
   - HTTP API: API.md
   - Deployment: DEPLOYMENT.md
+  - Agent Skills and Plugins: AGENT_SKILLS.md
   - Cloud Registry: CLOUD_REGISTRY.md
   - Cloud Configuration: CLOUD_CONFIG.md
   - Cloud Gateway: CLOUD_GATEWAY.md

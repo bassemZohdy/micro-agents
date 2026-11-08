@@ -307,6 +307,8 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[docs]"
       - run: mkdocs build --strict
+      # Skills and harness plugin manifests (Claude Code, Codex, Gemini CLI, Cursor).
+      - run: python tools/validate_skills.py
 
   docs-deploy:
     runs-on: ubuntu-latest

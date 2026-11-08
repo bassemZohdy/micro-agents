@@ -1,0 +1,21 @@
+{
+  "name": "micro-agents",
+  "version": "0.1.7",
+  "description": "Skills for building, running, governing and extending Micro-Agents: portable agent definitions that run unchanged on the custom, Google ADK and LangGraph runtimes.",
+  "author": {
+    "name": "Bassem Zohdy",
+    "url": "https://github.com/bassemZohdy"
+  },
+  "homepage": "https://bassemzohdy.github.io/micro-agents/",
+  "repository": "https://github.com/bassemZohdy/micro-agents",
+  "license": "Apache-2.0",
+  "keywords": [
+    "micro-agents",
+    "ai-agents",
+    "agent-runtime",
+    "mcp",
+    "a2a",
+    "google-adk",
+    "langgraph"
+  ]
+}

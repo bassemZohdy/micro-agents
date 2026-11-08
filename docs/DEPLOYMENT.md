@@ -180,7 +180,11 @@ Per release:
    section, set `pyproject.toml` `version`, and update the pinned image tag in
    `deploy/kubernetes/deployment.yaml` to `X.Y.Z` (the package, changelog,
    tag, schema version, and image pin must all agree —
-   `python tools/validate_release.py X.Y.Z` checks this before you tag).
+   `python tools/validate_release.py X.Y.Z` checks this before you tag). Set the
+   same `version` in the agent-plugin manifests (`.claude-plugin/plugin.json`,
+   `.claude-plugin/marketplace.json`, `plugin.json`, `.cursor-plugin/plugin.json`,
+   `gemini-extension.json`); `python tools/validate_skills.py` fails until they
+   match `pyproject.toml`.
 2. Land those edits on `main` through a pull request so the required checks
    run.
 3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `Release`

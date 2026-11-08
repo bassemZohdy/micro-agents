@@ -1,0 +1,26 @@
+{
+  "name": "micro-agents",
+  "description": "Micro-Agents skills for AI coding agents",
+  "owner": {
+    "name": "Bassem Zohdy",
+    "url": "https://github.com/bassemZohdy"
+  },
+  "plugins": [
+    {
+      "name": "micro-agents",
+      "source": "./",
+      "description": "Skills for building, running, governing and extending Micro-Agents: portable agent definitions that run unchanged on the custom, Google ADK and LangGraph runtimes.",
+      "version": "0.1.7",
+      "category": "development",
+      "tags": [
+        "micro-agents",
+        "ai-agents",
+        "agent-runtime",
+        "mcp",
+        "a2a",
+        "google-adk",
+        "langgraph"
+      ]
+    }
+  ]
+}
