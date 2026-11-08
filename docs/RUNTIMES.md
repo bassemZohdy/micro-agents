@@ -39,7 +39,7 @@ definition, core contracts or bootstrap depends on a particular framework.
 | Structured output | provider-dependent | provider-dependent | provider-dependent |
 | Memory, MCP, knowledge, policy, audit, telemetry | yes | yes | yes |
 | Idempotent side-effect operations | yes | yes | yes |
-| Session persistence | yes | yes (ADK transcript layout) | yes |
+| Session persistence | yes | yes (portable transcript; native events kept alongside) | yes |
 | Checkpoint / resume | yes | yes (ADK-specific state) | **provided** (needs a `CheckpointStore`) |
 | Durable approval continuations | yes (`ApprovalStore`) | yes (ADK native, in the session) | yes (`ApprovalStore`) |
 | Native framework model path | no | yes (Gemini) | no |
@@ -137,13 +137,30 @@ runtime never needs another's dependency.
 Report capabilities truthfully, keep framework types out of the public
 boundary, and reject (do not silently ignore) configuration you cannot honour.
 
+## Changing runtime with sessions in flight
+
+A stored session is the same for every runtime: `role`/`content` messages
+(`user`, `assistant` with optional `tool_calls`, and `tool` results) under the
+plain session id. The Google ADK adapter keeps its richer native events in the
+session metadata and reloads them losslessly while the transcript is unchanged;
+if another runtime appended, ADK rebuilds its events from the transcript. So
+changing `MICRO_AGENT_RUNTIME` between deployments needs no export or conversion
+step. Sessions that an earlier version stored in ADK's prefixed layout are moved
+to the portable layout the first time they are read. ADK-only protocol messages
+(confirmation requests) are not part of the portable transcript.
+
+Session ids are shared across agents in the same store, as they already were for
+the custom and LangGraph runtimes; use distinct ids per agent.
+
 ## Proving a runtime conforms
 
 `tests/test_runtime_conformance.py` runs one contract against every runtime:
 capability matrix, identity without framework types, a simple invocation, session
 history replayed to the model, a full tool loop, model failure surfacing, and
-unhealthy-model startup failure. A new runtime joins by adding one factory to
-that file.
+unhealthy-model startup failure, model retry/fallback/circuit-breaker, the
+invocation deadline and token usage. `tests/test_session_portability.py` writes a
+session under every runtime and reads it under every other. A new runtime joins
+by adding one factory to those files.
 
 `tests/test_dependency_rules.py` keeps the layering honest: `micro_agent` never
 imports `runtimes` outside the composition root, optional frameworks are never

@@ -129,7 +129,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       deadline, retry, fallback) so every adapter gets identical behavior, and
       the google-adk native Gemini path reports the same usage metadata.
       Redaction stays in telemetry/audit, which already scrub secrets.
-- [ ] Normalize the stored session transcript to one Micro-Agent layout
+- [x] Normalize the stored session transcript to one Micro-Agent layout
       regardless of runtime (an adapter-side mapper for ADK's layout) so
       sessions are portable when an operator changes `MICRO_AGENT_RUNTIME`;
       document the migration and add a cross-runtime session round-trip test.

@@ -14,7 +14,24 @@ from micro_agent.runtime import (
     guarantees_by_status,
 )
 
-CONFORMANCE = Path(__file__).parent / "test_runtime_conformance.py"
+# Files whose top-level ``test_*`` functions are conformance cases.
+CONFORMANCE_FILES = (
+    Path(__file__).parent / "test_runtime_conformance.py",
+    Path(__file__).parent / "test_session_portability.py",
+)
+
+
+def _case_names() -> set[str]:
+    names: set[str] = set()
+    for path in CONFORMANCE_FILES:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names |= {
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef)
+            and node.name.startswith("test_")
+        }
+    return names
 
 
 def test_capabilities_default_to_none_and_stay_backwards_compatible():
@@ -64,24 +81,13 @@ def test_guarantee_validates_its_status_fields():
 
 
 def test_every_covered_guarantee_names_an_existing_conformance_case():
-    tree = ast.parse(CONFORMANCE.read_text(encoding="utf-8"))
-    defined = {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef)
-    }
+    defined = _case_names()
     for guarantee in guarantees_by_status("covered"):
         missing = set(guarantee.tests) - defined
         assert not missing, f"{guarantee.id}: conformance cases missing: {sorted(missing)}"
 
 
 def test_every_conformance_case_is_claimed_by_a_guarantee():
-    tree = ast.parse(CONFORMANCE.read_text(encoding="utf-8"))
-    cases = {
-        node.name
-        for node in tree.body
-        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef)
-        and node.name.startswith("test_")
-    }
+    cases = _case_names()
     claimed = {t for g in UNIFORM_GUARANTEES for t in g.tests}
     assert cases <= claimed, f"unclaimed conformance cases: {sorted(cases - claimed)}"

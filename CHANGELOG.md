@@ -4,6 +4,13 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Stored sessions are portable across runtimes. The Google ADK session service
+  now stores the Micro-Agent transcript (`role`/`content`, tool calls and tool
+  results) under the plain session id and keeps ADK's native events in the
+  session metadata, so a session written under `custom`, `langgraph` or
+  `google-adk` is readable under any of them. Sessions saved by earlier versions
+  under the prefixed ADK layout are migrated on first read. ADK confirmation
+  requests are not part of the portable transcript.
 - Model-call and invocation resilience are now shared governance services.
   `InvocationGovernor` (circuit breaker, deadline, retry with backoff, fallback
   policy) moved out of the base runtime and now also wraps the Google ADK

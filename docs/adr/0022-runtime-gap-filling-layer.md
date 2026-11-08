@@ -99,6 +99,16 @@ internals:
   from the framework's final model events and reported through the same
   telemetry and the same `usage` metadata.
 
+**Session portability (Phase 4).** The canonical stored layout is the
+Micro-Agent transcript under the plain session id. The ADK adapter's session
+service maps ADK events to and from it (`runtimes/google_adk/transcript.py`) and
+keeps the native events in the session metadata with a digest of the transcript:
+a matching digest means ADK wrote last and its events load losslessly, a
+mismatch means another runtime appended and events are rebuilt from the
+messages. Records in the previous prefixed ADK layout are migrated on first
+read. The trade-off is storing the conversation twice for ADK sessions, in
+exchange for no conversion step when an operator changes runtime.
+
 **Stays framework-native.** The layer does not replace what a framework owns by
 design: ADK's internal session transcript and its native confirmation flow
 remain available (native approvals become an opt-in for ADK in Phase 2), and

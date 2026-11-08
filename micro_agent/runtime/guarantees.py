@@ -149,8 +149,8 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "session-portability",
         "A stored session written under one runtime is readable under another.",
-        "planned",
-        phase=4,
+        "covered",
+        ("test_a_session_written_by_one_runtime_is_readable_by_another",),
     ),
 )
 

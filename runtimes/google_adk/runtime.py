@@ -235,7 +235,7 @@ class GoogleAdkRuntime(AgentRuntime):
             self._config.session_service_factory()
             if self._config.session_service_factory is not None
             else (
-                _provider_session_service(self._config.session_provider)
+                _provider_session_service(self._config.session_provider, adk_agent_name)
                 if self._config.session_provider is not None
                 else session_service_cls()
             )
@@ -1154,13 +1154,13 @@ def _provider_memory_service(provider: MemoryProvider) -> Any:
     return ProviderMemoryService()
 
 
-def _provider_session_service(provider: SessionProvider) -> Any:
+def _provider_session_service(provider: SessionProvider, author: str) -> Any:
     """Build the ADK session service over a configured state provider."""
     if provider is None:  # pragma: no cover - guarded by the caller
         raise GoogleAdkError("a session provider is required")
     from runtimes.google_adk.session_service import build_adk_session_service
 
-    return build_adk_session_service(provider)
+    return build_adk_session_service(provider, author=author)
 
 
 def _event_text(event: Any) -> str:
