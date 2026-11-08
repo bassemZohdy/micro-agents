@@ -81,7 +81,10 @@ conformance tests (the `langgraph` CI job). It reaches models through the
 Micro-Agent provider SPI, shares the reference runtime's `ApprovalStore`
 approval continuations and its governance layer's `CheckpointStore`
 checkpointing (reported as `provided`), and makes no claim of LangGraph Platform
-or LangSmith integration. See [Runtimes](RUNTIMES.md) and
+or LangSmith integration. It passes the same conformance suite as the other
+runtimes; that behavior parity is a project guarantee
+([ADR 0022](adr/0022-runtime-gap-filling-layer.md)), not a protocol claim. See
+[Runtimes](RUNTIMES.md) and
 [ADR 0021](adr/0021-runtime-registry-and-langgraph-adapter.md).
 
 ## Version policy

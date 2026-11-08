@@ -141,7 +141,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
       must pass the same cases as `native`.
 - [x] Add a "capability gaps" report command or doc table generated from
       `RuntimeCapabilities` so `docs/RUNTIMES.md` cannot drift from code.
-- [ ] Update `docs/RUNTIMES.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/STANDARDS.md`,
+- [x] Update `docs/RUNTIMES.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/STANDARDS.md`,
       README and CHANGELOG; document how a third-party adapter opts into the layer.
 - [ ] Add the `langgraph` job (and a combined `adk`+`langgraph` parity job) to
       the required-checks ruleset (owner action).

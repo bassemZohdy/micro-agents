@@ -12,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 1097 collected on a base install | 975 passed and 17 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.3% line coverage (gate: 80%); the skips are the Google ADK and LangGraph adapter tests, which run in their own CI jobs with the optional extras (1132 passed with both extras and no Redis; the Redis-dependent tests fail without a service). The 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. The last full run with real Redis 7 and PostgreSQL 16 services (before the runtime registry) passed 1057 tests at 91.3% coverage and has not been repeated since |
+| Tests | 1257 collected with the `adk` and `langgraph` extras | 1244 passed and 8 skipped at 90.2% line coverage (gate: 80%) with both extras installed and the 5 Redis-service tests deselected; a base install skips the Google ADK and LangGraph adapter tests, which run in their own CI jobs. The Redis/PostgreSQL service suites were last run in full before the runtime registry and the governance layer, and have not been repeated since |
 | Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
@@ -76,7 +76,19 @@ Implemented:
   pauses for and resumes after approvals through the shared `ApprovalStore` and
   checkpoints/resumes through the governance layer (reported as `provided`)
 - a runtime conformance suite that runs one contract against the custom,
-  Google ADK and LangGraph runtimes
+  Google ADK and LangGraph runtimes, covering all 17 uniform guarantees in
+  `micro_agent.runtime.guarantees`
+- a framework-free governance layer (`micro_agent.governance`): `ToolGovernor` /
+  `GovernedTool` at the tool boundary, `GovernedModelProvider` at the model
+  boundary, `InvocationGovernor` (circuit breaker, deadline, retry, fallback),
+  shared approval and checkpoint services, and a versioned neutral checkpoint
+  schema; Google ADK runs through the same pieces while keeping its native
+  confirmation flow
+- portable sessions: every runtime stores the Micro-Agent transcript under the
+  plain session id (ADK keeps native events alongside), so changing
+  `MICRO_AGENT_RUNTIME` needs no conversion
+- a generated capability-gap table (`tools/runtime_capabilities.py`) that a test
+  keeps in sync with `docs/RUNTIMES.md`
 - custom async model/tool loop with overall/model/tool timeouts
 - bounded retry/fallback behavior with error classification, backoff, jitter,
   retry budgets, and circuit breaking

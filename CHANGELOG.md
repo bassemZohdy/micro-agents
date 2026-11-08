@@ -4,6 +4,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Documentation for the runtime gap-filling layer: README overview, status and
+  standards updates, and a guide in `docs/RUNTIMES.md` for opting a third-party
+  adapter into the layer (loop-owning and framework-owned-loop paths).
 - The capability-gap table in `docs/RUNTIMES.md` is now generated from what each
   runtime reports (`python tools/runtime_capabilities.py --write`), and a test
   fails when it is stale. The report also lists the gaps the governance layer

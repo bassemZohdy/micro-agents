@@ -116,7 +116,8 @@ Three pieces, all in `micro_agent.runtime`:
   manager, policy, audit sink, telemetry and tool registry.
 - **`RuntimeRegistration` / `RuntimeRegistry`** — a name, a factory
   `(RuntimeBuildContext) -> AgentRuntime`, aliases, and the few bootstrap-facing
-  facts (`native_model`, `approval_store`, `approval_note`).
+  facts (`native_model`, `approval_store`, `approval_note`, and `provides`: the
+  capabilities the governance layer supplies for this runtime).
 
 The bootstrap never mentions a framework. It resolves the registration, builds
 the context, calls the factory. Built-ins are registered in
@@ -160,6 +161,50 @@ runtime never needs another's dependency.
 
 Report capabilities truthfully, keep framework types out of the public
 boundary, and reject (do not silently ignore) configuration you cannot honour.
+
+### Opting an adapter into the gap-filling layer
+
+A definition must behave the same whichever framework runs it
+([ADR 0022](adr/0022-runtime-gap-filling-layer.md)). Adapters supply
+orchestration only; the layer in `micro_agent.governance` fills the rest at the
+boundaries Micro-Agents controls, never by reaching into framework internals.
+Pick the path that matches who owns the loop:
+
+**You own the loop** (like the reference loop and LangGraph's graph). Subclass
+`GovernedRuntime` and implement `_invoke_inner`. Then call, from your
+orchestration:
+
+- `self._execute_tools(...)` for a tool wave (policy, argument validation,
+  idempotent operations, approvals, timeouts, audit, telemetry);
+- `agent._internal["model_provider"].generate(...)`, which is a
+  `GovernedModelProvider` (deadline, span, latency and usage telemetry, deltas);
+- `_load_checkpoint` / `_save_checkpoint` / `_delete_checkpoint` at tool-round
+  boundaries, and `_approval_needed` / `_save_pending_approval` /
+  `_replay_pending_approval` for pause and resume.
+
+Retry, fallback, circuit breaking and the deadline are applied around
+`_invoke_inner` for you.
+
+**The framework owns the loop** (like Google ADK). Compose the same pieces at
+your boundaries: give the framework `GovernedTool`-wrapped tools (or a
+`ToolGovernor` call inside your tool shim), bridge its model calls through
+`GovernedModelProvider`, run each invocation through `InvocationGovernor.run`
+with `use_tool_scope` / `use_model_scope` bound, and store sessions in the
+portable transcript layout. Anything the framework keeps natively (for example
+ADK's confirmation flow) must still satisfy the same conformance case.
+
+Either way:
+
+1. Declare what the layer fills in `RuntimeRegistration.provides`; the
+   capability then reports as `provided`, not `native`.
+2. Add your factory to `tests/test_runtime_conformance.py` and
+   `tests/test_session_portability.py`. Every guarantee in
+   `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES` must pass; a `provided`
+   capability runs the same cases as a `native` one.
+3. Regenerate the table above with `python tools/runtime_capabilities.py --write`
+   (add your runtime to its `RUNTIMES` tuple) so the documented gaps stay true.
+4. Keep the adapter's imports inside its coupling cap in
+   `tests/test_dependency_rules.py`; adapters never import each other.
 
 ## Changing runtime with sessions in flight
 
