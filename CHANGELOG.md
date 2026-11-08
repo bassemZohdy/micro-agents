@@ -4,6 +4,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- The capability-gap table in `docs/RUNTIMES.md` is now generated from what each
+  runtime reports (`python tools/runtime_capabilities.py --write`), and a test
+  fails when it is stale. The report also lists the gaps the governance layer
+  fills and the gaps left open.
 - The runtime conformance suite now covers every uniform guarantee on the
   custom, Google ADK and LangGraph runtimes, including tool argument validation,
   idempotent side effects and tool audit/telemetry; no guarantee is left in the

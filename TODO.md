@@ -139,7 +139,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 - [x] Grow `tests/test_runtime_conformance.py` from 7 to a full matrix covering
       every item in the uniform-guarantees list; a capability reported `provided`
       must pass the same cases as `native`.
-- [ ] Add a "capability gaps" report command or doc table generated from
+- [x] Add a "capability gaps" report command or doc table generated from
       `RuntimeCapabilities` so `docs/RUNTIMES.md` cannot drift from code.
 - [ ] Update `docs/RUNTIMES.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/STANDARDS.md`,
       README and CHANGELOG; document how a third-party adapter opts into the layer.
