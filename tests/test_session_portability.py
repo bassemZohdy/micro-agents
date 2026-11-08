@@ -47,7 +47,7 @@ class _Recorder(FakeModelProvider):
         return ModelResponse(content="second answer")
 
 
-async def _first_turn(factory, sessions) -> None:
+async def _first_turn(factory, sessions, session_id: str = "portable") -> None:
     tool = _ChargeTool("lookup", side_effect="read_only")
     runtime = factory(
         _RequestsThenAnswers("lookup", "first answer"),
@@ -58,7 +58,7 @@ async def _first_turn(factory, sessions) -> None:
     try:
         await runtime.start(agent)
         await runtime.invoke(
-            agent, AgentRequest(input={"message": "remember-me"}, session_id="portable")
+            agent, AgentRequest(input={"message": "remember-me"}, session_id=session_id)
         )
     finally:
         await runtime.shutdown(agent)

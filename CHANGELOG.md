@@ -4,6 +4,9 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Session hand-over between the custom and Google ADK runtimes is now tested
+  over real Redis and PostgreSQL session providers (run by the `runtime-parity`
+  job, which gained Redis and PostgreSQL services).
 - CI: a `runtime-parity` job installs the `adk` and `langgraph` extras together
   and runs the conformance, session-portability, guarantee and governed-boundary
   suites plus `tools/runtime_capabilities.py --check`; the `adk` job also runs

@@ -12,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 1257 collected with the `adk` and `langgraph` extras | 1244 passed and 8 skipped at 90.2% line coverage (gate: 80%) with both extras installed and the 5 Redis-service tests deselected; a base install skips the Google ADK and LangGraph adapter tests, which run in their own CI jobs. The Redis/PostgreSQL service suites were last run in full before the runtime registry and the governance layer, and have not been repeated since |
+| Tests | 1263 collected with the `adk`, `langgraph`, `redis` and `postgres` extras | 1263 passed, 0 skipped with both framework extras and real Redis 7 and PostgreSQL 16 services (the full suite, including the integration tests; 90.2% line coverage measured on the 1244-test run without the service tests, gate: 80%). A base install skips the Google ADK and LangGraph adapter tests, which run in their own CI jobs, and the service-backed tests, which run in the `integration` and `runtime-parity` jobs |
 | Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
