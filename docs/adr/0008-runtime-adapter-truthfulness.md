@@ -27,3 +27,9 @@ The repository uses the separate-adapter option:
 - The deterministic custom loop may remain valuable for tests, examples, or a
   lightweight runtime, but it is not evidence of ADK support.
 - Complete service mapping remains a compatibility and migration follow-up.
+
+## Update (ADR 0022, Phase 1)
+
+The custom loop moved to `runtimes/custom` (`CustomRuntime`). `runtimes/adk`
+remains a deprecated compatibility alias (`AdkRuntime`, `AdkRuntimeConfig`) and
+contains no logic. Shared governance lives in `micro_agent.governance`.

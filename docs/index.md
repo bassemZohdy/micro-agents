@@ -20,6 +20,7 @@ reference implementation rather than a production-ready platform.
 - [HTTP API](API.md) — implemented routes and their current semantics
 - [Deployment](DEPLOYMENT.md) — development container/Kubernetes assets and the
   production hardening checklist
+- [Runtimes](RUNTIMES.md) — the runtime registry, Google ADK and LangGraph adapters, and how to add one
 - [Standards](STANDARDS.md) — A2A, MCP, and Google ADK compatibility baselines
 
 The normative model lives in the [Micro-Agent

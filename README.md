@@ -23,8 +23,10 @@ operated independently.
   compatibility migration, and generated JSON Schemas
 - YAML definition loader and runtime-neutral core contracts
 - a small `AgentRuntime` service-provider interface
-- a custom reference agent loop currently located under `runtimes/adk`
-- an optional Google ADK adapter under `runtimes/google_adk`
+- a custom reference agent loop in `runtimes/custom` (formerly `runtimes/adk`)
+- a runtime registry that selects the runtime by name, with optional Google ADK
+  (`runtimes/google_adk`) and LangGraph (`runtimes/langgraph`) adapters; see
+  [docs/RUNTIMES.md](docs/RUNTIMES.md)
 - fake and OpenAI-compatible model-provider implementations
 - tool, MCP, session, memory, idempotency, knowledge, policy, health, and
   telemetry seams (including SQLite durability and optional Redis-backed
@@ -67,14 +69,27 @@ Runtime SPI
         |
         +-- Optional Google ADK adapter
         |
-        `-- Future adapters only when justified
+        +-- Optional LangGraph adapter (StateGraph)
+        |
+        `-- Third-party runtimes via the registry / entry points
 ```
 
 The runtime-neutral contract is intentional. The custom loop remains the
-lightweight default, while the optional `google-adk` extra provides a genuine
-ADK adapter without leaking ADK types through the SPI. The executable bootstrap
-constructs the built-in providers and selects either runtime from deployment
-configuration; unsupported external providers still fail fast.
+lightweight default, while the optional `google-adk` and `langgraph` extras
+provide genuine framework adapters without leaking framework types through the
+SPI. The executable bootstrap constructs the built-in providers once and hands
+them to the runtime selected by name from the runtime registry; unsupported
+external providers still fail fast.
+
+A project-owned governance layer (`micro_agent.governance`) fills the gaps
+between frameworks at the boundaries Micro-Agents controls (tools, model
+provider, stores, request/response), so one definition behaves identically on
+every runtime: policy, argument validation, idempotent side effects, approvals,
+retry/fallback/circuit breaking, deadlines, usage accounting, checkpoint/resume
+and portable sessions. Seventeen uniform guarantees are enforced by one
+conformance suite, and the capability-gap table in
+[docs/RUNTIMES.md](docs/RUNTIMES.md) is generated from the code. See
+[ADR 0022](docs/adr/0022-runtime-gap-filling-layer.md).
 
 ## Definition example
 
@@ -165,7 +180,8 @@ fallback for a bare model reference.
 
 Runtime selection is deployment configuration. The custom loop is the default;
 set `MICRO_AGENT_RUNTIME=google-adk` (with the optional `adk` extra installed)
-to select the Google ADK adapter. Memory, policy, MCP, knowledge, credentials,
+to select the Google ADK adapter, or `MICRO_AGENT_RUNTIME=langgraph` (with the
+`langgraph` extra) for the LangGraph adapter. Memory, policy, MCP, knowledge, credentials,
 and telemetry mappings are validated at bootstrap; external session bindings
 use the runtime-neutral session-provider bridge and fail before startup when
 their endpoint or optional dependency is invalid. Model credential references are resolved
@@ -212,7 +228,7 @@ state, or A2A task interoperability.
 | Area | Current state | Production gap |
 |---|---|---|
 | Definition | Typed loader, v1alpha1/v1beta1 schemas and migration fixture, semantic uniqueness/format checks, runtime contract enforcement, deployment endpoint overlays, and versioned model-alias catalogs | broader resource catalog types |
-| Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK adapter with ADK lifecycle/session/tool tests and native confirmation continuations | external production state |
+| Runtime | Custom bounded model/tool loop plus deployment-selectable optional Google ADK and LangGraph adapters behind one registry; a shared governance layer and a 17-guarantee conformance suite keep their behavior identical, with portable sessions and ADK native confirmation continuations | external production state, LangGraph Platform/LangSmith |
 | Models | Explicit fake provider, native Anthropic Messages, native Google Gemini, Azure OpenAI, versioned model-alias catalog resolution, and definition/environment-selected OpenAI-compatible HTTP clients with tool-call transcript replay; ADK bridge accepts injected providers | broader provider credentials (Vertex AI, Entra ID) and production live-model baselines |
 | Tools | `echo` and bounded `json_parse` built in, schema validation, policy enforcement, and MCP adapters | additional bundled domain-native tools |
 | MCP | official SDK wire client behind the SPI, stable stdio/Streamable HTTP, legacy SSE, security checks, discovery, timeouts, reconnect, application-visible bounded notifications, and operator benchmark harnesses | production deployment baselines and SLO validation |

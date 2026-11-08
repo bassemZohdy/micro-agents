@@ -67,10 +67,25 @@ production load testing remains open.
 ## Google ADK
 
 Google ADK is a runtime implementation choice, not an interoperability
-protocol. `runtimes/adk` is the custom built-in loop; the optional
+protocol. `runtimes/custom` is the custom built-in loop; the optional
 `runtimes/google_adk` package depends on and invokes supported Google ADK APIs
 and is covered by adapter tests. The adapter is still pre-release and does not
 claim full production service integration.
+
+## LangGraph
+
+LangGraph is likewise a runtime implementation choice, not an interoperability
+protocol. The optional `runtimes/langgraph` package builds and runs a LangGraph
+`StateGraph` for each invocation and is covered by adapter and shared
+conformance tests (the `langgraph` CI job). It reaches models through the
+Micro-Agent provider SPI, shares the reference runtime's `ApprovalStore`
+approval continuations and its governance layer's `CheckpointStore`
+checkpointing (reported as `provided`), and makes no claim of LangGraph Platform
+or LangSmith integration. It passes the same conformance suite as the other
+runtimes; that behavior parity is a project guarantee
+([ADR 0022](adr/0022-runtime-gap-filling-layer.md)), not a protocol claim. See
+[Runtimes](RUNTIMES.md) and
+[ADR 0021](adr/0021-runtime-registry-and-langgraph-adapter.md).
 
 ## Version policy
 

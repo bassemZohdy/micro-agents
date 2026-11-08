@@ -1,0 +1,160 @@
+"""Behaviors every runtime must exhibit identically, native or provided.
+
+A Micro-Agent definition must behave the same whichever framework runs it.
+This module is the single list of those guarantees. The conformance suite
+(``tests/test_runtime_conformance.py``) is the executable form: a guarantee is
+``covered`` once the named conformance cases exist, and ``planned`` while the
+gap-filling layer that delivers it is still being built (see ``TODO.md``,
+"Runtime gap-filling layer").
+
+Guarantees describe observable behavior at Micro-Agent boundaries (tools,
+model provider, stores, request/response). They never mention a framework.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+GuaranteeStatus = Literal["covered", "planned"]
+
+
+@dataclass(frozen=True)
+class Guarantee:
+    """One cross-runtime behavioral guarantee."""
+
+    id: str
+    summary: str
+    status: GuaranteeStatus
+    #: Conformance test functions that prove the guarantee (``covered`` only).
+    tests: tuple[str, ...] = ()
+    #: Plan phase in TODO.md that delivers a ``planned`` guarantee.
+    phase: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.status == "covered" and not self.tests:
+            raise ValueError(f"covered guarantee '{self.id}' must name its conformance tests")
+        if self.status == "planned" and self.phase is None:
+            raise ValueError(f"planned guarantee '{self.id}' must name its plan phase")
+
+
+UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
+    Guarantee(
+        "identity",
+        "Creating an agent exposes Micro-Agent identity and capabilities, never framework types.",
+        "covered",
+        ("test_create_exposes_identity_without_framework_types",),
+    ),
+    Guarantee(
+        "capability-report",
+        "Capabilities are reported truthfully, including whether each is native or provided.",
+        "covered",
+        ("test_reports_a_capability_matrix",),
+    ),
+    Guarantee(
+        "invocation",
+        "A simple invocation returns the model content in the Micro-Agent response shape.",
+        "covered",
+        ("test_simple_invocation_returns_the_model_content",),
+    ),
+    Guarantee(
+        "session-replay",
+        "Session history is replayed to the model on the next invocation.",
+        "covered",
+        ("test_session_history_is_replayed_to_the_model",),
+    ),
+    Guarantee(
+        "tool-loop",
+        "Requested tools run and feed the next model turn, bounded by max iterations.",
+        "covered",
+        ("test_tool_loop_executes_requested_tools_then_answers",),
+    ),
+    Guarantee(
+        "model-failure",
+        "A model failure surfaces as an error response, subject to the error policy.",
+        "covered",
+        ("test_model_failure_surfaces_as_an_error",),
+    ),
+    Guarantee(
+        "startup-health",
+        "An unhealthy model dependency blocks startup.",
+        "covered",
+        ("test_unhealthy_model_blocks_startup",),
+    ),
+    Guarantee(
+        "policy-deny",
+        "A tool denied by policy is never executed and yields a denied result.",
+        "covered",
+        ("test_policy_denied_tool_is_never_executed",),
+    ),
+    Guarantee(
+        "argument-validation",
+        "Tool arguments are validated against the tool schema before execution.",
+        "covered",
+        ("test_invalid_tool_arguments_are_rejected_before_the_tool_runs",),
+    ),
+    Guarantee(
+        "idempotent-operations",
+        "Side-effect operations run at most once per operation key, even after retry or resume.",
+        "covered",
+        ("test_a_side_effect_runs_once_per_idempotency_key",),
+    ),
+    Guarantee(
+        "approval-pause-resume",
+        "A tool needing approval pauses the invocation durably and resumes after a decision.",
+        "covered",
+        (
+            "test_a_tool_needing_approval_pauses_then_runs_once_when_approved",
+            "test_a_denied_approval_never_runs_the_tool_and_the_model_still_answers",
+            "test_an_unknown_continuation_is_rejected",
+        ),
+    ),
+    Guarantee(
+        "audit-telemetry",
+        "Tool and model calls emit the same audit and telemetry events.",
+        "covered",
+        ("test_tool_calls_emit_the_same_audit_and_telemetry",),
+    ),
+    Guarantee(
+        "checkpoint-resume",
+        "An invocation resumes from a checkpoint at a tool-round boundary.",
+        "covered",
+        (
+            "test_an_interrupted_invocation_resumes_from_its_checkpoint",
+            "test_resuming_an_unknown_checkpoint_is_rejected",
+        ),
+    ),
+    Guarantee(
+        "retry-fallback-breaker",
+        "Model retry, fallback and circuit breaking behave identically.",
+        "covered",
+        (
+            "test_a_transient_model_failure_is_retried_under_the_retry_policy",
+            "test_a_fatal_model_failure_follows_the_fallback_policy",
+            "test_repeated_failures_open_the_circuit_breaker",
+        ),
+    ),
+    Guarantee(
+        "deadline",
+        "The invocation deadline bounds model and tool calls.",
+        "covered",
+        ("test_the_invocation_deadline_bounds_a_slow_model",),
+    ),
+    Guarantee(
+        "usage-telemetry",
+        "Token usage is reported in the response and recorded as telemetry.",
+        "covered",
+        ("test_token_usage_is_reported_and_recorded",),
+    ),
+    Guarantee(
+        "session-portability",
+        "A stored session written under one runtime is readable under another.",
+        "covered",
+        ("test_a_session_written_by_one_runtime_is_readable_by_another",),
+    ),
+)
+
+
+def guarantees_by_status(status: GuaranteeStatus) -> tuple[Guarantee, ...]:
+    """Return the guarantees in one status, in declaration order."""
+    return tuple(g for g in UNIFORM_GUARANTEES if g.status == status)

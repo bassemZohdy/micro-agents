@@ -12,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 1059 collected | 952 passed and 2 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.2% line coverage (gate: 80%); the 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. With real Redis 7 and PostgreSQL 16 services the whole suite passes (1057 passed, 2 skipped) at 91.3% coverage |
+| Tests | 1263 collected with the `adk`, `langgraph`, `redis` and `postgres` extras | 1263 passed, 0 skipped with both framework extras and real Redis 7 and PostgreSQL 16 services (the full suite, including the integration tests; 90.2% line coverage measured on the 1244-test run without the service tests, gate: 80%). A base install skips the Google ADK and LangGraph adapter tests, which run in their own CI jobs, and the service-backed tests, which run in the `integration` and `runtime-parity` jobs |
 | Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
@@ -67,7 +67,28 @@ Gaps:
 
 Implemented:
 
-- small runtime-neutral `AgentRuntime` SPI
+- small runtime-neutral `AgentRuntime` SPI and a runtime registry
+  (`RuntimeRegistration`, `RuntimeBuildContext`, `micro_agent.runtimes`
+  entry points) through which the bootstrap selects any runtime by name
+- optional `runtimes/langgraph` adapter whose invocation is a LangGraph
+  `StateGraph` (`prepare → model → tools* → finalize`), reusing the reference
+  runtime's policy, idempotency, audit, telemetry and retry semantics; it
+  pauses for and resumes after approvals through the shared `ApprovalStore` and
+  checkpoints/resumes through the governance layer (reported as `provided`)
+- a runtime conformance suite that runs one contract against the custom,
+  Google ADK and LangGraph runtimes, covering all 17 uniform guarantees in
+  `micro_agent.runtime.guarantees`
+- a framework-free governance layer (`micro_agent.governance`): `ToolGovernor` /
+  `GovernedTool` at the tool boundary, `GovernedModelProvider` at the model
+  boundary, `InvocationGovernor` (circuit breaker, deadline, retry, fallback),
+  shared approval and checkpoint services, and a versioned neutral checkpoint
+  schema; Google ADK runs through the same pieces while keeping its native
+  confirmation flow
+- portable sessions: every runtime stores the Micro-Agent transcript under the
+  plain session id (ADK keeps native events alongside), so changing
+  `MICRO_AGENT_RUNTIME` needs no conversion
+- a generated capability-gap table (`tools/runtime_capabilities.py`) that a test
+  keeps in sync with `docs/RUNTIMES.md`
 - custom async model/tool loop with overall/model/tool timeouts
 - bounded retry/fallback behavior with error classification, backoff, jitter,
   retry budgets, and circuit breaking
@@ -117,8 +138,8 @@ Implemented:
   MCP connections resolve declared credentials at connect time
 - caller-supplied request metadata is never used to construct caller, user,
   or workload identity; a source-level guard test enforces this boundary
-- executable bootstrap selects the custom loop by default or the Google ADK
-  adapter through `MICRO_AGENT_RUNTIME`; ADK session providers bridge SQLite,
+- executable bootstrap selects the custom loop by default, or the Google ADK
+  or LangGraph adapter, through `MICRO_AGENT_RUNTIME` and the runtime registry; ADK session providers bridge SQLite,
   Redis, and PostgreSQL state into durable event/state transcripts, while
   native model credentials are resolved into an owned GenAI client
 - declared MCP servers connect through the official SDK wire client at
@@ -486,7 +507,7 @@ Implemented:
   bounded snapshots, TTLs, and shared-worker integration coverage
 
 Known coupling: the two ADK adapters are composition layers and import many
-framework subpackages (`runtimes/adk` 14, `runtimes/google_adk` 13). That is
+framework subpackages (`runtimes/custom` 11, `runtimes/google_adk` 14, `runtimes/langgraph` 10). That is
 intentional for a runtime that wires every provider seam, and
 `tests/test_dependency_rules.py` caps it so it cannot grow unnoticed. Reducing
 it would mean introducing a facade over the provider seams, which is not

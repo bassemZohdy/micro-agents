@@ -134,7 +134,8 @@ Alternatively set `provider: openai-compatible`, `endpoint`, and a
 `credential_ref` in the model definition. The referenced environment variable
 must exist before startup.
 
-The package `runtimes.adk` is the lightweight custom loop. The genuine Google
+The package `runtimes.custom` is the lightweight custom loop (`runtimes.adk`
+remains a deprecated alias). The genuine Google
 ADK adapter is available separately through the optional `adk` extra:
 
 ```bash

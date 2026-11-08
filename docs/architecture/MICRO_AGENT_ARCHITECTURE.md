@@ -365,7 +365,7 @@ fallback model
 ```
 
 The runtime adapter is deliberately generic. Google ADK is the first external
-framework adapter. The `runtimes/adk` package is the custom built-in
+framework adapter. The `runtimes/custom` package is the custom built-in
 model/tool loop; the optional `runtimes/google_adk` package constructs and
 exercises supported ADK APIs through the same runtime-neutral SPI.
 

@@ -4,6 +4,97 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Session hand-over between the custom and Google ADK runtimes is now tested
+  over real Redis and PostgreSQL session providers (run by the `runtime-parity`
+  job, which gained Redis and PostgreSQL services).
+- CI: a `runtime-parity` job installs the `adk` and `langgraph` extras together
+  and runs the conformance, session-portability, guarantee and governed-boundary
+  suites plus `tools/runtime_capabilities.py --check`; the `adk` job also runs
+  the transcript tests.
+- Documentation for the runtime gap-filling layer: README overview, status and
+  standards updates, and a guide in `docs/RUNTIMES.md` for opting a third-party
+  adapter into the layer (loop-owning and framework-owned-loop paths).
+- The capability-gap table in `docs/RUNTIMES.md` is now generated from what each
+  runtime reports (`python tools/runtime_capabilities.py --write`), and a test
+  fails when it is stale. The report also lists the gaps the governance layer
+  fills and the gaps left open.
+- The runtime conformance suite now covers every uniform guarantee on the
+  custom, Google ADK and LangGraph runtimes, including tool argument validation,
+  idempotent side effects and tool audit/telemetry; no guarantee is left in the
+  `planned` state.
+- Stored sessions are portable across runtimes. The Google ADK session service
+  now stores the Micro-Agent transcript (`role`/`content`, tool calls and tool
+  results) under the plain session id and keeps ADK's native events in the
+  session metadata, so a session written under `custom`, `langgraph` or
+  `google-adk` is readable under any of them. Sessions saved by earlier versions
+  under the prefixed ADK layout are migrated on first read. ADK confirmation
+  requests are not part of the portable transcript.
+- Model-call and invocation resilience are now shared governance services.
+  `InvocationGovernor` (circuit breaker, deadline, retry with backoff, fallback
+  policy) moved out of the base runtime and now also wraps the Google ADK
+  runner, so the `retry`/`fallback` error policies and `circuit_breaker_*`
+  semantics apply to ADK as well; ADK retries restore the pre-attempt session so
+  they do not duplicate the user's turn. `GovernedModelProvider` applies the
+  deadline, model span, latency and token telemetry and streaming deltas for the
+  custom, LangGraph and ADK-bridge paths. ADK responses now include
+  `metadata["usage"]`, including for the native Gemini model. ADK tools inherit
+  the invocation deadline and side-effect state.
+- Checkpoint and resume are now services of the governance layer
+  (`GovernedRuntime._load_checkpoint` / `_save_checkpoint` / `_delete_checkpoint`)
+  stamped with a versioned neutral schema. The reference loop uses them
+  unchanged; the LangGraph runtime now supports `checkpoint_id` resume when a
+  `CheckpointStore` is configured and reports it as `provided`. Checkpoints are
+  portable between the custom and LangGraph runtimes, and checkpoints with an
+  unsupported schema or written by the Google ADK adapter are refused.
+  `RuntimeRegistration.provides` declares which capabilities a runtime gets this
+  way. The Google ADK adapter now includes pre-interruption tool results in a
+  resumed response, like the other runtimes.
+- The Google ADK adapter now runs every tool through the shared `ToolGovernor`
+  instead of its own copy of the policy, side-effect, idempotency and
+  execution logic. ADK keeps only its native confirmation handshake. Tool calls
+  gain argument validation, tool timeouts and tool spans, refused calls report
+  `denied`/`error` in `tool_results` like the other runtimes, and the shared
+  conformance cases for policy denial and approval pause/resume pass on ADK.
+- The LangGraph runtime now pauses for and resumes after human approvals through
+  the shared `ApprovalStore` (`approval_required`, `continuation_id`,
+  `approval_decision`), and `MICRO_AGENT_APPROVAL_ENDPOINT` is accepted for it.
+  The pause/resume logic moved into `GovernedRuntime` and is shared with the
+  reference loop; resumed tool results now always carry their `tool_call_id`.
+  The conformance suite gained policy-denial and approval pause/resume cases
+  for every runtime.
+- Added `ToolGovernor` and `GovernedTool` to `micro_agent.governance`: per-call tool
+  governance (argument validation, policy, side-effect policy, idempotent
+  operations, timeouts, telemetry, audit) now lives in one place, and a framework
+  that runs its own tool loop can receive wrapped tools it cannot bypass. A tool
+  that needs approval raises `ApprovalRequiredError`. The reference loop and
+  LangGraph run through the same governor; behavior is unchanged.
+- Extracted the framework-neutral governance (configuration, lifecycle,
+  retry/fallback/circuit breaking, deadlines, tool resolution and governed tool
+  execution) from the reference loop into `micro_agent.governance`
+  (`GovernedRuntime`, `GovernedRuntimeConfig`). The reference loop is now
+  `runtimes.custom.CustomRuntime`; `LangGraphRuntime` subclasses the neutral base
+  instead of the reference loop, so no adapter imports another. `runtimes.adk`
+  (`AdkRuntime`, `AdkRuntimeConfig`) remains a deprecated alias with no logic.
+  Behavior is unchanged.
+- Added `RuntimeCapabilities.provided`, `source()` and `sources()` so a runtime
+  can report each capability as `native`, `provided` (supplied by the
+  Micro-Agents gap-filling layer) or `none`; `supports()` and `as_dict()` are
+  unchanged. Added `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES`, the
+  tested list of behaviors every runtime must show identically, and ADR 0022.
+- Added a runtime registry (`RuntimeRegistry`, `RuntimeRegistration`,
+  `RuntimeBuildContext`, `register_runtime`, `micro_agent.runtimes` entry
+  points). The bootstrap now builds providers once and selects the runtime by
+  name instead of branching on Google ADK; built-ins live in
+  `micro_agent.config.runtimes`. See `docs/RUNTIMES.md` and ADR 0021.
+- Added an optional LangGraph runtime (`MICRO_AGENT_RUNTIME=langgraph`, extra
+  `langgraph`) that executes each invocation as a LangGraph `StateGraph` while
+  reusing the reference runtime's policy, idempotency, audit, telemetry and
+  retry semantics. It reports `checkpointing: false`, denies tools that require
+  approval, and rejects checkpoint/continuation requests.
+- Added a runtime conformance suite run against the custom, Google ADK and
+  LangGraph runtimes, a `langgraph` CI job, and a coupling cap for the new
+  adapter.
+
 ## [0.1.7] — 2026-11-08
 
 - Added a native Google Gemini model provider (`generateContent` and SSE

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from micro_agent.core import (
@@ -21,7 +21,7 @@ from micro_agent.core import (
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.health import DependencyProbe
 
-_RUNTIME_CAPABILITY_NAMES = frozenset(
+RUNTIME_CAPABILITY_NAMES = frozenset(
     {"streaming", "memory", "mcp", "a2a", "structured_output", "checkpointing"}
 )
 
@@ -32,7 +32,14 @@ _RUNTIME_CAPABILITY_NAMES = frozenset(
 
 @dataclass
 class RuntimeCapabilities:
-    """Capabilities reported by a runtime implementation."""
+    """Capabilities reported by a runtime implementation.
+
+    Each boolean says whether the capability is *effectively* available. A
+    capability named in ``provided`` is available only because the
+    Micro-Agents gap-filling layer supplies it on top of the framework; every
+    other true capability is ``native`` to the runtime. A provided capability
+    is always reported as true so existing ``supports()`` callers keep working.
+    """
 
     streaming: bool = False
     memory: bool = False
@@ -40,10 +47,29 @@ class RuntimeCapabilities:
     a2a: bool = False
     structured_output: bool = False
     checkpointing: bool = False
+    provided: frozenset[str] = field(default_factory=frozenset)
+
+    def __post_init__(self) -> None:
+        self.provided = frozenset(self.provided)
+        unknown = self.provided - RUNTIME_CAPABILITY_NAMES
+        if unknown:
+            raise ValueError(f"unknown provided capabilities: {', '.join(sorted(unknown))}")
+        for name in self.provided:
+            setattr(self, name, True)
 
     def supports(self, capability: str) -> bool:
         """Return whether this runtime advertises a named capability."""
-        return capability in _RUNTIME_CAPABILITY_NAMES and bool(getattr(self, capability, False))
+        return capability in RUNTIME_CAPABILITY_NAMES and bool(getattr(self, capability, False))
+
+    def source(self, capability: str) -> str:
+        """Return ``"native"``, ``"provided"`` or ``"none"`` for a capability."""
+        if not self.supports(capability):
+            return "none"
+        return "provided" if capability in self.provided else "native"
+
+    def with_provided(self, *capabilities: str) -> RuntimeCapabilities:
+        """Return a copy where ``capabilities`` are supplied by the gap-filling layer."""
+        return replace(self, provided=self.provided | frozenset(capabilities))
 
     def as_dict(self) -> dict[str, bool]:
         """Return the capability matrix as a serializable mapping."""
@@ -55,6 +81,10 @@ class RuntimeCapabilities:
             "structured_output": self.structured_output,
             "checkpointing": self.checkpointing,
         }
+
+    def sources(self) -> dict[str, str]:
+        """Return each capability's source: ``native``, ``provided`` or ``none``."""
+        return {name: self.source(name) for name in self.as_dict()}
 
 
 # ---------------------------------------------------------------------------
