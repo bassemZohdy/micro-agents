@@ -4,6 +4,10 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- The runtime conformance suite now covers every uniform guarantee on the
+  custom, Google ADK and LangGraph runtimes, including tool argument validation,
+  idempotent side effects and tool audit/telemetry; no guarantee is left in the
+  `planned` state.
 - Stored sessions are portable across runtimes. The Google ADK session service
   now stores the Micro-Agent transcript (`role`/`content`, tool calls and tool
   results) under the plain session id and keeps ADK's native events in the

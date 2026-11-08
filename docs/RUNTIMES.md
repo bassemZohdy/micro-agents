@@ -155,10 +155,13 @@ the custom and LangGraph runtimes; use distinct ids per agent.
 ## Proving a runtime conforms
 
 `tests/test_runtime_conformance.py` runs one contract against every runtime:
-capability matrix, identity without framework types, a simple invocation, session
-history replayed to the model, a full tool loop, model failure surfacing, and
-unhealthy-model startup failure, model retry/fallback/circuit-breaker, the
-invocation deadline and token usage. `tests/test_session_portability.py` writes a
+every item of the uniform-guarantee list (`micro_agent.runtime.guarantees`):
+capability matrix, identity without framework types, invocation, session replay,
+the tool loop, model failure, startup health, policy denial, argument
+validation, idempotent side effects, approval pause/resume, audit and telemetry,
+checkpoint/resume, model retry/fallback/circuit-breaker, the invocation deadline
+and token usage. A capability reported `provided` runs the same cases as a
+`native` one. `tests/test_session_portability.py` writes a
 session under every runtime and reads it under every other. A new runtime joins
 by adding one factory to those files.
 

@@ -544,3 +544,114 @@ async def test_token_usage_is_reported_and_recorded(make_runtime):
     }
     assert telemetry.metrics.get_metrics("model_tokens_total")
     assert telemetry.metrics.get_metrics("model_latency_ms")
+
+
+# ---------------------------------------------------------------------------
+# Tool boundary: validation, idempotency, audit and telemetry
+# ---------------------------------------------------------------------------
+
+
+class _AmountTool(_ChargeTool):
+    """A side-effecting tool whose schema requires ``amount``."""
+
+    @property
+    def input_schema(self) -> ToolInputSchema:
+        return ToolInputSchema(
+            parameters={
+                "type": "object",
+                "properties": {
+                    "amount": {"type": "integer"},
+                    "idempotency_key": {"type": "string"},
+                },
+                "required": ["amount"],
+            }
+        )
+
+
+class _RequestsOncePerInvocation(FakeModelProvider):
+    """Requests ``tool`` with ``arguments`` on every first model call of an invocation."""
+
+    def __init__(self, tool: str, arguments: dict) -> None:
+        super().__init__(FakeModelConfig(response="finished"))
+        self.tool, self.arguments, self.calls = tool, arguments, 0
+
+    async def generate(self, config, messages, tools=None):
+        self.calls += 1
+        if self.calls % 2 == 1:
+            return ModelResponse(tool_requests=[{"name": self.tool, "arguments": self.arguments}])
+        return ModelResponse(content="finished")
+
+
+@pytest.mark.asyncio
+async def test_invalid_tool_arguments_are_rejected_before_the_tool_runs(make_runtime):
+    tool = _AmountTool()
+    runtime = make_runtime(
+        _RequestsThenAnswers("charge"),  # asks for the tool with no arguments at all
+        tool_registry={"charge": tool},
+    )
+    response = await _run(runtime, _definition(tools=True, tool="charge"), AgentRequest(input={}))
+    assert response.status == "success"
+    assert tool.calls == 0
+    (result,) = response.output["tool_results"]
+    assert "missing required argument 'amount'" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_a_side_effect_runs_once_per_idempotency_key(make_runtime):
+    from micro_agent.security import OperationRegistry
+
+    tool = _AmountTool()
+    runtime = make_runtime(
+        _RequestsOncePerInvocation("charge", {"amount": 5, "idempotency_key": "order-1"}),
+        tool_registry={"charge": tool},
+        operation_registry=OperationRegistry(),
+    )
+    agent = await runtime.create(_definition(tools=True, tool="charge"))
+    try:
+        await runtime.start(agent)
+        first = await runtime.invoke(agent, AgentRequest(input={"n": 1}))
+        second = await runtime.invoke(agent, AgentRequest(input={"n": 2}))
+    finally:
+        await runtime.shutdown(agent)
+        await runtime.close()
+    assert first.status == second.status == "success"
+    assert tool.calls == 1  # the second invocation reused the recorded operation
+
+
+class _CollectingAudit:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict]] = []
+
+    def record(self, event: str, **fields) -> None:
+        self.events.append((event, fields))
+
+
+@pytest.mark.asyncio
+async def test_tool_calls_emit_the_same_audit_and_telemetry(make_runtime):
+    from micro_agent.observability import Telemetry
+
+    telemetry, audit = Telemetry(), _CollectingAudit()
+    allowed = _ChargeTool("lookup", side_effect="read_only")
+    runtime = make_runtime(
+        _RequestsThenAnswers("lookup"),
+        telemetry=telemetry,
+        tool_registry={"lookup": allowed},
+    )
+    await _run(runtime, _definition(tools=True, tool="lookup"), AgentRequest(input={}))
+    assert allowed.calls == 1
+    assert telemetry.metrics.get_metrics("tool_calls_total")
+    assert telemetry.metrics.get_metrics("tool_latency_ms")
+
+    denied = _ChargeTool("charge")
+    runtime = make_runtime(
+        _RequestsThenAnswers("charge"),
+        telemetry=telemetry,
+        audit=audit,
+        policy=AgentPolicy(denied_tools=["charge"]),
+        tool_registry={"charge": denied},
+    )
+    await _run(runtime, _definition(tools=True, tool="charge"), AgentRequest(input={}))
+    assert denied.calls == 0
+    assert telemetry.metrics.get_metrics("policy_denials_total")
+    (event, fields) = next(item for item in audit.events if item[0] == "policy.tool_denied")
+    assert fields["tool"] == "charge"

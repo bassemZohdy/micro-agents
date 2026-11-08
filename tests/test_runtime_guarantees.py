@@ -69,8 +69,12 @@ def test_unknown_provided_capability_is_rejected():
 def test_guarantee_ids_are_unique_and_statuses_consistent():
     ids = [g.id for g in UNIFORM_GUARANTEES]
     assert len(ids) == len(set(ids))
-    assert {g.status for g in UNIFORM_GUARANTEES} == {"covered", "planned"}
     assert len(guarantees_by_status("covered")) + len(guarantees_by_status("planned")) == len(ids)
+
+
+def test_every_guarantee_is_covered_by_conformance_cases():
+    """The plan is complete: no guarantee may remain merely planned."""
+    assert [g.id for g in guarantees_by_status("planned")] == []
 
 
 def test_guarantee_validates_its_status_fields():

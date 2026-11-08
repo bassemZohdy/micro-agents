@@ -90,14 +90,14 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "argument-validation",
         "Tool arguments are validated against the tool schema before execution.",
-        "planned",
-        phase=2,
+        "covered",
+        ("test_invalid_tool_arguments_are_rejected_before_the_tool_runs",),
     ),
     Guarantee(
         "idempotent-operations",
         "Side-effect operations run at most once per operation key, even after retry or resume.",
-        "planned",
-        phase=2,
+        "covered",
+        ("test_a_side_effect_runs_once_per_idempotency_key",),
     ),
     Guarantee(
         "approval-pause-resume",
@@ -112,8 +112,8 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "audit-telemetry",
         "Tool and model calls emit the same audit and telemetry events.",
-        "planned",
-        phase=2,
+        "covered",
+        ("test_tool_calls_emit_the_same_audit_and_telemetry",),
     ),
     Guarantee(
         "checkpoint-resume",

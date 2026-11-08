@@ -136,7 +136,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 5 — Conformance and documentation
 
-- [ ] Grow `tests/test_runtime_conformance.py` from 7 to a full matrix covering
+- [x] Grow `tests/test_runtime_conformance.py` from 7 to a full matrix covering
       every item in the uniform-guarantees list; a capability reported `provided`
       must pass the same cases as `native`.
 - [ ] Add a "capability gaps" report command or doc table generated from
