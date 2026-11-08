@@ -23,7 +23,7 @@ from micro_agent.core import (
     ContinuationNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
-from micro_agent.governance.runtime import (
+from micro_agent.governance import (
     MAX_SESSION_HISTORY_MESSAGES,
     ApprovalPausedError,
     GovernedRuntime,

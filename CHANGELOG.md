@@ -4,6 +4,12 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Added `ToolGovernor` and `GovernedTool` to `micro_agent.governance`: per-call tool
+  governance (argument validation, policy, side-effect policy, idempotent
+  operations, timeouts, telemetry, audit) now lives in one place, and a framework
+  that runs its own tool loop can receive wrapped tools it cannot bypass. A tool
+  that needs approval raises `ApprovalRequiredError`. The reference loop and
+  LangGraph run through the same governor; behavior is unchanged.
 - Extracted the framework-neutral governance (configuration, lifecycle,
   retry/fallback/circuit breaking, deadlines, tool resolution and governed tool
   execution) from the reference loop into `micro_agent.governance`

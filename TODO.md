@@ -86,7 +86,7 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 2 — Governed tools (works on any framework)
 
-- [ ] Add `GovernedTool`: wraps a `Tool` so policy check, argument validation,
+- [x] Add `GovernedTool`: wraps a `Tool` so policy check, argument validation,
       idempotent operation handling, audit and telemetry happen at the tool
       boundary no matter which framework invokes it. Frameworks receive wrapped
       tools; they cannot bypass governance.

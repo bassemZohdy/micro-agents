@@ -41,7 +41,7 @@ from uuid import uuid4
 
 from micro_agent.core import AgentCapabilities, AgentRequest, AgentResponse
 from micro_agent.definition import MicroAgentDefinition
-from micro_agent.governance.runtime import (
+from micro_agent.governance import (
     MAX_SESSION_HISTORY_MESSAGES,
     GovernedRuntime,
     GovernedRuntimeConfig,
