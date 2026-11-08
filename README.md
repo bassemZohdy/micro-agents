@@ -24,7 +24,9 @@ operated independently.
 - YAML definition loader and runtime-neutral core contracts
 - a small `AgentRuntime` service-provider interface
 - a custom reference agent loop currently located under `runtimes/adk`
-- an optional Google ADK adapter under `runtimes/google_adk`
+- a runtime registry that selects the runtime by name, with optional Google ADK
+  (`runtimes/google_adk`) and LangGraph (`runtimes/langgraph`) adapters; see
+  [docs/RUNTIMES.md](docs/RUNTIMES.md)
 - fake and OpenAI-compatible model-provider implementations
 - tool, MCP, session, memory, idempotency, knowledge, policy, health, and
   telemetry seams (including SQLite durability and optional Redis-backed
@@ -67,14 +69,17 @@ Runtime SPI
         |
         +-- Optional Google ADK adapter
         |
-        `-- Future adapters only when justified
+        +-- Optional LangGraph adapter (StateGraph)
+        |
+        `-- Third-party runtimes via the registry / entry points
 ```
 
 The runtime-neutral contract is intentional. The custom loop remains the
-lightweight default, while the optional `google-adk` extra provides a genuine
-ADK adapter without leaking ADK types through the SPI. The executable bootstrap
-constructs the built-in providers and selects either runtime from deployment
-configuration; unsupported external providers still fail fast.
+lightweight default, while the optional `google-adk` and `langgraph` extras
+provide genuine framework adapters without leaking framework types through the
+SPI. The executable bootstrap constructs the built-in providers once and hands
+them to the runtime selected by name from the runtime registry; unsupported
+external providers still fail fast.
 
 ## Definition example
 
@@ -165,7 +170,8 @@ fallback for a bare model reference.
 
 Runtime selection is deployment configuration. The custom loop is the default;
 set `MICRO_AGENT_RUNTIME=google-adk` (with the optional `adk` extra installed)
-to select the Google ADK adapter. Memory, policy, MCP, knowledge, credentials,
+to select the Google ADK adapter, or `MICRO_AGENT_RUNTIME=langgraph` (with the
+`langgraph` extra) for the LangGraph adapter. Memory, policy, MCP, knowledge, credentials,
 and telemetry mappings are validated at bootstrap; external session bindings
 use the runtime-neutral session-provider bridge and fail before startup when
 their endpoint or optional dependency is invalid. Model credential references are resolved

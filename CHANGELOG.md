@@ -4,6 +4,20 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Added a runtime registry (`RuntimeRegistry`, `RuntimeRegistration`,
+  `RuntimeBuildContext`, `register_runtime`, `micro_agent.runtimes` entry
+  points). The bootstrap now builds providers once and selects the runtime by
+  name instead of branching on Google ADK; built-ins live in
+  `micro_agent.config.runtimes`. See `docs/RUNTIMES.md` and ADR 0021.
+- Added an optional LangGraph runtime (`MICRO_AGENT_RUNTIME=langgraph`, extra
+  `langgraph`) that executes each invocation as a LangGraph `StateGraph` while
+  reusing the reference runtime's policy, idempotency, audit, telemetry and
+  retry semantics. It reports `checkpointing: false`, denies tools that require
+  approval, and rejects checkpoint/continuation requests.
+- Added a runtime conformance suite run against the custom, Google ADK and
+  LangGraph runtimes, a `langgraph` CI job, and a coupling cap for the new
+  adapter.
+
 ## [0.1.7] — 2026-11-08
 
 - Added a native Google Gemini model provider (`generateContent` and SSE

@@ -24,7 +24,7 @@ corresponding provider.
 
 | Variable | Resolved field | Bootstrap status |
 |---|---|---|
-| `MICRO_AGENT_RUNTIME` | `runtime` | wired; `custom` (default) or `google-adk` selects the runtime implementation |
+| `MICRO_AGENT_RUNTIME` | `runtime` | wired; `custom` (default), `google-adk`, `langgraph`, or a registered third-party runtime selects the implementation (see [Runtimes](RUNTIMES.md)) |
 | `MICRO_AGENT_MODEL_ENDPOINT` | `model_endpoint` | wired; selects OpenAI-compatible provider when set |
 | `MICRO_AGENT_MODEL_ID` | `model_id` | wired; overrides the provider model ID without changing the logical definition ref |
 | `MICRO_AGENT_MODEL_API_KEY` | `model_api_key` | wired; kept in provider memory only |
@@ -534,8 +534,12 @@ python -m pip install -e ".[dev,adk]"
 export MICRO_AGENT_RUNTIME=google-adk
 ```
 
-The selector accepts `custom` (also `adk` or `reference`) and `google-adk`
-(also `google_adk`). The adapter supports the native Google model path and
+The selector accepts `custom` (also `adk` or `reference`), `google-adk`
+(also `google_adk`) and `langgraph`, plus any runtime registered through the
+[runtime registry](RUNTIMES.md). `langgraph` (install the `langgraph` extra)
+runs the same definition on a LangGraph `StateGraph`; it does not support
+checkpoints or approval continuations and rejects
+`MICRO_AGENT_APPROVAL_ENDPOINT`. The adapter supports the native Google model path and
 injected fake/OpenAI-compatible/Anthropic model providers. Declared services map onto
 ADK-native constructs: memory bridges into an ADK memory service (auto-store
 and search included), injected policy is enforced around every tool execution

@@ -46,6 +46,9 @@ docs = [
 adk = [
     "google-adk==2.8.0",
 ]
+langgraph = [
+    "langgraph==1.2.20",
+]
 otel = [
     "opentelemetry-api>=1.27,<2.0",
     "opentelemetry-sdk>=1.27,<2.0",
@@ -97,7 +100,7 @@ explicit_package_bases = true
 mypy_path = "."
 
 [[tool.mypy.overrides]]
-module = ["google.*"]
+module = ["google.*", "langgraph.*", "langchain_core.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -107,6 +110,7 @@ markers = [
     "integration: integration tests (real network service, MCP wiring)",
     "e2e: end-to-end tests (booted services, full invoke paths)",
     "adk: Google ADK adapter tests (requires the optional adk extra)",
+    "langgraph: LangGraph adapter tests (requires the optional langgraph extra)",
     "otel: OpenTelemetry integration tests (requires the optional otel extra)",
     "postgres: PostgreSQL state provider tests (requires MICRO_AGENT_TEST_PG_DSN)",
 ]
@@ -116,6 +120,7 @@ source = ["micro_agent", "runtimes"]
 omit = [
     "micro_agent/definition/schema.py",
     "runtimes/google_adk/*",
+    "runtimes/langgraph/*",
 ]
 
 [tool.coverage.report]

@@ -102,6 +102,18 @@ Python package publication to PyPI is outside the current distribution plan.
       continuations live in the durable ADK session transcript, and bootstrap
       fails fast if `MICRO_AGENT_APPROVAL_ENDPOINT` is combined with the ADK
       runtime. See ADR 0020.
+- [x] Put an abstraction layer between the bootstrap and runtimes: a runtime
+      registry (`RuntimeRegistration`, `RuntimeBuildContext`, entry-point group
+      `micro_agent.runtimes`) replaces the hard-coded Google ADK branch, so
+      Google ADK is one adapter among several. See
+      [Runtimes](docs/RUNTIMES.md) and
+      [ADR 0021](docs/adr/0021-runtime-registry-and-langgraph-adapter.md).
+- [x] Add a second framework adapter, LangGraph (`runtimes/langgraph`), driven
+      by a real `StateGraph`, plus a conformance suite run against the custom,
+      Google ADK and LangGraph runtimes.
+- [ ] Optional follow-ups for the LangGraph adapter: map LangGraph's native
+      checkpointer onto `CheckpointStore`, and support approval continuations
+      via LangGraph interrupts. Not claimed today.
 - [x] Add a bundled native tool beyond `echo`: the bounded, side-effect-free
       `json_parse` utility is available for portable structured-data flows;
       domain tools still require installed plugins or programmatic injection.

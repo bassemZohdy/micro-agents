@@ -211,7 +211,11 @@ def test_optional_backends_import_without_their_libraries(package):
 
 # Runtime adapters are composition layers; cap their fan-out so it cannot grow
 # unnoticed. Raising a limit is a deliberate, reviewed decision.
-ADAPTER_SUBPACKAGE_LIMITS = {"runtimes.adk": 14, "runtimes.google_adk": 13}
+ADAPTER_SUBPACKAGE_LIMITS = {
+    "runtimes.adk": 14,
+    "runtimes.google_adk": 13,
+    "runtimes.langgraph": 9,
+}
 
 
 @pytest.mark.parametrize(("adapter", "limit"), sorted(ADAPTER_SUBPACKAGE_LIMITS.items()))

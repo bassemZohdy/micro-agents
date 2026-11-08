@@ -12,7 +12,7 @@ readiness or protocol compliance.
 | Check | Result | Evidence/qualification |
 |---|---|---|
 | Ruff lint and format | Pass | local and remote CI |
-| Tests | 1059 collected | 952 passed and 2 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.2% line coverage (gate: 80%); the 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. With real Redis 7 and PostgreSQL 16 services the whole suite passes (1057 passed, 2 skipped) at 91.3% coverage |
+| Tests | 1097 collected on a base install | 975 passed and 17 skipped in the default selection (`not integration`, `not e2e`, and `not otel`) at 87.3% line coverage (gate: 80%); the skips are the Google ADK and LangGraph adapter tests, which run in their own CI jobs with the optional extras (1132 passed with both extras and no Redis; the Redis-dependent tests fail without a service). The 105 integration/e2e/OTel/PostgreSQL tests are deselected for their dedicated CI jobs. The last full run with real Redis 7 and PostgreSQL 16 services (before the runtime registry) passed 1057 tests at 91.3% coverage and has not been repeated since |
 | Dependency rules | Pass | `tests/test_dependency_rules.py` enforces that `micro_agent` never imports `cloud`, only the `micro_agent.config` composition root imports `runtimes`, subpackage import-time graphs are acyclic, and optional libraries (Redis, asyncpg, MCP, A2A, PyJWT, boto3, Google ADK, OpenTelemetry) are never imported unguarded at module level |
 | Schema drift | Pass | generated schema matches the tracked file |
 | Container smoke | Pass | fake-provider startup and three HTTP endpoints |
@@ -67,7 +67,15 @@ Gaps:
 
 Implemented:
 
-- small runtime-neutral `AgentRuntime` SPI
+- small runtime-neutral `AgentRuntime` SPI and a runtime registry
+  (`RuntimeRegistration`, `RuntimeBuildContext`, `micro_agent.runtimes`
+  entry points) through which the bootstrap selects any runtime by name
+- optional `runtimes/langgraph` adapter whose invocation is a LangGraph
+  `StateGraph` (`prepare → model → tools* → finalize`), reusing the reference
+  runtime's policy, idempotency, audit, telemetry and retry semantics; it
+  reports `checkpointing: false` and denies tools that need approval
+- a runtime conformance suite that runs one contract against the custom,
+  Google ADK and LangGraph runtimes
 - custom async model/tool loop with overall/model/tool timeouts
 - bounded retry/fallback behavior with error classification, backoff, jitter,
   retry budgets, and circuit breaking
@@ -117,8 +125,8 @@ Implemented:
   MCP connections resolve declared credentials at connect time
 - caller-supplied request metadata is never used to construct caller, user,
   or workload identity; a source-level guard test enforces this boundary
-- executable bootstrap selects the custom loop by default or the Google ADK
-  adapter through `MICRO_AGENT_RUNTIME`; ADK session providers bridge SQLite,
+- executable bootstrap selects the custom loop by default, or the Google ADK
+  or LangGraph adapter, through `MICRO_AGENT_RUNTIME` and the runtime registry; ADK session providers bridge SQLite,
   Redis, and PostgreSQL state into durable event/state transcripts, while
   native model credentials are resolved into an owned GenAI client
 - declared MCP servers connect through the official SDK wire client at

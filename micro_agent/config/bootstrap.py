@@ -5,7 +5,8 @@ provider objects consumed by the selected runtime. Provider and runtime
 selection are explicit: an endpoint (or an OpenAI-compatible provider name)
 selects :class:`OpenAICompatProvider`; ``anthropic`` selects the native
 Messages adapter; ``fake`` selects the deterministic test provider;
-``MICRO_AGENT_RUNTIME=google-adk`` selects the optional Google ADK adapter;
+``MICRO_AGENT_RUNTIME`` selects a runtime from the runtime registry
+(``custom``, ``google-adk``, ``langgraph``, or a registered third party);
 unsupported or incomplete configurations fail before service start.
 
 Constructed from configuration:
@@ -35,7 +36,6 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from micro_agent.checkpoint import CheckpointStore, InMemoryCheckpointStore, SessionCheckpointStore
 from micro_agent.config.config import (
     EnvironmentConfig,
     EnvironmentOverlay,
@@ -44,6 +44,7 @@ from micro_agent.config.config import (
     resolve_config,
     validate_config,
 )
+from micro_agent.config.runtimes import register_builtin_runtimes
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.knowledge import (
     HttpKnowledgeRetriever,
@@ -83,7 +84,14 @@ from micro_agent.observability import (
     Telemetry,
 )
 from micro_agent.observability.audit import AuditSink
-from micro_agent.runtime import AgentRuntime
+from micro_agent.runtime import (
+    AgentRuntime,
+    RuntimeBuildContext,
+    RuntimeRegistration,
+    UnknownRuntimeError,
+    get_runtime_registration,
+    registered_runtimes,
+)
 from micro_agent.security import (
     AgentPolicy,
     ApprovalStore,
@@ -105,7 +113,6 @@ from micro_agent.session import (
     SqliteSessionProvider,
 )
 from micro_agent.tools import Tool, builtin_tool_registry
-from runtimes.adk import AdkRuntime, AdkRuntimeConfig
 
 
 class BootstrapError(RuntimeError):
@@ -171,7 +178,6 @@ def build_runtime(
         environment,
         model_catalog=model_catalog,
     )
-    runtime_name = _runtime_name(resolved.runtime)
 
     telemetry = telemetry or Telemetry.from_environment()
     telemetry.logger.set_level(resolved.log_level)
@@ -195,107 +201,51 @@ def build_runtime(
     knowledge_provider = _build_knowledge_provider(definition, knowledge_retriever, resolved)
     audit_sink = build_audit_sink(resolved)
 
+    registration = _runtime_registration(resolved.runtime)
+    if resolved.approval_endpoint and not registration.approval_store:
+        raise BootstrapError(
+            registration.approval_note
+            or f"{registration.name} runtime does not map MICRO_AGENT_APPROVAL_ENDPOINT"
+        )
     provider = _build_model_provider(
         resolved,
         fake_model_config=fake_model_config,
-        allow_native_google=runtime_name == "google-adk",
+        allow_native_google=registration.native_model,
         telemetry=telemetry,
     )
-    if runtime_name == "google-adk":
-        _validate_google_adk_bindings(definition, resolved)
-        session_provider = _build_session_provider(definition, resolved)
-        memory_provider = _build_memory_provider(definition, resolved)
-        operation_registry = _build_operation_registry(resolved)
-        checkpoint_store: CheckpointStore | None = None
-        if session_provider is not None:
-            checkpoint_store = SessionCheckpointStore(
-                session_provider,
-                ttl_seconds=definition.spec.dependencies.session.ttl_seconds,
-            )
-        elif definition.spec.dependencies.session.persistence == "memory":
-            checkpoint_store = InMemoryCheckpointStore()
-        from runtimes.google_adk import GoogleAdkRuntime, GoogleAdkRuntimeConfig
-
-        runtime: AgentRuntime = GoogleAdkRuntime(
-            GoogleAdkRuntimeConfig(
-                model_provider=provider,
-                model_api_key=resolved.model_api_key,
-                memory_provider=memory_provider,
-                memory_policy=MemoryPolicy() if memory_provider is not None else None,
-                session_provider=session_provider,
-                operation_registry=operation_registry,
-                checkpoint_store=checkpoint_store,
-                knowledge_provider=knowledge_provider,
-                mcp_manager=mcp,
-                policy=effective_policy,
-                audit=audit_sink,
-                telemetry=telemetry,
-                tool_registry=tool_registry,
-            )
-        )
-    else:
-        session_provider = _build_session_provider(definition, resolved)
-        checkpoint_store = (
-            SessionCheckpointStore(
-                session_provider,
-                ttl_seconds=definition.spec.dependencies.session.ttl_seconds,
-            )
-            if session_provider is not None
+    context = RuntimeBuildContext(
+        definition=definition,
+        model_provider=provider,
+        model_api_key=resolved.model_api_key,
+        session_provider=_build_session_provider(definition, resolved),
+        memory_provider=_build_memory_provider(definition, resolved),
+        operation_registry=_build_operation_registry(resolved),
+        approval_store=(
+            (approval_store or _build_approval_store(resolved))
+            if registration.approval_store
             else None
-        )
-        memory_provider = _build_memory_provider(definition, resolved)
-        operation_registry = _build_operation_registry(resolved)
-        effective_approval_store = approval_store or _build_approval_store(resolved)
-        runtime = AdkRuntime(
-            AdkRuntimeConfig(
-                model_provider=provider,
-                session_provider=session_provider,
-                checkpoint_store=checkpoint_store,
-                memory_provider=memory_provider,
-                memory_policy=MemoryPolicy() if memory_provider is not None else None,
-                operation_registry=operation_registry,
-                approval_store=effective_approval_store,
-                knowledge_provider=knowledge_provider,
-                mcp_manager=mcp,
-                policy=effective_policy,
-                audit=audit_sink,
-                telemetry=telemetry,
-                tool_registry=tool_registry,
-            )
-        )
+        ),
+        knowledge_provider=knowledge_provider,
+        mcp_manager=mcp,
+        policy=effective_policy,
+        audit=audit_sink,
+        telemetry=telemetry,
+        tool_registry=tool_registry,
+    )
+    runtime = registration.factory(context)
     return RuntimeBootstrap(runtime=runtime, resolved=resolved)
 
 
-_RUNTIME_ALIASES = {
-    "adk": "custom",
-    "custom": "custom",
-    "reference": "custom",
-    "google-adk": "google-adk",
-    "google_adk": "google-adk",
-    "googleadk": "google-adk",
-}
-
-
-def _runtime_name(value: str | None) -> str:
-    """Normalize the deployment-selected runtime name."""
-    normalized = (value or "custom").strip().lower()
+def _runtime_registration(value: str | None) -> RuntimeRegistration:
+    """Resolve the deployment-selected runtime through the runtime registry."""
+    register_builtin_runtimes()
     try:
-        return _RUNTIME_ALIASES[normalized]
-    except KeyError as exc:
-        supported = ", ".join(sorted(set(_RUNTIME_ALIASES.values())))
+        return get_runtime_registration(value or "custom")
+    except UnknownRuntimeError as exc:
+        supported = ", ".join(registered_runtimes())
         raise BootstrapError(
             f"Unsupported runtime '{value}'. Supported runtimes: {supported}"
         ) from exc
-
-
-def _validate_google_adk_bindings(definition: MicroAgentDefinition, config: ResolvedConfig) -> None:
-    """Reject only bindings that remain outside the ADK adapter contract."""
-    del definition
-    if config.approval_endpoint:
-        raise BootstrapError(
-            "Google ADK runtime uses native approval continuations and does not map "
-            "MICRO_AGENT_APPROVAL_ENDPOINT; use the custom runtime for durable approvals"
-        )
 
 
 def _resolve_definition_config(

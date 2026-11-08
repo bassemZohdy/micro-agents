@@ -13,6 +13,7 @@ nav:
   - Getting Started: GETTING_STARTED.md
   - Implementation Status: IMPLEMENTATION_STATUS.md
   - Configuration: CONFIGURATION.md
+  - Runtimes: RUNTIMES.md
   - Checkpointing: CHECKPOINTING.md
   - Performance: PERFORMANCE.md
   - Observability: OBSERVABILITY.md
@@ -58,3 +59,4 @@ nav:
       - 0018 Cloud repository boundary: adr/0018-cloud-repository-boundary.md
       - 0019 Container-first distribution: adr/0019-container-first-distribution.md
       - 0020 Native model providers and ADK approval state: adr/0020-native-model-providers-and-adk-approval-state.md
+      - 0021 Runtime registry and LangGraph adapter: adr/0021-runtime-registry-and-langgraph-adapter.md
