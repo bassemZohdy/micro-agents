@@ -74,12 +74,19 @@ def make_runtime(request):
 class _ChargeTool(Tool):
     """A side-effecting tool that records how often it really ran."""
 
-    def __init__(self) -> None:
+    def __init__(self, name: str = "charge", side_effect: str = "unsafe") -> None:
         self.calls = 0
+        self._name = name
+        self._side_effect = side_effect
 
     @property
     def metadata(self) -> ToolMetadata:
-        return ToolMetadata(name="charge", description="Charge.", source="native")
+        return ToolMetadata(
+            name=self._name,
+            description="Counts executions.",
+            source="native",
+            side_effect=self._side_effect,  # type: ignore[arg-type]
+        )
 
     @property
     def input_schema(self) -> ToolInputSchema:
@@ -344,5 +351,73 @@ async def test_an_unknown_continuation_is_rejected(make_runtime):
                     approval_decision="approve",
                 ),
             )
+    finally:
+        await runtime.close()
+
+
+class _FailsOnceAfterTheToolRound(FakeModelProvider):
+    """Calls ``lookup``, then fails the follow-up model call exactly once."""
+
+    def __init__(self) -> None:
+        super().__init__(FakeModelConfig(response="resumed answer"))
+        self.calls = 0
+
+    async def generate(self, config, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            return ModelResponse(tool_requests=[{"name": "lookup", "arguments": {}}])
+        if self.calls == 2:
+            raise RuntimeError("model went away")
+        return ModelResponse(content="resumed answer")
+
+
+@pytest.mark.asyncio
+async def test_an_interrupted_invocation_resumes_from_its_checkpoint(make_runtime):
+    from micro_agent.checkpoint import InMemoryCheckpointStore
+
+    lookup = _ChargeTool("lookup", side_effect="read_only")
+    provider = _FailsOnceAfterTheToolRound()
+    sessions = InMemorySessionProvider()
+    runtime = make_runtime(
+        provider,
+        session_provider=sessions,
+        checkpoint_store=InMemoryCheckpointStore(),
+        tool_registry={"lookup": lookup},
+    )
+    agent = await runtime.create(_definition(tools=True, tool="lookup"))
+    try:
+        await runtime.start(agent)
+        with pytest.raises(RuntimeError, match="model went away"):
+            await runtime.invoke(
+                agent, AgentRequest(input={"q": 1}, session_id="ckpt-1", request_id="req-1")
+            )
+        assert lookup.calls == 1
+        resumed = await runtime.invoke(
+            agent, AgentRequest(input={}, session_id="ckpt-1", checkpoint_id="req-1")
+        )
+    finally:
+        await runtime.close()
+    assert resumed.status == "success"
+    assert resumed.output["content"] == "resumed answer"
+    assert lookup.calls == 1  # the completed tool round was not repeated
+    assert [r["tool"] for r in resumed.output["tool_results"]] == ["lookup"]
+    assert resumed.metadata["resumed_from_checkpoint"] == "req-1"
+
+
+@pytest.mark.asyncio
+async def test_resuming_an_unknown_checkpoint_is_rejected(make_runtime):
+    from micro_agent.checkpoint import InMemoryCheckpointStore
+    from micro_agent.core import CheckpointNotFoundError
+
+    runtime = make_runtime(
+        FakeModelProvider(),
+        session_provider=InMemorySessionProvider(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    agent = await runtime.create(_definition())
+    try:
+        await runtime.start(agent)
+        with pytest.raises(CheckpointNotFoundError):
+            await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="never-saved"))
     finally:
         await runtime.close()

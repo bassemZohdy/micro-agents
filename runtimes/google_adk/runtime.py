@@ -759,7 +759,12 @@ class GoogleAdkRuntime(AgentRuntime):
             return AgentResponse(
                 output={
                     "content": output,
-                    "tool_results": _tool_results_from_events(events),
+                    "tool_results": [
+                        # Tool rounds completed before an interruption belong to
+                        # the same logical invocation.
+                        *(checkpoint.all_tool_results if checkpoint is not None else []),
+                        *_tool_results_from_events(events),
+                    ],
                 },
                 request_id=request.request_id,
                 session_id=session_id,

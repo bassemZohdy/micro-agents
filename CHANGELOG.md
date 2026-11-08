@@ -4,6 +4,16 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Checkpoint and resume are now services of the governance layer
+  (`GovernedRuntime._load_checkpoint` / `_save_checkpoint` / `_delete_checkpoint`)
+  stamped with a versioned neutral schema. The reference loop uses them
+  unchanged; the LangGraph runtime now supports `checkpoint_id` resume when a
+  `CheckpointStore` is configured and reports it as `provided`. Checkpoints are
+  portable between the custom and LangGraph runtimes, and checkpoints with an
+  unsupported schema or written by the Google ADK adapter are refused.
+  `RuntimeRegistration.provides` declares which capabilities a runtime gets this
+  way. The Google ADK adapter now includes pre-interruption tool results in a
+  resumed response, like the other runtimes.
 - The Google ADK adapter now runs every tool through the shared `ToolGovernor`
   instead of its own copy of the policy, side-effect, idempotency and
   execution logic. ADK keeps only its native confirmation handshake. Tool calls

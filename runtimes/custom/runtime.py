@@ -15,11 +15,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
-from micro_agent.checkpoint import CheckpointRecord
 from micro_agent.core import (
     AgentRequest,
     AgentResponse,
-    CheckpointNotFoundError,
 )
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.governance import (
@@ -48,7 +46,7 @@ from micro_agent.security import (
     get_invocation_identity,
 )
 from micro_agent.session import SessionProvider
-from micro_agent.tools import Tool, normalize_tool_side_effect
+from micro_agent.tools import Tool
 
 
 class CustomRuntime(GovernedRuntime):
@@ -70,7 +68,6 @@ class CustomRuntime(GovernedRuntime):
         skills = agent._internal["skills"]
         session_provider: SessionProvider | None = agent._internal["session_provider"]
         session_ttl: int | None = agent._internal["session_ttl"]
-        checkpoint_store = self._config.checkpoint_store
         memory_provider: MemoryProvider | None = agent._internal["memory_provider"]
         memory_scope: str = agent._internal["memory_scope"]
 
@@ -85,17 +82,7 @@ class CustomRuntime(GovernedRuntime):
             else None
         )
 
-        checkpoint: CheckpointRecord | None = None
-        if request.checkpoint_id is not None:
-            if checkpoint_store is None:
-                raise CheckpointNotFoundError("checkpointing is not configured for this runtime")
-            checkpoint = await deadline.run(
-                checkpoint_store.get(request.checkpoint_id, tenant_id=tenant_id)
-            )
-            if checkpoint is None or checkpoint.agent_id != agent.identity.agent_id:
-                raise CheckpointNotFoundError("unknown, expired, or foreign checkpoint")
-            if request.input:
-                raise ValueError("checkpoint resume must not include new input")
+        checkpoint = await self._load_checkpoint(agent, request, deadline, tenant_id)
 
         # Approval continuation: restore the paused conversation state before
         # anything else. Unknown, expired, or foreign continuations fail fast.
@@ -224,24 +211,20 @@ class CustomRuntime(GovernedRuntime):
             messages = replay.messages
 
         checkpoint_id = request.checkpoint_id or request.request_id
-        if checkpoint_store is not None:
-            await deadline.run(
-                checkpoint_store.save(
-                    CheckpointRecord(
-                        checkpoint_id=checkpoint_id,
-                        agent_id=agent.identity.agent_id,
-                        request_id=request.request_id,
-                        session_id=session_id,
-                        input_payload=dict(input_payload),
-                        messages=[dict(message) for message in messages],
-                        all_tool_results=list(all_tool_results),
-                        iterations=iterations,
-                        usage=dict(usage),
-                        history_tail_length=history_tail_length,
-                        tenant_id=tenant_id,
-                    )
-                )
-            )
+        await self._save_checkpoint(
+            agent,
+            request,
+            deadline,
+            tenant_id,
+            checkpoint_id=checkpoint_id,
+            session_id=session_id,
+            input_payload=input_payload,
+            messages=messages,
+            all_tool_results=all_tool_results,
+            iterations=iterations,
+            usage=usage,
+            history_tail_length=history_tail_length,
+        )
 
         while True:
             iterations += 1
@@ -333,14 +316,11 @@ class CustomRuntime(GovernedRuntime):
                     session_id=session_id,
                     input_payload=input_payload,
                 )
-                if checkpoint_store is not None:
-                    await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
+                await self._delete_checkpoint(checkpoint_id, deadline, tenant_id)
                 raise ApprovalPausedError(approval)
 
-            if checkpoint_store is not None and not self._tool_wave_is_replay_safe(
-                agent, tools, response.tool_requests
-            ):
-                await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
+            if not self._tool_wave_is_replay_safe(agent, tools, response.tool_requests):
+                await self._delete_checkpoint(checkpoint_id, deadline, tenant_id)
 
             tool_results = await self._execute_tools(
                 tools,
@@ -362,24 +342,20 @@ class CustomRuntime(GovernedRuntime):
                         "content": json.dumps(result["error"] or result["output"], default=str),
                     }
                 )
-            if checkpoint_store is not None:
-                await deadline.run(
-                    checkpoint_store.save(
-                        CheckpointRecord(
-                            checkpoint_id=checkpoint_id,
-                            agent_id=agent.identity.agent_id,
-                            request_id=request.request_id,
-                            session_id=session_id,
-                            input_payload=dict(input_payload),
-                            messages=[dict(message) for message in messages],
-                            all_tool_results=list(all_tool_results),
-                            iterations=iterations,
-                            usage=dict(usage),
-                            history_tail_length=history_tail_length,
-                            tenant_id=tenant_id,
-                        )
-                    )
-                )
+            await self._save_checkpoint(
+                agent,
+                request,
+                deadline,
+                tenant_id,
+                checkpoint_id=checkpoint_id,
+                session_id=session_id,
+                input_payload=input_payload,
+                messages=messages,
+                all_tool_results=all_tool_results,
+                iterations=iterations,
+                usage=usage,
+                history_tail_length=history_tail_length,
+            )
 
         if session is not None:
             # Persist the complete current turn so the next invocation can
@@ -411,8 +387,7 @@ class CustomRuntime(GovernedRuntime):
                 )
             )
 
-        if checkpoint_store is not None:
-            await deadline.run(checkpoint_store.delete(checkpoint_id, tenant_id=tenant_id))
+        await self._delete_checkpoint(checkpoint_id, deadline, tenant_id)
 
         agent_span.set_attribute("iterations", iterations)
         agent_span.add_event(
@@ -439,26 +414,6 @@ class CustomRuntime(GovernedRuntime):
                 "resumed_from_checkpoint": request.checkpoint_id,
             },
         )
-
-    def _tool_wave_is_replay_safe(
-        self,
-        agent: RuntimeAgent,
-        tools: dict[str, Tool],
-        tool_requests: list[dict[str, Any]],
-    ) -> bool:
-        """Return true only when replay cannot repeat a declared side effect."""
-        side_effects = agent._internal.get("tool_side_effects") or {}
-        for tool_request in tool_requests:
-            tool_name = str(tool_request.get("name", ""))
-            tool = tools.get(tool_name)
-            if tool is None:
-                continue
-            classification = normalize_tool_side_effect(
-                side_effects.get(tool_name) or tool.metadata.side_effect
-            )
-            if classification != "read_only":
-                return False
-        return True
 
 
 CustomRuntimeConfig = GovernedRuntimeConfig

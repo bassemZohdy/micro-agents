@@ -19,7 +19,10 @@ LangGraph's. No LangGraph or LangChain type crosses the public
 
 Capability reporting is honest about what this adapter does not do:
 
-* ``checkpointing`` is false and ``checkpoint_id`` requests are rejected.
+* Checkpoint and resume are *provided* by the governance layer, not by
+  LangGraph: with a ``checkpoint_store`` configured, state is snapshotted at
+  tool-round boundaries in the neutral schema and ``checkpoint_id`` resumes it.
+  Without a store, ``checkpointing`` is false and the request is rejected.
 * Approval continuations use the shared ``ApprovalStore``: a tool whose
   side-effect policy requires approval pauses the invocation
   (``approval_required``) and a later request with the ``continuation_id`` and
@@ -40,6 +43,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import uuid4
 
+from micro_agent.checkpoint import CheckpointRecord
 from micro_agent.core import AgentCapabilities, AgentRequest, AgentResponse
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.governance import (
@@ -87,8 +91,8 @@ class LangGraphRuntimeConfig(GovernedRuntimeConfig):
     """Configuration for the LangGraph runtime.
 
     It accepts the same service wiring as the reference runtime, including the
-    durable ``ApprovalStore``. The checkpoint store is unsupported here and
-    rejected at construction rather than silently ignored.
+    durable ``ApprovalStore`` and the ``CheckpointStore`` whose checkpointing is
+    supplied by the governance layer (capability source ``provided``).
     """
 
 
@@ -134,6 +138,9 @@ class _Run:
     #: Set when this invocation resumes a paused tool wave.
     resume: PendingApproval | None = None
     approved: bool = False
+    #: Set when this invocation resumes from a checkpoint.
+    checkpoint: CheckpointRecord | None = None
+    checkpoint_id: str = ""
 
 
 class LangGraphRuntime(GovernedRuntime):
@@ -141,8 +148,6 @@ class LangGraphRuntime(GovernedRuntime):
 
     def __init__(self, config: LangGraphRuntimeConfig | None = None) -> None:
         config = config or LangGraphRuntimeConfig()
-        if config.checkpoint_store is not None:
-            raise ValueError("LangGraph runtime does not support checkpoint_store")
         super().__init__(config)
         self._graph: Any = None
 
@@ -152,14 +157,17 @@ class LangGraphRuntime(GovernedRuntime):
 
     def capabilities(self) -> RuntimeCapabilities:
         model = self._model_provider.capabilities()
-        return RuntimeCapabilities(
+        capabilities = RuntimeCapabilities(
             streaming=model.streaming,
             memory=self._config.memory_provider is not None,
             mcp=self._config.mcp_manager is not None,
             a2a=False,
             structured_output=model.structured_output,
-            checkpointing=False,
         )
+        if self._config.checkpoint_store is not None:
+            # LangGraph is not involved: the governance layer supplies it.
+            return capabilities.with_provided("checkpointing")
+        return capabilities
 
     async def create(self, definition: MicroAgentDefinition) -> RuntimeAgent:
         agent = await super().create(definition)
@@ -228,7 +236,11 @@ class LangGraphRuntime(GovernedRuntime):
             run.session = session
 
         knowledge_context = ""
-        if self._config.knowledge_provider is not None and self._knowledge_refs:
+        if (
+            run.checkpoint is None
+            and self._config.knowledge_provider is not None
+            and self._knowledge_refs
+        ):
             knowledge_context, run.knowledge_counts = await run.deadline.run(
                 retrieve_knowledge_context(
                     self._config.knowledge_provider,
@@ -271,7 +283,14 @@ class LangGraphRuntime(GovernedRuntime):
             for tool in tools.values()
         ]
         iterations = 0
+        usage: dict[str, int] = {}
         tool_results: list[dict[str, Any]] = []
+        if run.checkpoint is not None:
+            messages = [dict(message) for message in run.checkpoint.messages]
+            run.history_tail_length = run.checkpoint.history_tail_length
+            iterations = run.checkpoint.iterations
+            usage = dict(run.checkpoint.usage)
+            tool_results = list(run.checkpoint.all_tool_results)
         if run.resume is not None:
             # Continue from the paused transcript; the approved wave runs (hard
             # policy denials still apply) or the model is told it was denied.
@@ -289,11 +308,25 @@ class LangGraphRuntime(GovernedRuntime):
             messages = replay.messages
             iterations = run.resume.iterations
             tool_results = [*run.resume.all_tool_results, *replay.tool_results]
+        await self._save_checkpoint(
+            run.agent,
+            run.request,
+            run.deadline,
+            run.tenant_id,
+            checkpoint_id=run.checkpoint_id,
+            session_id=run.session_id,
+            input_payload=run.input_payload,
+            messages=messages,
+            all_tool_results=tool_results,
+            iterations=iterations,
+            usage=usage,
+            history_tail_length=run.history_tail_length,
+        )
         return {
             "messages": messages,
             "tool_requests": [],
             "tool_results": tool_results,
-            "usage": {},
+            "usage": usage,
             "iterations": iterations,
             "content": "",
             "finish_reason": "",
@@ -407,7 +440,11 @@ class LangGraphRuntime(GovernedRuntime):
                 session_id=run.session_id,
                 input_payload=run.input_payload,
             )
+            await self._delete_checkpoint(run.checkpoint_id, run.deadline, run.tenant_id)
             raise ApprovalPausedError(approval)
+        if not self._tool_wave_is_replay_safe(run.agent, tools, state["tool_requests"]):
+            # Replaying this wave could repeat a side effect: drop the snapshot.
+            await self._delete_checkpoint(run.checkpoint_id, run.deadline, run.tenant_id)
         results = await self._execute_tools(
             tools,
             state["tool_requests"],
@@ -428,10 +465,25 @@ class LangGraphRuntime(GovernedRuntime):
                     "content": json.dumps(result["error"] or result["output"], default=str),
                 }
             )
+        all_results = [*state["tool_results"], *results]
+        await self._save_checkpoint(
+            run.agent,
+            run.request,
+            run.deadline,
+            run.tenant_id,
+            checkpoint_id=run.checkpoint_id,
+            session_id=run.session_id,
+            input_payload=run.input_payload,
+            messages=messages,
+            all_tool_results=all_results,
+            iterations=state["iterations"],
+            usage=state["usage"],
+            history_tail_length=run.history_tail_length,
+        )
         return {
             "messages": messages,
             "tool_requests": [],
-            "tool_results": [*state["tool_results"], *results],
+            "tool_results": all_results,
         }
 
     async def _node_finalize(self, state: _State, config: RunnableConfig) -> _State:
@@ -460,6 +512,7 @@ class LangGraphRuntime(GovernedRuntime):
                     ),
                 )
             )
+        await self._delete_checkpoint(run.checkpoint_id, run.deadline, run.tenant_id)
         return {}
 
     # ------------------------------------------------------------------
@@ -476,8 +529,6 @@ class LangGraphRuntime(GovernedRuntime):
         side_effect_state: dict[str, Any] | None = None,
         emit_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentResponse:
-        if request.checkpoint_id is not None:
-            raise ValueError("LangGraph runtime does not support checkpoint resume")
         if self._graph is None:  # pragma: no cover - create() compiles the graph
             self._graph = self._compile_graph()
 
@@ -490,12 +541,18 @@ class LangGraphRuntime(GovernedRuntime):
             else None
         )
         max_iterations = semantics.max_iterations or self._config.default_max_iterations
+        checkpoint = await self._load_checkpoint(agent, request, deadline, tenant_id)
         # Approval continuation: unknown, expired or foreign ones fail fast.
         resume: PendingApproval | None = None
         approved = False
         if request.continuation_id:
             resume, approved = await self._load_pending_approval(agent, request)
-        session_id = request.session_id or (resume.session_id if resume else None)
+        if checkpoint is not None:
+            session_id = checkpoint.session_id
+            input_payload = dict(checkpoint.input_payload)
+        else:
+            session_id = request.session_id or (resume.session_id if resume else None)
+            input_payload = resume.input_payload if resume is not None else request.input
         agent_span = self._telemetry.start_span(
             "agent.invoke",
             trace_id=trace_id,
@@ -523,9 +580,11 @@ class LangGraphRuntime(GovernedRuntime):
             max_iterations=max_iterations,
             agent_span=agent_span,
             session_id=session_id,
-            input_payload=resume.input_payload if resume is not None else request.input,
+            input_payload=input_payload,
             resume=resume,
             approved=approved,
+            checkpoint=checkpoint,
+            checkpoint_id=request.checkpoint_id or request.request_id,
         )
         started = time.monotonic()
         try:
@@ -560,7 +619,7 @@ class LangGraphRuntime(GovernedRuntime):
                 "unresolved_tools": agent._internal["unresolved_tools"],
                 "knowledge_entries": sum(run.knowledge_counts.values()),
                 "knowledge_sources": run.knowledge_counts,
-                "resumed_from_checkpoint": None,
+                "resumed_from_checkpoint": request.checkpoint_id,
                 "runtime": "langgraph",
             },
         )

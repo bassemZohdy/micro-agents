@@ -538,7 +538,8 @@ The selector accepts `custom` (also `adk` or `reference`), `google-adk`
 (also `google_adk`) and `langgraph`, plus any runtime registered through the
 [runtime registry](RUNTIMES.md). `langgraph` (install the `langgraph` extra)
 runs the same definition on a LangGraph `StateGraph`; it supports approval
-continuations (including `MICRO_AGENT_APPROVAL_ENDPOINT`) but not checkpoints. The adapter supports the native Google model path and
+continuations (including `MICRO_AGENT_APPROVAL_ENDPOINT`) and, when sessions persist,
+checkpoint/resume supplied by the governance layer. The adapter supports the native Google model path and
 injected fake/OpenAI-compatible/Anthropic model providers. Declared services map onto
 ADK-native constructs: memory bridges into an ADK memory service (auto-store
 and search included), injected policy is enforced around every tool execution

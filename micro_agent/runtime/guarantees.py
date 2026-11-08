@@ -118,8 +118,11 @@ UNIFORM_GUARANTEES: tuple[Guarantee, ...] = (
     Guarantee(
         "checkpoint-resume",
         "An invocation resumes from a checkpoint at a tool-round boundary.",
-        "planned",
-        phase=3,
+        "covered",
+        (
+            "test_an_interrupted_invocation_resumes_from_its_checkpoint",
+            "test_resuming_an_unknown_checkpoint_is_rejected",
+        ),
     ),
     Guarantee(
         "retry-fallback-breaker",

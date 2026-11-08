@@ -21,16 +21,18 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from micro_agent.checkpoint import CheckpointStore
+from micro_agent.checkpoint import CheckpointRecord, CheckpointStore
 from micro_agent.core import (
     AgentCapabilities,
     AgentIdentity,
     AgentRequest,
     AgentResponse,
     AgentStreamEvent,
+    CheckpointNotFoundError,
     ContinuationNotFoundError,
 )
 from micro_agent.definition import ErrorPolicy, MicroAgentDefinition
+from micro_agent.governance.checkpoints import ensure_neutral_checkpoint, neutral_runtime_state
 from micro_agent.governance.errors import (
     ApprovalPausedError,
     RetrySuppressedAfterSideEffectError,
@@ -69,7 +71,7 @@ from micro_agent.security import (
     set_invocation_identity,
 )
 from micro_agent.session import SessionProvider
-from micro_agent.tools import Tool, builtin_tool_registry
+from micro_agent.tools import Tool, builtin_tool_registry, normalize_tool_side_effect
 from micro_agent.tools.plugin import load_plugin_tools
 
 
@@ -687,6 +689,98 @@ class GovernedRuntime(AgentRuntime):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Checkpoint and resume (shared by every orchestration)
+    # ------------------------------------------------------------------
+
+    async def _load_checkpoint(
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        deadline: InvocationDeadline,
+        tenant_id: str | None,
+    ) -> CheckpointRecord | None:
+        """Load the checkpoint a request resumes from, or ``None`` for a fresh run."""
+        if request.checkpoint_id is None:
+            return None
+        store = self._config.checkpoint_store
+        if store is None:
+            raise CheckpointNotFoundError("checkpointing is not configured for this runtime")
+        checkpoint = await deadline.run(store.get(request.checkpoint_id, tenant_id=tenant_id))
+        if checkpoint is None or checkpoint.agent_id != agent.identity.agent_id:
+            raise CheckpointNotFoundError("unknown, expired, or foreign checkpoint")
+        ensure_neutral_checkpoint(checkpoint)
+        if request.input:
+            raise ValueError("checkpoint resume must not include new input")
+        return checkpoint
+
+    async def _save_checkpoint(
+        self,
+        agent: RuntimeAgent,
+        request: AgentRequest,
+        deadline: InvocationDeadline,
+        tenant_id: str | None,
+        *,
+        checkpoint_id: str,
+        session_id: str | None,
+        input_payload: dict[str, Any],
+        messages: list[dict[str, Any]],
+        all_tool_results: list[dict[str, Any]],
+        iterations: int,
+        usage: dict[str, int],
+        history_tail_length: int,
+    ) -> None:
+        """Snapshot replay-safe state at a tool-round boundary (no-op without a store)."""
+        store = self._config.checkpoint_store
+        if store is None:
+            return
+        await deadline.run(
+            store.save(
+                CheckpointRecord(
+                    checkpoint_id=checkpoint_id,
+                    agent_id=agent.identity.agent_id,
+                    request_id=request.request_id,
+                    session_id=session_id,
+                    input_payload=dict(input_payload),
+                    messages=[dict(message) for message in messages],
+                    all_tool_results=list(all_tool_results),
+                    iterations=iterations,
+                    usage=dict(usage),
+                    history_tail_length=history_tail_length,
+                    tenant_id=tenant_id,
+                    runtime_state=neutral_runtime_state(),
+                )
+            )
+        )
+
+    async def _delete_checkpoint(
+        self, checkpoint_id: str, deadline: InvocationDeadline, tenant_id: str | None
+    ) -> None:
+        """Drop a checkpoint (no-op without a store)."""
+        store = self._config.checkpoint_store
+        if store is not None:
+            await deadline.run(store.delete(checkpoint_id, tenant_id=tenant_id))
+
+    def _tool_wave_is_replay_safe(
+        self,
+        agent: RuntimeAgent,
+        tools: dict[str, Tool],
+        tool_requests: list[dict[str, Any]],
+    ) -> bool:
+        """Return true only when replay cannot repeat a declared side effect."""
+        side_effects = agent._internal.get("tool_side_effects") or {}
+        for tool_request in tool_requests:
+            tool_name = str(tool_request.get("name", ""))
+            tool = tools.get(tool_name)
+            if tool is None:
+                continue
+            classification = normalize_tool_side_effect(
+                side_effects.get(tool_name) or tool.metadata.side_effect
+            )
+            if classification != "read_only":
+                return False
+        return True
 
     # ------------------------------------------------------------------
     # Approval pause and resume (shared by every orchestration)

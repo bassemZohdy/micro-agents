@@ -228,3 +228,16 @@ def test_runtimes_share_the_neutral_governance_base():
     assert [b for b in CustomRuntime.__mro__ if b.__module__.startswith("runtimes.")] == [
         CustomRuntime
     ]
+
+
+def test_registration_validates_provided_capability_names():
+    with pytest.raises(ValueError, match="unknown provided capabilities: teleport"):
+        RuntimeRegistration(
+            name="x", factory=lambda context: _StubRuntime(), provides=("teleport",)
+        )
+
+
+def test_builtin_registrations_declare_what_the_layer_provides():
+    assert get_runtime_registration("langgraph").provides == ("checkpointing",)
+    assert get_runtime_registration("custom").provides == ()
+    assert get_runtime_registration("google-adk").provides == ()

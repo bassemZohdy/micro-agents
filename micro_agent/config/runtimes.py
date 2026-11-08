@@ -80,6 +80,7 @@ def _build_langgraph(context: RuntimeBuildContext) -> AgentRuntime:
         LangGraphRuntimeConfig(
             model_provider=context.model_provider,
             session_provider=context.session_provider,
+            checkpoint_store=_session_checkpoints(context, memory_fallback=False),
             memory_provider=context.memory_provider,
             memory_policy=MemoryPolicy() if context.memory_provider is not None else None,
             operation_registry=context.operation_registry,
@@ -119,6 +120,7 @@ BUILTIN_RUNTIMES: tuple[RuntimeRegistration, ...] = (
         aliases=("lang-graph",),
         description="LangGraph StateGraph adapter (requires the 'langgraph' extra)",
         approval_store=True,
+        provides=("checkpointing",),
     ),
 )
 

@@ -40,14 +40,21 @@ definition, core contracts or bootstrap depends on a particular framework.
 | Memory, MCP, knowledge, policy, audit, telemetry | yes | yes | yes |
 | Idempotent side-effect operations | yes | yes | yes |
 | Session persistence | yes | yes (ADK transcript layout) | yes |
-| Checkpoint / resume | yes | yes | **no** |
+| Checkpoint / resume | yes | yes (ADK-specific state) | **provided** (needs a `CheckpointStore`) |
 | Durable approval continuations | yes (`ApprovalStore`) | yes (ADK native, in the session) | yes (`ApprovalStore`) |
 | Native framework model path | no | yes (Gemini) | no |
 
 `langgraph` shares the reference runtime's approval pause/resume (through the
 same `ApprovalStore`, including `MICRO_AGENT_APPROVAL_ENDPOINT`). Where it lacks
-a feature it fails closed: `checkpoint_id` requests are rejected and a
-checkpoint store is refused at construction instead of ignored.
+a feature it fails closed: without a `CheckpointStore`, `checkpoint_id` requests
+are rejected.
+
+LangGraph has no checkpointing of its own here: the governance layer supplies it
+(`provided`). With a store configured, state is snapshotted at tool-round
+boundaries in the neutral, versioned schema and `checkpoint_id` resumes it, so
+a checkpoint written by the custom runtime can be resumed on LangGraph and vice
+versa. A checkpoint written by the Google ADK adapter carries ADK session
+events and is refused by the neutral runtimes (and the reverse).
 Models are reached through the Micro-Agent provider SPI, so every built-in
 provider (OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, fake) works
 unchanged; no LangChain chat model is involved.
@@ -67,7 +74,7 @@ The same definition and the same providers run on all three; see the
 `RuntimeCapabilities.sources()` reports each capability as `native`, `provided`
 or `none`. `provided` means the Micro-Agents gap-filling layer supplies it on
 top of the framework ([ADR 0022](adr/0022-runtime-gap-filling-layer.md)); no
-built-in runtime reports `provided` yet. The behaviors every runtime must show
+built-in runtime reports `provided` only for `langgraph` checkpointing. The behaviors every runtime must show
 identically are listed in `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES`
 and proven by the conformance suite.
 

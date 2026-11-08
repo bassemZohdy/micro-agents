@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from micro_agent.runtime.runtime import AgentRuntime
+from micro_agent.runtime.runtime import RUNTIME_CAPABILITY_NAMES, AgentRuntime
 
 if TYPE_CHECKING:
     from micro_agent.definition import MicroAgentDefinition
@@ -85,6 +85,9 @@ class RuntimeRegistration:
     says whether the runtime consumes the durable ``ApprovalStore``; a runtime
     that does not must explain, in ``approval_note``, why
     ``MICRO_AGENT_APPROVAL_ENDPOINT`` is rejected instead of silently ignored.
+    ``provides`` names capabilities the runtime reports as ``provided`` (supplied
+    by the Micro-Agents governance layer rather than the framework) once the
+    services they need are configured.
     """
 
     name: str
@@ -94,10 +97,14 @@ class RuntimeRegistration:
     native_model: bool = False
     approval_store: bool = False
     approval_note: str = ""
+    provides: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not _normalize(self.name):
             raise ValueError("runtime name must not be empty")
+        unknown = set(self.provides) - RUNTIME_CAPABILITY_NAMES
+        if unknown:
+            raise ValueError(f"unknown provided capabilities: {', '.join(sorted(unknown))}")
         if not callable(self.factory):
             raise TypeError("runtime factory must be callable")
 

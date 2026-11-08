@@ -21,7 +21,7 @@ from micro_agent.core import (
 from micro_agent.definition import MicroAgentDefinition
 from micro_agent.health import DependencyProbe
 
-_RUNTIME_CAPABILITY_NAMES = frozenset(
+RUNTIME_CAPABILITY_NAMES = frozenset(
     {"streaming", "memory", "mcp", "a2a", "structured_output", "checkpointing"}
 )
 
@@ -51,7 +51,7 @@ class RuntimeCapabilities:
 
     def __post_init__(self) -> None:
         self.provided = frozenset(self.provided)
-        unknown = self.provided - _RUNTIME_CAPABILITY_NAMES
+        unknown = self.provided - RUNTIME_CAPABILITY_NAMES
         if unknown:
             raise ValueError(f"unknown provided capabilities: {', '.join(sorted(unknown))}")
         for name in self.provided:
@@ -59,7 +59,7 @@ class RuntimeCapabilities:
 
     def supports(self, capability: str) -> bool:
         """Return whether this runtime advertises a named capability."""
-        return capability in _RUNTIME_CAPABILITY_NAMES and bool(getattr(self, capability, False))
+        return capability in RUNTIME_CAPABILITY_NAMES and bool(getattr(self, capability, False))
 
     def source(self, capability: str) -> str:
         """Return ``"native"``, ``"provided"`` or ``"none"`` for a capability."""

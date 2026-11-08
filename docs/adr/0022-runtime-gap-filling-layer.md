@@ -35,19 +35,32 @@ Three mechanisms, delivered in later phases:
 2. **Governed model provider** (`GovernedModelProvider`). Retry, fallback,
    circuit breaker, deadline, usage accounting and redaction wrap the provider
    SPI, so adapters that use it get identical behavior.
-3. **Runtime decorator** (`CheckpointingRuntime`). For a runtime without native
-   checkpointing it snapshots neutral invocation state at tool-round boundaries
-   in the `CheckpointStore` and replays it into a fresh framework invocation on
-   resume. The registry wraps a runtime only for capabilities it lacks
-   (`RuntimeRegistration.provides`).
+3. **Governance-provided checkpointing.** Snapshotting neutral invocation state
+   at tool-round boundaries in the `CheckpointStore`, and resuming from it, are
+   services of `GovernedRuntime` (`_load_checkpoint`, `_save_checkpoint`,
+   `_delete_checkpoint`) that an orchestration calls at its own loop
+   boundaries. `RuntimeRegistration.provides` declares which capabilities a
+   runtime gets this way and `capabilities()` reports them as `provided`.
+
+**Amendment (Phase 3): services, not a decorator.** The first draft proposed a
+`CheckpointingRuntime` wrapper. That cannot work without framework internals:
+a wrapper sees only requests and responses, so it can neither read the
+framework's transcript at a tool boundary nor restore it into a fresh run
+(intercepting the model provider would resume the model's view but lose the
+turn that the framework persists to the session). Checkpointing therefore
+follows the same rule as approvals: the base class owns the neutral state and
+the stores, and the orchestration calls it where its loop has a tool-round
+boundary. The state is a `CheckpointRecord` stamped with a schema version
+(`micro_agent.governance.checkpoints`); records from before versioning are
+schema 1, and records written by the Google ADK adapter are refused because they
+hold ADK session events.
 
 **Reporting.** `RuntimeCapabilities` distinguishes where a capability comes
 from. A boolean stays true when the capability is effectively available, so
 `supports()` and `as_dict()` are unchanged. A new `provided` set names the
 capabilities that exist only because the layer supplies them, and
-`source(name)` / `sources()` return `native`, `provided` or `none`. The first
-step of this ADR (Phase 0) ships that model and nothing else: no runtime
-reports `provided` yet.
+`source(name)` / `sources()` return `native`, `provided` or `none`. LangGraph reports
+checkpointing as `provided` (Phase 3).
 
 **Uniform guarantees.** `micro_agent.runtime.guarantees.UNIFORM_GUARANTEES` is
 the single list of behaviors every runtime must show identically. Each entry is

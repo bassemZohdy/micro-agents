@@ -79,8 +79,9 @@ protocol. The optional `runtimes/langgraph` package builds and runs a LangGraph
 `StateGraph` for each invocation and is covered by adapter and shared
 conformance tests (the `langgraph` CI job). It reaches models through the
 Micro-Agent provider SPI, shares the reference runtime's `ApprovalStore`
-approval continuations, does not implement checkpointing, and makes no claim of LangGraph Platform or LangSmith
-integration. See [Runtimes](RUNTIMES.md) and
+approval continuations and its governance layer's `CheckpointStore`
+checkpointing (reported as `provided`), and makes no claim of LangGraph Platform
+or LangSmith integration. See [Runtimes](RUNTIMES.md) and
 [ADR 0021](adr/0021-runtime-registry-and-langgraph-adapter.md).
 
 ## Version policy

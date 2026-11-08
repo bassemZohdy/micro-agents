@@ -108,20 +108,19 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 3 — Provided checkpoint and resume
 
-- [ ] Add a `CheckpointingRuntime` decorator that implements `checkpoint_id`
-      resume for any runtime lacking native support: it snapshots the neutral
-      invocation state (request, transcript so far, tool results, iteration
-      count) to `CheckpointStore` at tool-round boundaries and replays it into a
-      fresh framework invocation on resume.
-- [ ] Define the neutral invocation-state schema (versioned, JSON, secret-free)
-      and a migration rule; reject checkpoints written by an incompatible
-      version.
-- [ ] Wire it through the registry: `RuntimeRegistration.provides` lists the
-      gaps the layer may fill; bootstrap wraps the runtime only for capabilities
-      it lacks and reports them as `provided` in `capabilities()`.
-- [ ] Tests: kill-and-resume mid tool loop on langgraph and google-adk using the
-      in-memory and SQLite `CheckpointStore`; resume is exactly-once for
-      idempotent operations.
+- [x] Provide `checkpoint_id` resume to any orchestration as governance-layer
+      services (`_load_checkpoint` / `_save_checkpoint` / `_delete_checkpoint`)
+      instead of a decorator, which cannot see or restore a framework's
+      transcript (ADR 0022 amendment). Snapshots are taken at tool-round
+      boundaries; the LangGraph runtime now resumes from them.
+- [x] Define the neutral invocation-state schema (versioned, JSON, secret-free,
+      `micro_agent.governance.checkpoints`); unversioned records are schema 1,
+      and incompatible versions or ADK-written records are refused.
+- [x] Wire it through the registry: `RuntimeRegistration.provides` declares the
+      gaps the layer fills; `capabilities()` reports them as `provided`.
+- [x] Tests: kill-and-resume mid tool loop on custom, langgraph and google-adk
+      (shared conformance) plus a LangGraph SQLite restart across instances and
+      exactly-once side effects across a resume.
 
 #### Phase 4 — Governed model boundary and session uniformity
 

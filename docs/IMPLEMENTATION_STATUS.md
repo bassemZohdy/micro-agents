@@ -74,7 +74,7 @@ Implemented:
   `StateGraph` (`prepare → model → tools* → finalize`), reusing the reference
   runtime's policy, idempotency, audit, telemetry and retry semantics; it
   pauses for and resumes after approvals through the shared `ApprovalStore` and
-  reports `checkpointing: false`
+  checkpoints/resumes through the governance layer (reported as `provided`)
 - a runtime conformance suite that runs one contract against the custom,
   Google ADK and LangGraph runtimes
 - custom async model/tool loop with overall/model/tool timeouts

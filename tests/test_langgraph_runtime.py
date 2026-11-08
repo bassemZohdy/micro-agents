@@ -6,9 +6,9 @@ import sys
 
 import pytest
 
-from micro_agent.checkpoint import InMemoryCheckpointStore
+from micro_agent.checkpoint import CheckpointRecord, InMemoryCheckpointStore
 from micro_agent.config.bootstrap import build_runtime
-from micro_agent.core import AgentRequest, ContinuationNotFoundError
+from micro_agent.core import AgentRequest, CheckpointNotFoundError, ContinuationNotFoundError
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.memory import InMemoryMemoryProvider
 from micro_agent.models import FakeModelConfig, FakeModelProvider, ModelResponse
@@ -96,9 +96,17 @@ async def test_capabilities_are_honest():
     await runtime.close()
 
 
-def test_unsupported_checkpoint_store_is_rejected_instead_of_ignored():
-    with pytest.raises(ValueError, match="checkpoint_store"):
-        LangGraphRuntime(LangGraphRuntimeConfig(checkpoint_store=InMemoryCheckpointStore()))
+def test_checkpointing_is_provided_by_the_governance_layer_only_with_a_store():
+    without = LangGraphRuntime(LangGraphRuntimeConfig(model_provider=FakeModelProvider()))
+    assert without.capabilities().source("checkpointing") == "none"
+    with_store = LangGraphRuntime(
+        LangGraphRuntimeConfig(
+            model_provider=FakeModelProvider(), checkpoint_store=InMemoryCheckpointStore()
+        )
+    )
+    caps = with_store.capabilities()
+    assert caps.checkpointing is True and caps.source("checkpointing") == "provided"
+    assert caps.provided == frozenset({"checkpointing"})
 
 
 def test_the_approval_store_is_supported():
@@ -108,10 +116,10 @@ def test_the_approval_store_is_supported():
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_requests_are_rejected_and_unknown_continuations_fail_fast():
+async def test_checkpoint_without_a_store_is_rejected_and_unknown_continuations_fail_fast():
     runtime = LangGraphRuntime(LangGraphRuntimeConfig(model_provider=FakeModelProvider()))
     agent = await _started(runtime, _definition(tools=False))
-    with pytest.raises(ValueError, match="checkpoint"):
+    with pytest.raises(CheckpointNotFoundError, match="not configured"):
         await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="cp-1"))
     with pytest.raises(ContinuationNotFoundError):
         await runtime.invoke(
@@ -371,3 +379,311 @@ def test_bootstrap_hands_the_approval_store_to_langgraph(monkeypatch):
     bootstrap = build_runtime(_definition(tools=False), approval_store=store)
     assert isinstance(bootstrap.runtime, LangGraphRuntime)
     assert bootstrap.runtime._approval_store is store
+
+
+# ---------------------------------------------------------------------------
+# Provided checkpoint / resume
+# ---------------------------------------------------------------------------
+
+
+class _FailsAfterTools(FakeModelProvider):
+    """Requests ``echo``, then fails the next ``failures`` model calls."""
+
+    def __init__(self, failures: int = 1) -> None:
+        super().__init__(FakeModelConfig(response="recovered"))
+        self.calls, self.failures = 0, failures
+
+    async def generate(self, config, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            return ModelResponse(tool_requests=[{"name": "echo", "arguments": {"message": "x"}}])
+        if self.calls <= 1 + self.failures:
+            raise RuntimeError("model unavailable")
+        return ModelResponse(content="recovered")
+
+
+def _checkpointing(provider, store, **extra):
+    return LangGraphRuntime(
+        LangGraphRuntimeConfig(model_provider=provider, checkpoint_store=store, **extra)
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_checkpoint_is_written_at_the_tool_boundary_and_removed_on_success():
+    store = InMemoryCheckpointStore()
+    runtime = _checkpointing(_FailsAfterTools(), store, session_provider=InMemorySessionProvider())
+    agent = await _started(runtime, _definition())
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        await runtime.invoke(agent, AgentRequest(input={"q": 1}, session_id="s", request_id="r1"))
+    saved = await store.get("r1")
+    assert saved is not None
+    assert saved.iterations == 1 and [r["tool"] for r in saved.all_tool_results] == ["echo"]
+    assert saved.runtime_state == {"micro_agent": {"schema": 1}}
+    assert saved.messages[-1]["role"] == "tool"
+
+    resumed = await runtime.invoke(
+        agent, AgentRequest(input={}, session_id="s", checkpoint_id="r1")
+    )
+    assert resumed.output["content"] == "recovered"
+    assert await store.get("r1") is None  # cleaned up after a successful resume
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_resume_persists_the_whole_turn_to_the_session_once():
+    sessions = InMemorySessionProvider()
+    runtime = _checkpointing(
+        _FailsAfterTools(), InMemoryCheckpointStore(), session_provider=sessions
+    )
+    agent = await _started(runtime, _definition())
+    with pytest.raises(RuntimeError):
+        await runtime.invoke(agent, AgentRequest(input={"q": 1}, session_id="s", request_id="r2"))
+    await runtime.invoke(agent, AgentRequest(input={}, session_id="s", checkpoint_id="r2"))
+    session = await sessions.get("s")
+    assert session is not None
+    assert [m["role"] for m in session.messages] == ["user", "assistant", "tool", "assistant"]
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_resume_requires_empty_input_and_rejects_foreign_checkpoints():
+    store = InMemoryCheckpointStore()
+    runtime = _checkpointing(_FailsAfterTools(), store)
+    agent = await _started(runtime, _definition())
+    with pytest.raises(RuntimeError):
+        await runtime.invoke(agent, AgentRequest(input={"q": 1}, request_id="r3"))
+    with pytest.raises(ValueError, match="must not include new input"):
+        await runtime.invoke(agent, AgentRequest(input={"again": 1}, checkpoint_id="r3"))
+    other = await _started(runtime, _definition(name="someone-else"))
+    with pytest.raises(CheckpointNotFoundError, match="foreign"):
+        await runtime.invoke(other, AgentRequest(input={}, checkpoint_id="r3"))
+    await runtime.close()
+
+
+class _RecordingStore(InMemoryCheckpointStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ops: list[str] = []
+
+    async def save(self, checkpoint, *args, **kwargs):
+        self.ops.append("save")
+        return await super().save(checkpoint, *args, **kwargs)
+
+    async def delete(self, checkpoint_id, *args, **kwargs):
+        self.ops.append("delete")
+        return await super().delete(checkpoint_id, *args, **kwargs)
+
+
+def _echo_definition(side_effect: str):
+    return load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "lg-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "x"},
+                "dependencies": {
+                    "model": {"ref": "m", "provider": "fake"},
+                    "tools": [{"name": "echo", "source": "native", "side_effect": side_effect}],
+                },
+            },
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_side_effecting_tool_wave_drops_the_snapshot_before_it_runs():
+    # Replaying a wave that could repeat an effect is unsafe, so the pre-wave
+    # snapshot is deleted first; the post-wave snapshot already holds the result.
+    unsafe_store = _RecordingStore()
+    runtime = _checkpointing(_FailsAfterTools(), unsafe_store)
+    agent = await _started(runtime, _echo_definition("unsafe"))
+    with pytest.raises(RuntimeError):
+        await runtime.invoke(agent, AgentRequest(input={}, request_id="r4"))
+    assert unsafe_store.ops == ["save", "delete", "save"]
+    await runtime.close()
+
+    safe_store = _RecordingStore()
+    runtime = _checkpointing(_FailsAfterTools(), safe_store)
+    agent = await _started(runtime, _echo_definition("read_only"))
+    with pytest.raises(RuntimeError):
+        await runtime.invoke(agent, AgentRequest(input={}, request_id="r5"))
+    assert safe_store.ops == ["save", "save"]
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_checkpoints_with_an_incompatible_schema_or_runtime_are_refused():
+    store = InMemoryCheckpointStore()
+    runtime = _checkpointing(FakeModelProvider(), store)
+    agent = await _started(runtime, _definition(tools=False))
+
+    def record(checkpoint_id, state):
+        return CheckpointRecord(
+            checkpoint_id=checkpoint_id,
+            agent_id=agent.identity.agent_id,
+            request_id=checkpoint_id,
+            session_id=None,
+            input_payload={},
+            messages=[{"role": "user", "content": "x"}],
+            runtime_state=state,
+        )
+
+    await store.save(record("future", {"micro_agent": {"schema": 99}}))
+    await store.save(record("adk", {"google_adk": {"version": 1, "events": []}}))
+    await store.save(record("legacy", {}))  # unversioned records are schema 1
+    with pytest.raises(CheckpointNotFoundError, match="schema 99"):
+        await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="future"))
+    with pytest.raises(CheckpointNotFoundError, match="google_adk"):
+        await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="adk"))
+    resumed = await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="legacy"))
+    assert resumed.status == "success"
+    await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_a_checkpoint_written_by_the_custom_runtime_resumes_on_langgraph():
+    """The state is neutral, so operators can change runtime mid-flight."""
+    from runtimes.custom import CustomRuntime, CustomRuntimeConfig
+
+    store = InMemoryCheckpointStore()
+    sessions = InMemorySessionProvider()
+    definition = _definition()
+    provider = _FailsAfterTools()
+    custom = CustomRuntime(
+        CustomRuntimeConfig(
+            model_provider=provider, checkpoint_store=store, session_provider=sessions
+        )
+    )
+    custom_agent = await _started(custom, definition)
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        await custom.invoke(
+            custom_agent, AgentRequest(input={"q": 1}, session_id="x", request_id="cross")
+        )
+    await custom.close()
+
+    graph = _checkpointing(provider, store, session_provider=sessions)
+    agent = await _started(graph, definition)
+    resumed = await graph.invoke(
+        agent, AgentRequest(input={}, session_id="x", checkpoint_id="cross")
+    )
+    assert resumed.status == "success" and resumed.output["content"] == "recovered"
+    assert [r["tool"] for r in resumed.output["tool_results"]] == ["echo"]
+    assert resumed.metadata["runtime"] == "langgraph"
+    await graph.close()
+
+
+def test_bootstrap_wires_provided_checkpointing_when_sessions_persist(monkeypatch):
+    monkeypatch.setenv("MICRO_AGENT_RUNTIME", "langgraph")
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "lg-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "x"},
+                "dependencies": {
+                    "model": {"ref": "m", "provider": "fake"},
+                    "session": {"persistence": "memory"},
+                },
+            },
+        }
+    )
+    caps = build_runtime(definition).runtime.capabilities()
+    assert caps.source("checkpointing") == "provided"
+
+
+@pytest.mark.asyncio
+async def test_a_killed_invocation_resumes_on_a_new_instance_from_sqlite(tmp_path):
+    from micro_agent.checkpoint import SessionCheckpointStore
+    from micro_agent.session import SqliteSessionProvider
+
+    db = str(tmp_path / "sessions.db")
+
+    def runtime_for(provider):
+        sessions = SqliteSessionProvider(db)
+        return _checkpointing(
+            provider, SessionCheckpointStore(sessions, ttl_seconds=60), session_provider=sessions
+        )
+
+    first = runtime_for(_FailsAfterTools())
+    agent = await _started(first, _definition())
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        await first.invoke(agent, AgentRequest(input={"q": 1}, session_id="s", request_id="k1"))
+    await first.close()  # the process "dies"; only SQLite survives
+
+    second = runtime_for(FakeModelProvider(FakeModelConfig(response="after restart")))
+    agent2 = await _started(second, _definition())
+    resumed = await second.invoke(
+        agent2, AgentRequest(input={}, session_id="s", checkpoint_id="k1")
+    )
+    assert resumed.output["content"] == "after restart"
+    assert [r["tool"] for r in resumed.output["tool_results"]] == ["echo"]
+    await second.close()
+
+
+@pytest.mark.asyncio
+async def test_a_resumed_side_effect_runs_exactly_once():
+    from micro_agent.security import OperationRegistry
+    from micro_agent.tools import Tool, ToolInputSchema, ToolMetadata, ToolOutputSchema, ToolResult
+
+    class Charge(Tool):
+        calls = 0
+
+        @property
+        def metadata(self):
+            return ToolMetadata(name="charge", description="c", source="native")
+
+        @property
+        def input_schema(self):
+            return ToolInputSchema(parameters={"type": "object", "properties": {}})
+
+        @property
+        def output_schema(self):
+            return ToolOutputSchema()
+
+        async def execute(self, arguments):
+            Charge.calls += 1
+            return ToolResult(output={"ok": True})
+
+    class ChargeThenFail(FakeModelProvider):
+        calls = 0
+
+        async def generate(self, config, messages, tools=None):
+            ChargeThenFail.calls += 1
+            if ChargeThenFail.calls == 1:
+                return ModelResponse(
+                    tool_requests=[{"name": "charge", "arguments": {"idempotency_key": "k"}}]
+                )
+            if ChargeThenFail.calls == 2:
+                raise RuntimeError("model unavailable")
+            return ModelResponse(content="receipt sent")
+
+    store = InMemoryCheckpointStore()
+    runtime = _checkpointing(
+        ChargeThenFail(),
+        store,
+        tool_registry={"charge": Charge()},
+        operation_registry=OperationRegistry(),
+    )
+    definition = load_definition_from_dict(
+        {
+            "apiVersion": "microagents.io/v1alpha1",
+            "kind": "MicroAgent",
+            "metadata": {"name": "lg-agent", "version": "1.0.0"},
+            "spec": {
+                "behavior": {"instructions": "x"},
+                "dependencies": {
+                    "model": {"ref": "m", "provider": "fake"},
+                    "tools": [{"name": "charge", "source": "native"}],
+                },
+            },
+        }
+    )
+    agent = await _started(runtime, definition)
+    with pytest.raises(RuntimeError):
+        await runtime.invoke(agent, AgentRequest(input={}, request_id="once"))
+    resumed = await runtime.invoke(agent, AgentRequest(input={}, checkpoint_id="once"))
+    assert resumed.output["content"] == "receipt sent"
+    assert Charge.calls == 1  # the effect was not repeated by the resume
+    await runtime.close()

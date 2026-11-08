@@ -214,7 +214,7 @@ def test_optional_backends_import_without_their_libraries(package):
 ADAPTER_SUBPACKAGE_LIMITS = {
     "runtimes.custom": 11,
     "runtimes.google_adk": 14,  # +1: shares micro_agent.governance
-    "runtimes.langgraph": 10,
+    "runtimes.langgraph": 11,  # +1: micro_agent.checkpoint
 }
 
 
