@@ -4,7 +4,7 @@ This file tracks implementation work and its completion status. Completed work
 is summarized in [CHANGELOG.md](CHANGELOG.md); implementation evidence and
 limitations belong in [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-Backlog audited against `main` (v0.1.6 plus unreleased work) on 2026-11-07.
+Backlog audited against `main` (v0.1.7) on 2026-11-08.
 
 ## Project scope and release policy
 

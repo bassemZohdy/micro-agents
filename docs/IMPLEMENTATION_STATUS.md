@@ -1,7 +1,7 @@
 # Implementation Status
 
-Last audited: 2026-11-07
-Audited implementation revision: `main` at v0.1.6 plus the unreleased provider and hygiene work
+Last audited: 2026-11-08
+Audited implementation revision: `main` at v0.1.7
 
 This document separates implemented code from architectural intent. Passing
 unit tests prove the exercised behavior only; they do not establish production
@@ -484,6 +484,13 @@ Implemented:
 - optional Redis-backed A2A task and push-configuration stores selected by a
   `redis://`/`rediss://` A2A store location, with tenant-scoped task keys,
   bounded snapshots, TTLs, and shared-worker integration coverage
+
+Known coupling: the two ADK adapters are composition layers and import many
+framework subpackages (`runtimes/adk` 14, `runtimes/google_adk` 13). That is
+intentional for a runtime that wires every provider seam, and
+`tests/test_dependency_rules.py` caps it so it cannot grow unnoticed. Reducing
+it would mean introducing a facade over the provider seams, which is not
+planned.
 
 Gaps and operator-owned checks:
 

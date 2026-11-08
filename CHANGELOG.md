@@ -4,6 +4,8 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-11-08
+
 - Added a native Google Gemini model provider (`generateContent` and SSE
   streaming over the existing HTTP client) with tool-call translation,
   JSON-Schema-to-OpenAPI sanitising, header-only API-key authentication, and

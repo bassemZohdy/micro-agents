@@ -207,3 +207,20 @@ def test_optional_backends_import_without_their_libraries(package):
         [sys.executable, "-c", code], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stderr
+
+
+# Runtime adapters are composition layers; cap their fan-out so it cannot grow
+# unnoticed. Raising a limit is a deliberate, reviewed decision.
+ADAPTER_SUBPACKAGE_LIMITS = {"runtimes.adk": 14, "runtimes.google_adk": 13}
+
+
+@pytest.mark.parametrize(("adapter", "limit"), sorted(ADAPTER_SUBPACKAGE_LIMITS.items()))
+def test_runtime_adapter_coupling_does_not_grow(adapter, limit):
+    targets: set[str] = set()
+    for package, dotted, path in _modules():
+        if package != "runtimes" or _subpackage(dotted) != adapter:
+            continue
+        for module, _line, _guarded in import_time_imports(path.read_text(encoding="utf-8")):
+            if module.split(".")[0] == "micro_agent" and "." in module:
+                targets.add(_subpackage(module))
+    assert len(targets) <= limit, sorted(targets)
