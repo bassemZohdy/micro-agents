@@ -9,11 +9,12 @@ The control flow of an invocation is a genuine LangGraph ``StateGraph``::
 ``tools`` executes requested tools, and ``finalize`` persists the turn. The
 loop edge is bounded by the definition's ``max_iterations``.
 
-Governance is deliberately shared with the reference runtime rather than
-re-implemented: deterministic policy, argument validation, idempotent
-side-effect operations, audit, telemetry, retry/fallback semantics, deadlines
-and circuit breaking all come from :class:`runtimes.adk.AdkRuntime`. Only the
-orchestration is LangGraph's. No LangGraph or LangChain type crosses the public
+Governance is shared through the framework-neutral
+:class:`micro_agent.governance.GovernedRuntime` rather than re-implemented:
+deterministic policy, argument validation, idempotent side-effect operations,
+audit, telemetry, retry/fallback semantics, deadlines and circuit breaking all
+come from that base. Only the orchestration is
+LangGraph's. No LangGraph or LangChain type crosses the public
 :class:`~micro_agent.runtime.AgentRuntime` boundary.
 
 Capability reporting is honest about what this adapter does not do:
@@ -40,6 +41,14 @@ from uuid import uuid4
 
 from micro_agent.core import AgentCapabilities, AgentRequest, AgentResponse
 from micro_agent.definition import MicroAgentDefinition
+from micro_agent.governance.runtime import (
+    MAX_SESSION_HISTORY_MESSAGES,
+    GovernedRuntime,
+    GovernedRuntimeConfig,
+    InvocationDeadline,
+    call_with_supported_kwargs,
+    new_call_id,
+)
 from micro_agent.knowledge import build_knowledge_query, retrieve_knowledge_context
 from micro_agent.memory import MemoryEntry, MemoryPolicy
 from micro_agent.models import (
@@ -52,14 +61,6 @@ from micro_agent.runtime import RuntimeAgent, RuntimeCapabilities
 from micro_agent.security import get_invocation_identity
 from micro_agent.session import SessionProvider
 from micro_agent.tools import Tool
-from runtimes.adk.runtime import (
-    _MAX_SESSION_HISTORY_MESSAGES,
-    AdkRuntime,
-    AdkRuntimeConfig,
-    _call_with_supported_kwargs,
-    _InvocationDeadline,
-    _new_call_id,
-)
 
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
@@ -80,7 +81,7 @@ class LangGraphError(RuntimeError):
 
 
 @dataclass
-class LangGraphRuntimeConfig(AdkRuntimeConfig):
+class LangGraphRuntimeConfig(GovernedRuntimeConfig):
     """Configuration for the LangGraph runtime.
 
     It accepts the same service wiring as the reference runtime. The
@@ -113,7 +114,7 @@ class _Run:
     agent: RuntimeAgent
     request: AgentRequest
     trace_id: str
-    deadline: _InvocationDeadline
+    deadline: InvocationDeadline
     side_effect_state: dict[str, Any] | None
     emit_delta: Callable[[str], Awaitable[None]] | None
     definition: MicroAgentDefinition
@@ -130,7 +131,7 @@ class _Run:
     knowledge_counts: dict[str, int] = field(default_factory=dict)
 
 
-class LangGraphRuntime(AdkRuntime):
+class LangGraphRuntime(GovernedRuntime):
     """Micro-Agent runtime whose invocation loop is a LangGraph ``StateGraph``."""
 
     def __init__(self, config: LangGraphRuntimeConfig | None = None) -> None:
@@ -208,13 +209,13 @@ class LangGraphRuntime(AdkRuntime):
 
         if session_provider is not None and run.session_id:
             session = await run.deadline.run(
-                _call_with_supported_kwargs(
+                call_with_supported_kwargs(
                     session_provider.get, run.session_id, tenant_id=run.tenant_id
                 )
             )
             if session is None:
                 session = await run.deadline.run(
-                    _call_with_supported_kwargs(
+                    call_with_supported_kwargs(
                         session_provider.create,
                         run.session_id,
                         ttl_seconds=session_ttl,
@@ -238,7 +239,7 @@ class LangGraphRuntime(AdkRuntime):
             system_prompt += "\n\n" + knowledge_context
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         if run.session is not None:
-            tail = run.session.messages[-_MAX_SESSION_HISTORY_MESSAGES:]
+            tail = run.session.messages[-MAX_SESSION_HISTORY_MESSAGES:]
             run.history_tail_length = len(tail)
             messages.extend(tail)
         messages.append({"role": "user", "content": json.dumps(run.input_payload, default=str)})
@@ -333,7 +334,7 @@ class LangGraphRuntime(AdkRuntime):
         tool_requests = [dict(item) for item in response.tool_requests]
         if tool_requests:
             for item in tool_requests:
-                item["id"] = str(item.get("id") or _new_call_id())
+                item["id"] = str(item.get("id") or new_call_id())
             assistant["tool_calls"] = [
                 {
                     "id": item["id"],
@@ -415,7 +416,7 @@ class LangGraphRuntime(AdkRuntime):
             and (self._config.memory_policy or MemoryPolicy()).auto_store
         ):
             await run.deadline.run(
-                _call_with_supported_kwargs(
+                call_with_supported_kwargs(
                     memory_provider.store,
                     MemoryEntry(
                         key=f"invocation:{run.request.request_id or uuid4()}",
@@ -428,7 +429,7 @@ class LangGraphRuntime(AdkRuntime):
         return {}
 
     # ------------------------------------------------------------------
-    # Invocation (called by AdkRuntime's retry/fallback/circuit wrapper)
+    # Invocation (called by GovernedRuntime's retry/fallback/circuit wrapper)
     # ------------------------------------------------------------------
 
     async def _invoke_inner(
@@ -436,7 +437,7 @@ class LangGraphRuntime(AdkRuntime):
         agent: RuntimeAgent,
         request: AgentRequest,
         trace_id: str,
-        deadline: _InvocationDeadline,
+        deadline: InvocationDeadline,
         *,
         side_effect_state: dict[str, Any] | None = None,
         emit_delta: Callable[[str], Awaitable[None]] | None = None,

@@ -20,7 +20,8 @@ from micro_agent.core import AgentRequest, DefaultMicroAgent
 from micro_agent.definition import load_definition_from_dict
 from micro_agent.interoperability import create_app
 from micro_agent.models import FakeModelConfig
-from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+from runtimes.custom import CustomRuntime as CustomRuntime
+from runtimes.custom import CustomRuntimeConfig as CustomRuntimeConfig
 
 BUDGET_PATH = Path(__file__).with_name("budgets.json")
 
@@ -45,8 +46,8 @@ def _definition() -> Any:
 
 
 async def _build_agent() -> DefaultMicroAgent:
-    runtime = AdkRuntime(
-        AdkRuntimeConfig(fake_model_config=FakeModelConfig(response="benchmark response"))
+    runtime = CustomRuntime(
+        CustomRuntimeConfig(fake_model_config=FakeModelConfig(response="benchmark response"))
     )
     agent = DefaultMicroAgent(_definition(), runtime)
     await agent.initialize()

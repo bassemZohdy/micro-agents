@@ -30,10 +30,10 @@ def _session_checkpoints(
 
 
 def _build_custom(context: RuntimeBuildContext) -> AgentRuntime:
-    from runtimes.adk import AdkRuntime, AdkRuntimeConfig
+    from runtimes.custom import CustomRuntime, CustomRuntimeConfig
 
-    return AdkRuntime(
-        AdkRuntimeConfig(
+    return CustomRuntime(
+        CustomRuntimeConfig(
             model_provider=context.model_provider,
             session_provider=context.session_provider,
             checkpoint_store=_session_checkpoints(context, memory_fallback=False),

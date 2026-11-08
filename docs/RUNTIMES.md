@@ -22,12 +22,13 @@ definition, core contracts or bootstrap depends on a particular framework.
 
 | Runtime | Select with | Extra | Orchestration |
 |---|---|---|---|
-| `custom` (aliases `adk`, `reference`) | default | none | project-owned bounded model/tool loop in `runtimes/adk` |
+| `custom` (aliases `adk`, `reference`) | default | none | project-owned bounded model/tool loop in `runtimes/custom` |
 | `google-adk` | `MICRO_AGENT_RUNTIME=google-adk` | `adk` | Google ADK `LlmAgent` and `Runner` in `runtimes/google_adk` |
 | `langgraph` | `MICRO_AGENT_RUNTIME=langgraph` | `langgraph` | LangGraph `StateGraph` in `runtimes/langgraph` |
 
-> The package named `runtimes/adk` is the **custom** loop, not Google ADK. The
-> name is historical ([ADR 0008](adr/0008-runtime-adapter-truthfulness.md));
+> The custom loop lives in `runtimes/custom`. It was published as `runtimes/adk`,
+> a misleading name ([ADR 0008](adr/0008-runtime-adapter-truthfulness.md)) that
+> remains as a deprecated alias (`AdkRuntime` is `CustomRuntime`).
 > `runtimes/google_adk` is the real ADK adapter.
 
 ### What each runtime supports
@@ -92,10 +93,11 @@ runtime never needs another's dependency.
 
 ## Adding a runtime
 
-1. Implement `AgentRuntime` (subclass `AdkRuntime` to inherit the shared
+1. Implement `AgentRuntime` (subclass `micro_agent.governance.GovernedRuntime` to inherit the shared
    governance — policy, argument validation, idempotency, audit, telemetry,
    retries, deadlines — and replace only the orchestration, as the LangGraph
-   adapter does).
+   adapter does; adapters never import each other, a rule enforced by
+   `tests/test_dependency_rules.py`).
 2. Write a factory that maps `RuntimeBuildContext` onto your configuration.
 3. Register it, either in code:
 

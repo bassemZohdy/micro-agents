@@ -23,7 +23,7 @@ operated independently.
   compatibility migration, and generated JSON Schemas
 - YAML definition loader and runtime-neutral core contracts
 - a small `AgentRuntime` service-provider interface
-- a custom reference agent loop currently located under `runtimes/adk`
+- a custom reference agent loop in `runtimes/custom` (formerly `runtimes/adk`)
 - a runtime registry that selects the runtime by name, with optional Google ADK
   (`runtimes/google_adk`) and LangGraph (`runtimes/langgraph`) adapters; see
   [docs/RUNTIMES.md](docs/RUNTIMES.md)

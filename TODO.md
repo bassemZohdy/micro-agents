@@ -69,19 +69,19 @@ Current gaps this plan closes (from the capability matrix in `docs/RUNTIMES.md`)
 
 #### Phase 1 — Neutral governance core (remove the `AdkRuntime` inheritance)
 
-- [ ] Extract the framework-independent logic now living in `runtimes/adk`
+- [x] Extract the framework-independent logic now living in `runtimes/adk`
       (`_execute_tools`, `_invoke` retry/fallback/breaker, `_system_prompt`,
       `_resolve_tools`, deadline, call-id helpers) into
       `micro_agent/runtime/governance.py` as composable pieces with no framework
       imports; keep `runtimes/adk` as the reference loop that uses them.
-- [ ] Rebase `LangGraphRuntime` on the neutral core instead of subclassing
+- [x] Rebase `LangGraphRuntime` on the neutral core instead of subclassing
       `AdkRuntime`; delete its imports of private `runtimes.adk.runtime` names
       and tighten the `runtimes.langgraph` coupling cap in
       `tests/test_dependency_rules.py`.
-- [ ] Rename the misleading `runtimes/adk` package/module surface (it is the
+- [x] Rename the misleading `runtimes/adk` package/module surface (it is the
       custom loop) behind a compatibility alias, per ADR 0008, with a
       deprecation note and changelog entry.
-- [ ] Guard with tests: behavior-preserving refactor, all 21 conformance cases
+- [x] Guard with tests: behavior-preserving refactor, all 21 conformance cases
       and the existing runtime tests pass unchanged.
 
 #### Phase 2 — Governed tools (works on any framework)

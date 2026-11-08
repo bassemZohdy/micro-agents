@@ -46,7 +46,8 @@ the dependency-rule tests with a coupling cap for the new adapter.
   it later touches its own package and one registration.
 - A new framework adapter needs a factory and a registration, not a bootstrap
   change.
-- `LangGraphRuntime` inherits from `AdkRuntime` (the reference loop, whose
+- *(Superseded by ADR 0022 Phase 1: both runtimes now subclass the neutral
+  `micro_agent.governance.GovernedRuntime`.)* `LangGraphRuntime` inherited from `AdkRuntime` (the reference loop, whose
   package name is historical). That is a deliberate reuse trade-off: the
   adapter depends on the reference loop's private helpers. Extracting the shared
   governance into a neutral base class is the natural follow-up if a third

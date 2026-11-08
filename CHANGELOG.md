@@ -4,6 +4,14 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+- Extracted the framework-neutral governance (configuration, lifecycle,
+  retry/fallback/circuit breaking, deadlines, tool resolution and governed tool
+  execution) from the reference loop into `micro_agent.governance`
+  (`GovernedRuntime`, `GovernedRuntimeConfig`). The reference loop is now
+  `runtimes.custom.CustomRuntime`; `LangGraphRuntime` subclasses the neutral base
+  instead of the reference loop, so no adapter imports another. `runtimes.adk`
+  (`AdkRuntime`, `AdkRuntimeConfig`) remains a deprecated alias with no logic.
+  Behavior is unchanged.
 - Added `RuntimeCapabilities.provided`, `source()` and `sources()` so a runtime
   can report each capability as `native`, `provided` (supplied by the
   Micro-Agents gap-filling layer) or `none`; `supports()` and `as_dict()` are

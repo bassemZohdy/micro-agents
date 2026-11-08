@@ -67,7 +67,7 @@ production load testing remains open.
 ## Google ADK
 
 Google ADK is a runtime implementation choice, not an interoperability
-protocol. `runtimes/adk` is the custom built-in loop; the optional
+protocol. `runtimes/custom` is the custom built-in loop; the optional
 `runtimes/google_adk` package depends on and invokes supported Google ADK APIs
 and is covered by adapter tests. The adapter is still pre-release and does not
 claim full production service integration.

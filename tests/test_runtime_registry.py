@@ -208,3 +208,23 @@ def test_a_runtime_that_consumes_approvals_receives_the_store(monkeypatch):
         assert runtime.context is not None and runtime.context.approval_store is store
     finally:
         default_registry.unregister("wants-approval")
+
+
+def test_deprecated_adk_package_aliases_the_custom_runtime():
+    import runtimes.adk
+    import runtimes.adk.runtime
+    import runtimes.custom
+
+    assert runtimes.adk.AdkRuntime is runtimes.custom.CustomRuntime
+    assert runtimes.adk.AdkRuntimeConfig is runtimes.custom.CustomRuntimeConfig
+    assert runtimes.adk.runtime.AdkRuntime is runtimes.custom.CustomRuntime
+
+
+def test_runtimes_share_the_neutral_governance_base():
+    from micro_agent.governance import GovernedRuntime
+    from runtimes.custom import CustomRuntime
+
+    assert issubclass(CustomRuntime, GovernedRuntime)
+    assert [b for b in CustomRuntime.__mro__ if b.__module__.startswith("runtimes.")] == [
+        CustomRuntime
+    ]

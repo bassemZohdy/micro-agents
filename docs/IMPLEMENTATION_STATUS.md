@@ -494,7 +494,7 @@ Implemented:
   bounded snapshots, TTLs, and shared-worker integration coverage
 
 Known coupling: the two ADK adapters are composition layers and import many
-framework subpackages (`runtimes/adk` 14, `runtimes/google_adk` 13). That is
+framework subpackages (`runtimes/custom` 11, `runtimes/google_adk` 13, `runtimes/langgraph` 10). That is
 intentional for a runtime that wires every provider seam, and
 `tests/test_dependency_rules.py` caps it so it cannot grow unnoticed. Reducing
 it would mean introducing a facade over the provider seams, which is not

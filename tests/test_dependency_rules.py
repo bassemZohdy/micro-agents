@@ -212,9 +212,9 @@ def test_optional_backends_import_without_their_libraries(package):
 # Runtime adapters are composition layers; cap their fan-out so it cannot grow
 # unnoticed. Raising a limit is a deliberate, reviewed decision.
 ADAPTER_SUBPACKAGE_LIMITS = {
-    "runtimes.adk": 14,
+    "runtimes.custom": 11,
     "runtimes.google_adk": 13,
-    "runtimes.langgraph": 9,
+    "runtimes.langgraph": 10,
 }
 
 
@@ -228,3 +228,18 @@ def test_runtime_adapter_coupling_does_not_grow(adapter, limit):
             if module.split(".")[0] == "micro_agent" and "." in module:
                 targets.add(_subpackage(module))
     assert len(targets) <= limit, sorted(targets)
+
+
+def test_runtime_adapters_do_not_import_each_other():
+    """Shared logic lives in ``micro_agent.governance``, never in a sibling adapter."""
+    violations: list[str] = []
+    for package, dotted, path in _modules():
+        if package != "runtimes":
+            continue
+        own = _subpackage(dotted)
+        for module, line, _guarded in import_time_imports(path.read_text(encoding="utf-8")):
+            if own == "runtimes.adk" and _subpackage(module) == "runtimes.custom":
+                continue  # the deprecated alias package re-exports the custom runtime
+            if module.split(".")[0] == "runtimes" and _subpackage(module) != own:
+                violations.append(f"{dotted}:{line} imports {module}")
+    assert not violations, violations
