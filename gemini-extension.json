@@ -1,6 +1,6 @@
 {
   "name": "micro-agents",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Skills for building, running, governing and extending Micro-Agents: portable agent definitions that run unchanged on the custom, Google ADK and LangGraph runtimes.",
   "contextFileName": "AGENTS.md"
 }

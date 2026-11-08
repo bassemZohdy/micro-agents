@@ -4,6 +4,8 @@ All notable changes to the Micro-Agents project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-11-08
+
 - Agent Skills and plugins: six `micro-agents-*` skills in `skills/` (author a
   definition, run and deploy, choose a runtime, govern tools, add a runtime
   adapter, contribute) in the open Agent Skills format, plus `AGENTS.md` and
